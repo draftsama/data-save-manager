@@ -21,7 +21,6 @@ public sealed class DSMManagerWindow : EditorWindow
     private Dictionary<string, JToken> _slotData = new(); // current values from active slot
     private string _activeSlot = "default";
     private string[] _availableSlots = Array.Empty<string>();
-    private string _slotDirLabel = string.Empty;
     private DSMConfig? _config;
     private UnityEditor.SerializedObject? _configSO;
     private string _searchText = string.Empty;
@@ -163,7 +162,6 @@ public sealed class DSMManagerWindow : EditorWindow
     private void DiscoverSlots()
     {
         var dir = GetSaveDirectory();
-        _slotDirLabel = dir;
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         names.Add(GetSlotName());
         if (Directory.Exists(dir))
@@ -501,6 +499,7 @@ public sealed class DSMManagerWindow : EditorWindow
             var currentStr  = currentToken != null ? InferFromToken(currentToken).Item2 : (defEntry?.SerializedDefault ?? string.Empty);
 
             using var row = new EditorGUILayout.VerticalScope(s_rowBox!);
+            EditorGUI.DrawRect(row.rect, TypeColor(displayType));
 
             // ── Header row: key + type + expose + delete ─────────────────────
             var isExposed = _config?.FindExposed(key) != null;
@@ -768,6 +767,23 @@ public sealed class DSMManagerWindow : EditorWindow
         AssetDatabase.SaveAssets();
         Selection.activeObject = asset;
     }
+
+    // ── Type colors ──────────────────────────────────────────────────────────
+
+    private static Color TypeColor(DSMDataType type) => type switch
+    {
+        DSMDataType.Int     => new Color(0.15f, 0.28f, 0.50f, 0.30f),
+        DSMDataType.Float   => new Color(0.15f, 0.38f, 0.38f, 0.30f),
+        DSMDataType.Double  => new Color(0.10f, 0.32f, 0.45f, 0.30f),
+        DSMDataType.Long    => new Color(0.22f, 0.18f, 0.48f, 0.30f),
+        DSMDataType.Bool    => new Color(0.48f, 0.30f, 0.08f, 0.30f),
+        DSMDataType.String  => new Color(0.42f, 0.38f, 0.08f, 0.30f),
+        DSMDataType.Vector2 => new Color(0.48f, 0.15f, 0.15f, 0.30f),
+        DSMDataType.Vector3 => new Color(0.50f, 0.12f, 0.22f, 0.30f),
+        DSMDataType.Vector4 => new Color(0.42f, 0.10f, 0.38f, 0.30f),
+        DSMDataType.Color   => new Color(0.35f, 0.22f, 0.40f, 0.30f),
+        _                   => Color.clear
+    };
 
     // ── Vector / Color helpers ────────────────────────────────────────────────
 
