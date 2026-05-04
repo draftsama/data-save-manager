@@ -23,6 +23,7 @@ public sealed class DSMManagerWindow : EditorWindow
     private string[] _availableSlots = Array.Empty<string>();
     private string _slotDirLabel = string.Empty;
     private DSMConfig? _config;
+    private UnityEditor.SerializedObject? _configSO;
     private string _searchText = string.Empty;
     private Vector2 _listScroll;
     private bool _configExpanded = true;
@@ -77,6 +78,7 @@ public sealed class DSMManagerWindow : EditorWindow
     public void Reload()
     {
         _config = Resources.Load<DSMConfig>("DSMConfig");
+        _configSO = _config != null ? new UnityEditor.SerializedObject(_config) : null;
         LoadDefaultsFromReflection();
         DiscoverSlots();
         if (!_availableSlots.Any(s => s == _activeSlot))
@@ -330,30 +332,38 @@ public sealed class DSMManagerWindow : EditorWindow
             }
             else
             {
+                _configSO!.Update();
                 EditorGUILayout.Space(4);
-                using (new EditorGUI.DisabledScope(true))
                 using (new EditorGUILayout.HorizontalScope())
                 {
                     GUILayout.Label("Auto Save", EditorStyles.miniLabel, GUILayout.Width(62));
-                    EditorGUILayout.Toggle(_config.AutoSave, GUILayout.Width(16));
+                    ConfigProp("<AutoSave>k__BackingField").boolValue =
+                        EditorGUILayout.Toggle(ConfigProp("<AutoSave>k__BackingField").boolValue, GUILayout.Width(16));
                     GUILayout.Space(14);
                     GUILayout.Label("Debounce", EditorStyles.miniLabel, GUILayout.Width(58));
-                    EditorGUILayout.FloatField(_config.AutoSaveDebounce, GUILayout.Width(38));
+                    ConfigProp("<AutoSaveDebounce>k__BackingField").floatValue =
+                        EditorGUILayout.FloatField(ConfigProp("<AutoSaveDebounce>k__BackingField").floatValue, GUILayout.Width(38));
                     GUILayout.Label("s", EditorStyles.miniLabel, GUILayout.Width(10));
                     GUILayout.Space(14);
                     GUILayout.Label("Encrypt", EditorStyles.miniLabel, GUILayout.Width(48));
-                    EditorGUILayout.Toggle(_config.Encrypt, GUILayout.Width(16));
+                    ConfigProp("<Encrypt>k__BackingField").boolValue =
+                        EditorGUILayout.Toggle(ConfigProp("<Encrypt>k__BackingField").boolValue, GUILayout.Width(16));
+                    GUILayout.Space(14);
+                    GUILayout.Label("Pretty", EditorStyles.miniLabel, GUILayout.Width(38));
+                    ConfigProp("<PrettyPrint>k__BackingField").boolValue =
+                        EditorGUILayout.Toggle(ConfigProp("<PrettyPrint>k__BackingField").boolValue, GUILayout.Width(16));
                     GUILayout.FlexibleSpace();
                 }
                 EditorGUILayout.Space(3);
                 using (new EditorGUILayout.HorizontalScope())
                 {
                     GUILayout.Label("Default Slot", EditorStyles.miniLabel, GUILayout.Width(70));
-                    using (new EditorGUI.DisabledScope(true))
-                        EditorGUILayout.TextField(_config.DefaultSlot);
+                    GUILayout.Label(_config.DefaultSlot, EditorStyles.miniLabel);
+                    GUILayout.FlexibleSpace();
                     if (GUILayout.Button("Edit Config →", GUILayout.Width(100)))
                         Selection.activeObject = _config;
                 }
+                _configSO.ApplyModifiedProperties();
             }
         }
         EditorGUILayout.EndFoldoutHeaderGroup();
@@ -374,6 +384,13 @@ public sealed class DSMManagerWindow : EditorWindow
         {
             _activeSlot = _availableSlots[newIdx];
             LoadSlotData(_activeSlot);
+        }
+
+        var isDefault = _config != null && _activeSlot == _config.DefaultSlot;
+        using (new EditorGUI.DisabledScope(isDefault))
+        {
+            if (GUILayout.Button(isDefault ? "✓ Default" : "Set Default", EditorStyles.miniButton, GUILayout.Width(76)))
+                SetDefaultSlot(_activeSlot);
         }
 
         GUILayout.Space(4);
@@ -675,7 +692,20 @@ public sealed class DSMManagerWindow : EditorWindow
         }
     }
 
-    // ── Config save ───────────────────────────────────────────────────────────
+    // ── Config helpers ────────────────────────────────────────────────────────
+
+    private UnityEditor.SerializedProperty ConfigProp(string backingField) =>
+        _configSO!.FindProperty(backingField);
+
+    private void SetDefaultSlot(string slotName)
+    {
+        if (_configSO == null) return;
+        _configSO.Update();
+        ConfigProp("<DefaultSlot>k__BackingField").stringValue = slotName;
+        _configSO.ApplyModifiedProperties();
+        AssetDatabase.SaveAssets();
+        Repaint();
+    }
 
     private void SaveConfig()
     {
