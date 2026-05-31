@@ -55,7 +55,9 @@ public sealed class DSMSlotManager
                 ext.Equals(".enc",  StringComparison.OrdinalIgnoreCase))
                 names.Add(Path.GetFileNameWithoutExtension(file)!);
         }
-        return names.ToArray();
+        var result = new string[names.Count];
+        names.CopyTo(result);
+        return result;
     }
 
     public void SaveActiveSlot() => _activeSlot.Save();
