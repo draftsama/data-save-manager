@@ -9,13 +9,24 @@ A lightweight, slot-based save system for Unity with JSON serialization, optiona
 - **Simple static API** — `DSM.Set` / `DSM.Get` from anywhere
 - **Multi-slot saves** — independent named save slots per player/profile
 - **Shared defaults** — all slots use `DSMConstant` as default values; new slots are seeded automatically
-- **Optional AES encryption** — `.enc` files with PBKDF2 key derivation
+- **Optional AES encryption** — `.enc` files with PBKDF2 key derivation; random per-file salt prevents rainbow-table attacks
 - **Async I/O** — `SaveAsync` / `LoadAsync` via UniTask
 - **Reactive watching** — `WatchAsync<T>` streams value changes as `IUniTaskAsyncEnumerable`
 - **Unity type support** — Vector2/3/4, Quaternion, Color, Color32
 - **Transform snapshot helpers** — `DSMTransformData`, `DSMRectData`
 - **Editor Manager window** — define typed entries, manage slots, edit values, generate `DSMConstant.cs` on demand
 - **Runtime Config Canvas** — expose selected entries to an in-game UI canvas; auto-generates typed input widgets per value
+
+---
+
+### How to add submodule by command line
+```bash
+git submodule add  <url> <relative_path>
+```
+Example
+```bash
+git submodule add git@github.com:draftsama/data-save-manager.git Assets/data-save-manager
+```
 
 ---
 
@@ -32,10 +43,11 @@ This creates `Assets/Resources/DSMConfig.asset`. Adjust settings in the Inspecto
 | Auto Save | Save automatically after every `Set()` |
 | Auto Save Debounce | Delay (seconds) before auto-save fires |
 | Encrypt | Store save files as encrypted `.enc` |
-| Encryption Key | Password used for AES encryption |
 | Save Path | Override default `persistentDataPath/DSM` |
 | Default Slot | Name of the default save slot |
 | Pretty Print | Indent JSON for readability |
+
+> **Note:** The encryption key is **not** stored in the config asset. Set it at runtime via `DSM.Configure(config)` followed by `config.SetEncryptionKey("your-key")`. See [Configuration via Code](#configuration-via-code).
 
 ### 2. Use the API
 
@@ -64,6 +76,8 @@ await DSM.LoadAsync();
 ### 3. Use typed constants (recommended)
 
 Open **DSM › Open Manager**, create entries, and click **Save DSMConstant.cs**.
+
+> **Convention:** Entry keys must start with an uppercase letter (PascalCase). The code generator emits a warning for any key that begins with a lowercase letter.
 
 ```csharp
 // Generated: DSMConstant.cs
@@ -358,6 +372,21 @@ void Awake()
 
 Calling `Configure()` after DSM has already been used is safe; it replaces the manager cleanly.
 
+### Setting the Encryption Key
+
+The encryption key is intentionally **not** serialized in `DSMConfig.asset` to prevent secrets being committed to source control. Set it in code before DSM first accesses encrypted files:
+
+```csharp
+void Awake()
+{
+    var config = Resources.Load<DSMConfig>("DSMConfig");
+    config.SetEncryptionKey("your-secret-key"); // call before any Save/Load
+    DSM.Configure(config);
+}
+```
+
+> **Breaking change (v1.0):** Encrypted save files now use a random per-file salt prepended to the ciphertext (`[16-byte IV][32-byte salt][ciphertext]`). Files encrypted with the previous format (fixed salt) cannot be decrypted with this version.
+
 ---
 
 ## File Structure
@@ -375,6 +404,7 @@ Assets/DataSaveManager/
 │   ├── DSMConstant.cs          Auto-generated typed constants (shared defaults)
 │   ├── DSMDataEntry.cs         Entry model (key / type / default)
 │   ├── DSMDataType.cs          Enum of supported types
+│   ├── DSMPaths.cs             Centralized save-directory path helper
 │   ├── IDSMWidget.cs           Interface for runtime widget prefabs
 │   ├── DSMWidgetConfig.cs      ScriptableObject — maps DSMDataType to widget prefab
 │   ├── DSMRuntimePanel.cs      MonoBehaviour — spawns widgets on Canvas at runtime

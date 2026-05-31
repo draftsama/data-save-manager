@@ -1,0 +1,21 @@
+{
+  "name": "com.draftsama.datasavemanager",
+  "version": "1.0.0",
+  "displayName": "DataSaveManager",
+  "description": "A lightweight, slot-based save system for Unity with JSON serialization, optional AES-256 encryption (random per-file salt), reactive change watching via UniTask, and an Editor Manager window for defining typed data constants.",
+  "unity": "6000.0",
+  "author": {
+    "name": "draftsama"
+  },
+  "dependencies": {
+    "com.cysharp.unitask": "https://github.com/Cysharp/UniTask.git?path=src/UniTask/Assets/Plugins/UniTask",
+    "com.unity.nuget.newtonsoft-json": "3.2.1"
+  },
+  "keywords": [
+    "save",
+    "data",
+    "persistence",
+    "slot",
+    "encryption"
+  ]
+}
