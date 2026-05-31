@@ -12,7 +12,7 @@ public sealed class DSMRuntimePanel : MonoBehaviour
 
     [SerializeField] private string _slotName = "default";
 
-    private void Start() => BuildWidgets();
+    private void Awake() => BuildWidgets();
 
     public void Rebuild()
     {
@@ -23,10 +23,14 @@ public sealed class DSMRuntimePanel : MonoBehaviour
 
     private void BuildWidgets()
     {
-        if (_config == null || _widgetConfig == null || _container == null) return;
+        if (_config == null || _widgetConfig == null || _container == null)
+        {
+            Debug.LogError($"DSMRuntimePanel on '{gameObject.name}': _config, _widgetConfig, or _container is not assigned in the Inspector.", this);
+            return;
+        }
         if (!DSM.GetAllSlots().Contains(_slotName))
             throw new InvalidOperationException($"DSMRuntimePanel: slot '{_slotName}' not found");
-       
+
         var slot = DSM.GetSlot(_slotName);
         slot.Load();
 

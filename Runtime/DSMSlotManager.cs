@@ -3,7 +3,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using UnityEngine;
 
 public sealed class DSMSlotManager
@@ -13,7 +12,10 @@ public sealed class DSMSlotManager
     private readonly DSMSerializer _serializer = new();
     private DSMSlot _activeSlot;
 
+    private static Type? s_constantType;
+
     public DSMSlot ActiveSlot => _activeSlot;
+    public string SaveDirectory => DSMPaths.GetSaveDirectory(_config.SavePath);
 
     public DSMSlotManager(DSMConfig config)
     {
@@ -33,7 +35,7 @@ public sealed class DSMSlotManager
     public void DeleteSlot(string name)
     {
         _slots.Remove(name);
-        var dir = GetSaveDirectory();
+        var dir = SaveDirectory;
         var jsonPath = Path.Combine(dir, $"{name}.json");
         var encPath = Path.Combine(dir, $"{name}.enc");
         if (File.Exists(jsonPath)) File.Delete(jsonPath);
@@ -42,16 +44,18 @@ public sealed class DSMSlotManager
 
     public string[] GetAllSlots()
     {
-        var dir = GetSaveDirectory();
+        var dir = SaveDirectory;
         if (!Directory.Exists(dir)) return Array.Empty<string>();
 
-        return Directory.GetFiles(dir, "*.json")
-            .Concat(Directory.GetFiles(dir, "*.enc"))
-            .Select(Path.GetFileNameWithoutExtension)
-            .Where(name => name is not null)
-            .Select(name => name!)
-            .Distinct()
-            .ToArray();
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var file in Directory.GetFiles(dir))
+        {
+            var ext = Path.GetExtension(file);
+            if (ext.Equals(".json", StringComparison.OrdinalIgnoreCase) ||
+                ext.Equals(".enc",  StringComparison.OrdinalIgnoreCase))
+                names.Add(Path.GetFileNameWithoutExtension(file)!);
+        }
+        return names.ToArray();
     }
 
     public void SaveActiveSlot() => _activeSlot.Save();
@@ -59,13 +63,27 @@ public sealed class DSMSlotManager
     private DSMSlot GetOrCreateSlot(string name)
     {
         if (_slots.TryGetValue(name, out var slot)) return slot;
-        slot = new DSMSlot(name, _config, _serializer);
+        slot = new DSMSlot(name, _config, _serializer, SaveDirectory, ResolveConstantType());
         _slots[name] = slot;
         return slot;
     }
 
-    private string GetSaveDirectory() =>
-        string.IsNullOrEmpty(_config.SavePath)
-            ? Path.Combine(Application.persistentDataPath, "DSM")
-            : _config.SavePath;
+    private static Type? ResolveConstantType()
+    {
+        if (s_constantType != null) return s_constantType;
+        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+        {
+            try
+            {
+                foreach (var t in assembly.GetTypes())
+                {
+                    if (t.Name == "DSMConstant" && t.IsClass && t.IsAbstract && t.IsSealed)
+                        return s_constantType = t;
+                }
+            }
+            catch (System.Reflection.ReflectionTypeLoadException) { }
+            catch (Exception ex) { Debug.LogWarning($"DSM: {ex.Message}"); }
+        }
+        return null;
+    }
 }

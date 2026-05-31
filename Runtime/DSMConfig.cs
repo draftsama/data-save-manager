@@ -3,17 +3,39 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 [CreateAssetMenu(menuName = "DSM/Config")]
 public sealed class DSMConfig : ScriptableObject
 {
-    [field: SerializeField] public bool AutoSave { get; private set; } = true;
-    [field: SerializeField] public float AutoSaveDebounce { get; private set; } = 2f;
-    [field: SerializeField] public bool Encrypt { get; private set; }
-    [field: SerializeField] public string EncryptionKey { get; private set; } = string.Empty;
-    [field: SerializeField] public string SavePath { get; private set; } = string.Empty;
-    [field: SerializeField] public string DefaultSlot { get; private set; } = "default";
-    [field: SerializeField] public bool PrettyPrint { get; private set; }
+    [SerializeField, FormerlySerializedAs("<AutoSave>k__BackingField")]
+    private bool _autoSave = true;
+    public bool AutoSave => _autoSave;
+
+    [SerializeField, FormerlySerializedAs("<AutoSaveDebounce>k__BackingField")]
+    private float _autoSaveDebounce = 2f;
+    public float AutoSaveDebounce => _autoSaveDebounce;
+
+    [SerializeField, FormerlySerializedAs("<Encrypt>k__BackingField")]
+    private bool _encrypt;
+    public bool Encrypt => _encrypt;
+
+    // NOT serialized — set programmatically to keep secrets out of asset files
+    [field: NonSerialized]
+    public string EncryptionKey { get; private set; } = string.Empty;
+    public void SetEncryptionKey(string key) => EncryptionKey = key;
+
+    [SerializeField, FormerlySerializedAs("<SavePath>k__BackingField")]
+    private string _savePath = string.Empty;
+    public string SavePath => _savePath;
+
+    [SerializeField, FormerlySerializedAs("<DefaultSlot>k__BackingField")]
+    private string _defaultSlot = "default";
+    public string DefaultSlot => _defaultSlot;
+
+    [SerializeField, FormerlySerializedAs("<PrettyPrint>k__BackingField")]
+    private bool _prettyPrint;
+    public bool PrettyPrint => _prettyPrint;
 
     [Serializable]
     public sealed class ExposedEntry

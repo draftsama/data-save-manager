@@ -104,7 +104,8 @@ public sealed class DSMManagerWindow : EditorWindow
                     { constantType = t; break; }
                 }
             }
-            catch { /* skip assemblies that can't be reflected */ }
+            catch (ReflectionTypeLoadException) { /* Expected — some assemblies cannot be fully reflected */ }
+            catch (Exception ex) { Debug.LogWarning($"DSM: Unexpected exception scanning assembly for DSMConstant: {ex.Message}"); }
             if (constantType != null) break;
         }
 
@@ -151,17 +152,12 @@ public sealed class DSMManagerWindow : EditorWindow
 
     // ── Slot I/O ──────────────────────────────────────────────────────────────
 
-    private string GetSaveDirectory() =>
-        string.IsNullOrEmpty(_config?.SavePath)
-            ? Path.Combine(Application.persistentDataPath, "DSM")
-            : _config.SavePath;
-
     private string GetSlotName() =>
         string.IsNullOrEmpty(_config?.DefaultSlot) ? "default" : _config.DefaultSlot;
 
     private void DiscoverSlots()
     {
-        var dir = GetSaveDirectory();
+        var dir = DSMPaths.GetSaveDirectory(_config?.SavePath);
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         names.Add(GetSlotName());
         if (Directory.Exists(dir))
@@ -188,7 +184,7 @@ public sealed class DSMManagerWindow : EditorWindow
 
     private JObject? ReadSlotJObject(string slot)
     {
-        var dir = GetSaveDirectory();
+        var dir = DSMPaths.GetSaveDirectory(_config?.SavePath);
         var enc  = Path.Combine(dir, $"{slot}.enc");
         var json = Path.Combine(dir, $"{slot}.json");
         try
@@ -206,7 +202,7 @@ public sealed class DSMManagerWindow : EditorWindow
 
     private void WriteSlotJObject(string slot, JObject data)
     {
-        var dir = GetSaveDirectory();
+        var dir = DSMPaths.GetSaveDirectory(_config?.SavePath);
         Directory.CreateDirectory(dir);
         var pretty = _config?.PrettyPrint == true ? Formatting.Indented : Formatting.None;
         var json = data.ToString(pretty);
@@ -332,40 +328,50 @@ public sealed class DSMManagerWindow : EditorWindow
             {
                 _configSO!.Update();
                 EditorGUILayout.Space(4);
-                using (new EditorGUILayout.HorizontalScope())
-                {
-                    GUILayout.Label("Auto Save", EditorStyles.miniLabel, GUILayout.Width(62));
-                    ConfigProp("<AutoSave>k__BackingField").boolValue =
-                        EditorGUILayout.Toggle(ConfigProp("<AutoSave>k__BackingField").boolValue, GUILayout.Width(16));
-                    GUILayout.Space(14);
-                    GUILayout.Label("Debounce", EditorStyles.miniLabel, GUILayout.Width(58));
-                    ConfigProp("<AutoSaveDebounce>k__BackingField").floatValue =
-                        EditorGUILayout.FloatField(ConfigProp("<AutoSaveDebounce>k__BackingField").floatValue, GUILayout.Width(38));
-                    GUILayout.Label("s", EditorStyles.miniLabel, GUILayout.Width(10));
-                    GUILayout.Space(14);
-                    GUILayout.Label("Encrypt", EditorStyles.miniLabel, GUILayout.Width(48));
-                    ConfigProp("<Encrypt>k__BackingField").boolValue =
-                        EditorGUILayout.Toggle(ConfigProp("<Encrypt>k__BackingField").boolValue, GUILayout.Width(16));
-                    GUILayout.Space(14);
-                    GUILayout.Label("Pretty", EditorStyles.miniLabel, GUILayout.Width(38));
-                    ConfigProp("<PrettyPrint>k__BackingField").boolValue =
-                        EditorGUILayout.Toggle(ConfigProp("<PrettyPrint>k__BackingField").boolValue, GUILayout.Width(16));
-                    GUILayout.FlexibleSpace();
-                }
+                DrawConfigToggles();
                 EditorGUILayout.Space(3);
-                using (new EditorGUILayout.HorizontalScope())
-                {
-                    GUILayout.Label("Default Slot", EditorStyles.miniLabel, GUILayout.Width(70));
-                    GUILayout.Label(_config.DefaultSlot, EditorStyles.miniLabel);
-                    GUILayout.FlexibleSpace();
-                    if (GUILayout.Button("Edit Config →", GUILayout.Width(100)))
-                        Selection.activeObject = _config;
-                }
+                DrawConfigSlotRow();
                 _configSO.ApplyModifiedProperties();
             }
         }
         EditorGUILayout.EndFoldoutHeaderGroup();
         DrawSeparator();
+    }
+
+    private void DrawConfigToggles()
+    {
+        using (new EditorGUILayout.HorizontalScope())
+        {
+            GUILayout.Label("Auto Save", EditorStyles.miniLabel, GUILayout.Width(62));
+            ConfigProp("_autoSave").boolValue =
+                EditorGUILayout.Toggle(ConfigProp("_autoSave").boolValue, GUILayout.Width(16));
+            GUILayout.Space(14);
+            GUILayout.Label("Debounce", EditorStyles.miniLabel, GUILayout.Width(58));
+            ConfigProp("_autoSaveDebounce").floatValue =
+                EditorGUILayout.FloatField(ConfigProp("_autoSaveDebounce").floatValue, GUILayout.Width(38));
+            GUILayout.Label("s", EditorStyles.miniLabel, GUILayout.Width(10));
+            GUILayout.Space(14);
+            GUILayout.Label("Encrypt", EditorStyles.miniLabel, GUILayout.Width(48));
+            ConfigProp("_encrypt").boolValue =
+                EditorGUILayout.Toggle(ConfigProp("_encrypt").boolValue, GUILayout.Width(16));
+            GUILayout.Space(14);
+            GUILayout.Label("Pretty", EditorStyles.miniLabel, GUILayout.Width(38));
+            ConfigProp("_prettyPrint").boolValue =
+                EditorGUILayout.Toggle(ConfigProp("_prettyPrint").boolValue, GUILayout.Width(16));
+            GUILayout.FlexibleSpace();
+        }
+    }
+
+    private void DrawConfigSlotRow()
+    {
+        using (new EditorGUILayout.HorizontalScope())
+        {
+            GUILayout.Label("Default Slot", EditorStyles.miniLabel, GUILayout.Width(70));
+            GUILayout.Label(_config!.DefaultSlot, EditorStyles.miniLabel);
+            GUILayout.FlexibleSpace();
+            if (GUILayout.Button("Edit Config →", GUILayout.Width(100)))
+                Selection.activeObject = _config;
+        }
     }
 
     // ── Slot bar ──────────────────────────────────────────────────────────────
@@ -436,7 +442,7 @@ public sealed class DSMManagerWindow : EditorWindow
     {
         if (!EditorUtility.DisplayDialog("Delete Slot",
             $"Delete slot '{_activeSlot}'? This cannot be undone.", "Delete", "Cancel")) return;
-        var dir = GetSaveDirectory();
+        var dir = DSMPaths.GetSaveDirectory(_config?.SavePath);
         foreach (var ext in new[] { ".json", ".enc" })
         {
             var path = Path.Combine(dir, _activeSlot + ext);
@@ -700,7 +706,7 @@ public sealed class DSMManagerWindow : EditorWindow
     {
         if (_configSO == null) return;
         _configSO.Update();
-        ConfigProp("<DefaultSlot>k__BackingField").stringValue = slotName;
+        ConfigProp("_defaultSlot").stringValue = slotName;
         _configSO.ApplyModifiedProperties();
         AssetDatabase.SaveAssets();
         Repaint();

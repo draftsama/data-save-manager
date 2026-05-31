@@ -26,6 +26,8 @@ public static class DSMCodeGenerator
         foreach (var entry in entries)
         {
             if (string.IsNullOrWhiteSpace(entry.Key)) continue;
+            if (char.IsLower(entry.Key[0]))
+                Debug.LogWarning($"DSM: Key '{entry.Key}' does not follow PascalCase convention. Consider renaming it.");
             sb.AppendLine($"    {BuildDeclaration(entry)}");
         }
 

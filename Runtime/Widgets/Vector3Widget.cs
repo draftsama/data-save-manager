@@ -16,14 +16,19 @@ public sealed class Vector3Widget : MonoBehaviour, IDSMWidget
 
     public void Setup(string key, DSMDataType type, string label, DSMSlot slot)
     {
+        if (_label == null || _xInput == null || _yInput == null || _zInput == null)
+        {
+            Debug.LogError($"Vector3Widget on '{gameObject.name}': _label, _xInput, _yInput, or _zInput is not assigned.", this);
+            return;
+        }
         _key = key;
         _slot = slot;
-        _label!.text = label;
+        _label.text = label;
 
         var value = slot.Get(key, Vector3.zero);
-        _xInput!.text = value.x.ToString("G", CultureInfo.InvariantCulture);
-        _yInput!.text = value.y.ToString("G", CultureInfo.InvariantCulture);
-        _zInput!.text = value.z.ToString("G", CultureInfo.InvariantCulture);
+        _xInput.text = value.x.ToString("G", CultureInfo.InvariantCulture);
+        _yInput.text = value.y.ToString("G", CultureInfo.InvariantCulture);
+        _zInput.text = value.z.ToString("G", CultureInfo.InvariantCulture);
 
         _xInput.onEndEdit.AddListener(_ => ApplyValue());
         _yInput.onEndEdit.AddListener(_ => ApplyValue());
@@ -32,9 +37,9 @@ public sealed class Vector3Widget : MonoBehaviour, IDSMWidget
 
     private void ApplyValue()
     {
-        float.TryParse(_xInput!.text, NumberStyles.Any, CultureInfo.InvariantCulture, out var x);
-        float.TryParse(_yInput!.text, NumberStyles.Any, CultureInfo.InvariantCulture, out var y);
-        float.TryParse(_zInput!.text, NumberStyles.Any, CultureInfo.InvariantCulture, out var z);
-        _slot!.Set(_key, new Vector3(x, y, z));
+        float.TryParse(_xInput?.text, NumberStyles.Any, CultureInfo.InvariantCulture, out var x);
+        float.TryParse(_yInput?.text, NumberStyles.Any, CultureInfo.InvariantCulture, out var y);
+        float.TryParse(_zInput?.text, NumberStyles.Any, CultureInfo.InvariantCulture, out var z);
+        _slot?.Set(_key, new Vector3(x, y, z));
     }
 }

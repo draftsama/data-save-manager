@@ -15,14 +15,18 @@ public sealed class DSMSlot
     private readonly DSMConfig _config;
     private readonly DSMSerializer _serializer;
     private readonly DSMWatcher _watcher = new();
+    private readonly string _saveDirectory;
+    private readonly Type? _constantType;
     private Dictionary<string, JToken> _data = new();
     private CancellationTokenSource? _debounceCts;
 
-    public DSMSlot(string slotName, DSMConfig config, DSMSerializer serializer)
+    public DSMSlot(string slotName, DSMConfig config, DSMSerializer serializer, string saveDirectory, Type? constantType)
     {
         _slotName = slotName;
         _config = config;
         _serializer = serializer;
+        _saveDirectory = saveDirectory;
+        _constantType = constantType;
     }
 
     public void Set<T>(string key, T value) where T : notnull
@@ -119,27 +123,13 @@ public sealed class DSMSlot
     private void SeedDefaults()
     {
         _data = new Dictionary<string, JToken>();
-        Type? constantType = null;
-        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
-        {
-            try
-            {
-                foreach (var t in assembly.GetTypes())
-                {
-                    if (t.Name == "DSMConstant" && t.IsClass && t.IsAbstract && t.IsSealed)
-                    { constantType = t; break; }
-                }
-            }
-            catch { }
-            if (constantType != null) break;
-        }
-        if (constantType == null) return;
-        foreach (var field in constantType.GetFields(BindingFlags.Public | BindingFlags.Static))
+        if (_constantType == null) return;
+        foreach (var field in _constantType.GetFields(BindingFlags.Public | BindingFlags.Static))
         {
             var value = field.GetValue(null);
             if (value == null) continue;
             try { _data[field.Name] = JToken.FromObject(value, _serializer.JsonSerializer); }
-            catch { }
+            catch (Exception ex) { Debug.LogWarning($"DSM: Could not seed default for '{field.Name}': {ex.Message}"); }
         }
     }
 
@@ -167,28 +157,21 @@ public sealed class DSMSlot
 
     private string GetSavePath()
     {
-        var dir = GetSaveDirectory();
-        Directory.CreateDirectory(dir);
+        Directory.CreateDirectory(_saveDirectory);
         var ext = _config.Encrypt ? "enc" : "json";
-        return Path.Combine(dir, $"{_slotName}.{ext}");
+        return Path.Combine(_saveDirectory, $"{_slotName}.{ext}");
     }
 
     private string? GetLoadPath()
     {
-        var dir = GetSaveDirectory();
-        var encPath = Path.Combine(dir, $"{_slotName}.enc");
-        var jsonPath = Path.Combine(dir, $"{_slotName}.json");
+        var encPath = Path.Combine(_saveDirectory, $"{_slotName}.enc");
+        var jsonPath = Path.Combine(_saveDirectory, $"{_slotName}.json");
 
         // Prefer encrypted file when both exist
         if (File.Exists(encPath)) return encPath;
         if (File.Exists(jsonPath)) return jsonPath;
         return null;
     }
-
-    private string GetSaveDirectory() =>
-        string.IsNullOrEmpty(_config.SavePath)
-            ? Path.Combine(Application.persistentDataPath, "DSM")
-            : _config.SavePath;
 
     private static bool IsEncryptedFile(string path) =>
         Path.GetExtension(path).Equals(".enc", StringComparison.OrdinalIgnoreCase);
