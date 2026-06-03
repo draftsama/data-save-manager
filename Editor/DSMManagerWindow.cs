@@ -59,7 +59,7 @@ public sealed class DSMManagerWindow : EditorWindow
         s_sectionBox ??= new GUIStyle(EditorStyles.helpBox) { padding = new RectOffset(10, 10, 8, 8), margin = new RectOffset(4, 4, 2, 2) };
         s_rowBox ??= new GUIStyle(EditorStyles.helpBox) { padding = new RectOffset(6, 6, 4, 4), margin = new RectOffset(0, 0, 1, 1) };
         s_deleteBtn ??= new GUIStyle(EditorStyles.miniButton) { normal = { textColor = new Color(0.9f, 0.3f, 0.3f) }, fontStyle = FontStyle.Bold };
-        s_keyLabel ??= new GUIStyle(EditorStyles.label) { fontStyle = FontStyle.Bold };
+        s_keyLabel ??= new GUIStyle(EditorStyles.label) { fontStyle = FontStyle.Bold, normal = { textColor = Color.white } };
     }
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
@@ -82,8 +82,8 @@ public sealed class DSMManagerWindow : EditorWindow
         DiscoverSlots();
         if (!_availableSlots.Any(s => s == _activeSlot))
             _activeSlot = GetSlotName();
-        LoadSlotData(_activeSlot);
         _defaultsDirty = false;
+        LoadSlotData(_activeSlot);
         Repaint();
     }
 
@@ -180,6 +180,18 @@ public sealed class DSMManagerWindow : EditorWindow
         if (jObj == null) return;
         foreach (var prop in jObj.Properties())
             _slotData[prop.Name] = prop.Value;
+        SyncRuntimeKeys();
+    }
+
+    private void SyncRuntimeKeys()
+    {
+        foreach (var kvp in _slotData)
+        {
+            if (_defaults.Exists(e => e.Key == kvp.Key)) continue;
+            var (type, serialized) = InferFromToken(kvp.Value);
+            _defaults.Add(new DSMDataEntry { Key = kvp.Key, Type = type, SerializedDefault = serialized });
+            _defaultsDirty = true;
+        }
     }
 
     private JObject? ReadSlotJObject(string slot)
@@ -511,7 +523,11 @@ public sealed class DSMManagerWindow : EditorWindow
             var isExposed = _config?.FindExposed(key) != null;
             using (new EditorGUILayout.HorizontalScope())
             {
-                GUILayout.Label(key, s_keyLabel!, GUILayout.Width(120));
+                GUILayout.BeginHorizontal();
+                GUILayout.Label("key:", GUILayout.Width(36));
+                GUILayout.TextField(key, GUILayout.Width(120));
+                                GUILayout.EndHorizontal();
+
 
                 if (defEntry != null)
                 {
