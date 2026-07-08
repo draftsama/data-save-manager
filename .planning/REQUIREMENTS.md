@@ -93,39 +93,39 @@ Which phases cover which requirements. Populated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CONC-01 | TBD | Pending |
-| CONC-02 | TBD | Pending |
-| CONC-03 | TBD | Pending |
-| CONC-04 | TBD | Pending |
-| TEST-01 | TBD | Pending |
-| BUGS-02 | TBD | Pending |
-| ENC-01 | TBD | Pending |
-| ENC-02 | TBD | Pending |
-| BUGS-01 | TBD | Pending |
-| BUGS-03 | TBD | Pending |
-| BUGS-04 | TBD | Pending |
-| SCHM-01 | TBD | Pending |
-| SCHM-02 | TBD | Pending |
-| MIGR-01 | TBD | Pending |
-| MIGR-02 | TBD | Pending |
-| MIGR-03 | TBD | Pending |
-| TEST-06 | TBD | Pending |
-| WATCH-01 | TBD | Pending |
-| EDIT-01 | TBD | Pending |
-| PERF-01 | TBD | Pending |
-| PERF-02 | TBD | Pending |
-| PERF-03 | TBD | Pending |
-| PERF-04 | TBD | Pending |
-| TEST-02 | TBD | Pending |
-| TEST-03 | TBD | Pending |
-| TEST-04 | TBD | Pending |
-| TEST-05 | TBD | Pending |
+| CONC-01 | Phase 1 | Pending |
+| CONC-02 | Phase 1 | Pending |
+| CONC-03 | Phase 1 | Pending |
+| CONC-04 | Phase 1 | Pending |
+| TEST-01 | Phase 1 | Pending |
+| BUGS-02 | Phase 2 | Pending |
+| ENC-01 | Phase 2 | Pending |
+| ENC-02 | Phase 2 | Pending |
+| BUGS-01 | Phase 5 | Pending |
+| BUGS-03 | Phase 1 | Pending |
+| BUGS-04 | Phase 1 | Pending |
+| SCHM-01 | Phase 3 | Pending |
+| SCHM-02 | Phase 3 | Pending |
+| MIGR-01 | Phase 4 | Pending |
+| MIGR-02 | Phase 4 | Pending |
+| MIGR-03 | Phase 4 | Pending |
+| TEST-06 | Phase 4 | Pending |
+| WATCH-01 | Phase 5 | Pending |
+| EDIT-01 | Phase 5 | Pending |
+| PERF-01 | Phase 5 | Pending |
+| PERF-02 | Phase 5 | Pending |
+| PERF-03 | Phase 5 | Pending |
+| PERF-04 | Phase 5 | Pending |
+| TEST-02 | Phase 2 | Pending |
+| TEST-03 | Phase 1 | Pending |
+| TEST-04 | Phase 1 | Pending |
+| TEST-05 | Phase 5 | Pending |
 
 **Coverage:**
 - v1 requirements: 27 total
-- Mapped to phases: 0 (pending roadmap creation)
-- Unmapped: 27 ⚠️ (expected — roadmap creation resolves this)
+- Mapped to phases: 27
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-07-08*
-*Last updated: 2026-07-08 after initial definition*
+*Last updated: 2026-07-08 after roadmap creation (27/27 requirements mapped across 5 phases)*
