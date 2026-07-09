@@ -20,6 +20,7 @@ public sealed class DSMSlot
     private Dictionary<string, JToken> _data = new();
     private CancellationTokenSource? _debounceCts;
     private readonly object _dataLock = new();
+    private readonly SemaphoreSlim _ioGate = new(1, 1);
 
     public DSMSlot(string slotName, DSMConfig config, DSMSerializer serializer, string saveDirectory, Type? constantType)
     {
@@ -78,65 +79,129 @@ public sealed class DSMSlot
 
     public void Save()
     {
-        CancelDebounce();
-        var json = _serializer.Serialize(_data, _config.PrettyPrint);
-        var path = GetSavePath();
+        _ioGate.Wait();
+        try
+        {
+            CancelDebounce();
+            var json = _serializer.Serialize(_data, _config.PrettyPrint);
+            var path = GetSavePath();
+            var tmpPath = path + ".tmp";
 
-        if (_config.Encrypt)
-            File.WriteAllBytes(path, DSMEncryptor.Encrypt(json, _config.EncryptionKey));
-        else
-            File.WriteAllText(path, json);
+            try
+            {
+                if (_config.Encrypt)
+                    File.WriteAllBytes(tmpPath, DSMEncryptor.Encrypt(json, _config.EncryptionKey));
+                else
+                    File.WriteAllText(tmpPath, json);
+
+                ReplaceFile(tmpPath, path);
+            }
+            catch
+            {
+                if (File.Exists(tmpPath))
+                    File.Delete(tmpPath);
+                throw;
+            }
+        }
+        finally
+        {
+            _ioGate.Release();
+        }
     }
 
     public void Load()
     {
-        var path = GetLoadPath();
-        if (path is null)
+        _ioGate.Wait();
+        try
         {
-            SeedDefaults();
-            return;
+            var path = GetLoadPath();
+            if (path is null)
+            {
+                SeedDefaults();
+                return;
+            }
+
+            var json = IsEncryptedFile(path)
+                ? DSMEncryptor.Decrypt(File.ReadAllBytes(path), _config.EncryptionKey)
+                : File.ReadAllText(path);
+
+            var deserialized = _serializer.Deserialize(json);
+            lock (_dataLock)
+            {
+                _data = deserialized;
+            }
         }
-
-        var json = IsEncryptedFile(path)
-            ? DSMEncryptor.Decrypt(File.ReadAllBytes(path), _config.EncryptionKey)
-            : File.ReadAllText(path);
-
-        _data = _serializer.Deserialize(json);
+        finally
+        {
+            _ioGate.Release();
+        }
     }
 
     public async UniTask SaveAsync()
     {
-        CancelDebounce();
-        var json = _serializer.Serialize(_data, _config.PrettyPrint);
-        var path = GetSavePath();
+        await _ioGate.WaitAsync();
+        try
+        {
+            CancelDebounce();
+            var json = _serializer.Serialize(_data, _config.PrettyPrint);
+            var path = GetSavePath();
+            var tmpPath = path + ".tmp";
 
-        if (_config.Encrypt)
-            await File.WriteAllBytesAsync(path, DSMEncryptor.Encrypt(json, _config.EncryptionKey));
-        else
-            await File.WriteAllTextAsync(path, json);
+            try
+            {
+                if (_config.Encrypt)
+                    await File.WriteAllBytesAsync(tmpPath, DSMEncryptor.Encrypt(json, _config.EncryptionKey));
+                else
+                    await File.WriteAllTextAsync(tmpPath, json);
+
+                ReplaceFile(tmpPath, path);
+            }
+            catch
+            {
+                if (File.Exists(tmpPath))
+                    File.Delete(tmpPath);
+                throw;
+            }
+        }
+        finally
+        {
+            _ioGate.Release();
+        }
     }
 
     public async UniTask LoadAsync()
     {
-        var path = GetLoadPath();
-        if (path is null)
+        await _ioGate.WaitAsync();
+        try
         {
-            SeedDefaults();
-            return;
-        }
+            var path = GetLoadPath();
+            if (path is null)
+            {
+                SeedDefaults();
+                return;
+            }
 
-        string json;
-        if (IsEncryptedFile(path))
-        {
-            var bytes = await File.ReadAllBytesAsync(path);
-            json = DSMEncryptor.Decrypt(bytes, _config.EncryptionKey);
-        }
-        else
-        {
-            json = await File.ReadAllTextAsync(path);
-        }
+            string json;
+            if (IsEncryptedFile(path))
+            {
+                var bytes = await File.ReadAllBytesAsync(path);
+                json = DSMEncryptor.Decrypt(bytes, _config.EncryptionKey);
+            }
+            else
+            {
+                json = await File.ReadAllTextAsync(path);
+            }
 
-        _data = _serializer.Deserialize(json);
+            var deserialized = _serializer.Deserialize(json);
+            lock (_dataLock)
+            {
+                _data = deserialized;
+            }
+        }
+        finally
+        {
+            _ioGate.Release();
+        }
     }
 
     public IUniTaskAsyncEnumerable<T> WatchAsync<T>(string key) =>
@@ -205,4 +270,15 @@ public sealed class DSMSlot
 
     private static bool IsEncryptedFile(string path) =>
         Path.GetExtension(path).Equals(".enc", StringComparison.OrdinalIgnoreCase);
+
+    // Portable atomic-rename: File.Move(src, dest, overwrite) is not available at Unity's
+    // API compatibility level, so use File.Replace when the destination already exists
+    // (atomic on the file system) and fall back to a plain Move for the first-ever save.
+    private static void ReplaceFile(string tmpPath, string destPath)
+    {
+        if (File.Exists(destPath))
+            File.Replace(tmpPath, destPath, null);
+        else
+            File.Move(tmpPath, destPath);
+    }
 }
