@@ -11,6 +11,7 @@ public sealed class DSMSlotManager
     private readonly DSMConfig _config;
     private readonly DSMSerializer _serializer = new();
     private DSMSlot _activeSlot;
+    private readonly object _slotsLock = new();
 
     private static Type? s_constantType;
 
@@ -34,7 +35,10 @@ public sealed class DSMSlotManager
 
     public void DeleteSlot(string name)
     {
-        _slots.Remove(name);
+        lock (_slotsLock)
+        {
+            _slots.Remove(name);
+        }
         var dir = SaveDirectory;
         var jsonPath = Path.Combine(dir, $"{name}.json");
         var encPath = Path.Combine(dir, $"{name}.enc");
@@ -64,10 +68,13 @@ public sealed class DSMSlotManager
 
     private DSMSlot GetOrCreateSlot(string name)
     {
-        if (_slots.TryGetValue(name, out var slot)) return slot;
-        slot = new DSMSlot(name, _config, _serializer, SaveDirectory, ResolveConstantType());
-        _slots[name] = slot;
-        return slot;
+        lock (_slotsLock)
+        {
+            if (_slots.TryGetValue(name, out var slot)) return slot;
+            slot = new DSMSlot(name, _config, _serializer, SaveDirectory, ResolveConstantType());
+            _slots[name] = slot;
+            return slot;
+        }
     }
 
     private static Type? ResolveConstantType()

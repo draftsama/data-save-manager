@@ -19,6 +19,7 @@ public sealed class DSMSlot
     private readonly Type? _constantType;
     private Dictionary<string, JToken> _data = new();
     private CancellationTokenSource? _debounceCts;
+    private readonly object _dataLock = new();
 
     public DSMSlot(string slotName, DSMConfig config, DSMSerializer serializer, string saveDirectory, Type? constantType)
     {
@@ -31,7 +32,11 @@ public sealed class DSMSlot
 
     public void Set<T>(string key, T value) where T : notnull
     {
-        _data[key] = JToken.FromObject(value, _serializer.JsonSerializer);
+        var token = JToken.FromObject(value, _serializer.JsonSerializer);
+        lock (_dataLock)
+        {
+            _data[key] = token;
+        }
         _watcher.Notify(key, value);
         if (_config.AutoSave)
             ScheduleSave();
@@ -39,15 +44,37 @@ public sealed class DSMSlot
 
     public T Get<T>(string key, T defaultValue)
     {
-        if (!_data.TryGetValue(key, out var token)) return defaultValue;
+        JToken? token;
+        lock (_dataLock)
+        {
+            if (!_data.TryGetValue(key, out token)) return defaultValue;
+        }
         return token.ToObject<T>(_serializer.JsonSerializer) ?? defaultValue;
     }
 
-    public bool Has(string key) => _data.ContainsKey(key);
+    public bool Has(string key)
+    {
+        lock (_dataLock)
+        {
+            return _data.ContainsKey(key);
+        }
+    }
 
-    public void Delete(string key) => _data.Remove(key);
+    public void Delete(string key)
+    {
+        lock (_dataLock)
+        {
+            _data.Remove(key);
+        }
+    }
 
-    public void Clear() => _data.Clear();
+    public void Clear()
+    {
+        lock (_dataLock)
+        {
+            _data.Clear();
+        }
+    }
 
     public void Save()
     {
@@ -122,14 +149,17 @@ public sealed class DSMSlot
 
     private void SeedDefaults()
     {
-        _data = new Dictionary<string, JToken>();
-        if (_constantType == null) return;
-        foreach (var field in _constantType.GetFields(BindingFlags.Public | BindingFlags.Static))
+        lock (_dataLock)
         {
-            var value = field.GetValue(null);
-            if (value == null) continue;
-            try { _data[field.Name] = JToken.FromObject(value, _serializer.JsonSerializer); }
-            catch (Exception ex) { Debug.LogWarning($"DSM: Could not seed default for '{field.Name}': {ex.Message}"); }
+            _data = new Dictionary<string, JToken>();
+            if (_constantType == null) return;
+            foreach (var field in _constantType.GetFields(BindingFlags.Public | BindingFlags.Static))
+            {
+                var value = field.GetValue(null);
+                if (value == null) continue;
+                try { _data[field.Name] = JToken.FromObject(value, _serializer.JsonSerializer); }
+                catch (Exception ex) { Debug.LogWarning($"DSM: Could not seed default for '{field.Name}': {ex.Message}"); }
+            }
         }
     }
 
