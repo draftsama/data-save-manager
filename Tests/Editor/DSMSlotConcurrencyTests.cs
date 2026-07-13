@@ -145,7 +145,7 @@ public class DSMSlotConcurrencyTests
 
             slot.Set("score", 77);
 
-            var results = await UniTask.WhenAll(subscriber1, subscriber2, subscriber3);
+            var results = await UniTask.WhenAll(new[] { subscriber1, subscriber2, subscriber3 });
 
             Assert.That(results, Is.All.EqualTo(77));
         }
