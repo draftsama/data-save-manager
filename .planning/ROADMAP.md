@@ -13,7 +13,7 @@ This milestone hardens an existing, working save system rather than building one
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Foundation — Thread-Safety, Robustness & Test Infrastructure** - Synchronize shared slot state, fix the debounce/CTS race, make saves atomic, harden slot-name/input validation, and stand up the test framework
+- [x] **Phase 1: Foundation — Thread-Safety, Robustness & Test Infrastructure** - Synchronize shared slot state, fix the debounce/CTS race, make saves atomic, harden slot-name/input validation, and stand up the test framework
 - [ ] **Phase 2: Encryption Hardening — Key Validation & Rotation** - Centralize key validation, switch to Encrypt-then-MAC (AES-CBC + HMAC-SHA256), and add atomic key rotation
 - [ ] **Phase 3: Schema Validation** - Type-safe `Set`/`Get` validation built from existing codegen metadata
 - [ ] **Phase 4: Save Versioning + Migration** - Versioned save envelope with lazy, composable per-slot migration on load
@@ -35,11 +35,11 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. Invalid input is rejected with a clear error instead of corrupting state or failing silently: path-traversal/reserved slot names are rejected, malformed JSON on load doesn't crash, and a widget prefab missing its `IDSMWidget` component logs a warning instead of failing silently
   5. `Tests/Editor` and `Tests/Runtime` asmdefs exist, and the full suite (concurrency regression tests, invalid-input tests, slot-name-validation tests) runs green in the Unity Test Runner
 
-**Plans**: 1/3 plans executed
+**Plans**: 3/3 plans executed
 
 - [x] 01-01-PLAN.md
 - [x] 01-02-PLAN.md
-- [ ] 01-03-PLAN.md
+- [x] 01-03-PLAN.md
 
 **UI hint**: yes
 
@@ -111,7 +111,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation — Thread-Safety, Robustness & Test Infrastructure | 1/3 | In Progress|  |
+| 1. Foundation — Thread-Safety, Robustness & Test Infrastructure | 3/3 | Complete | 2026-07-13 |
 | 2. Encryption Hardening — Key Validation & Rotation | 0/TBD | Not started | - |
 | 3. Schema Validation | 0/TBD | Not started | - |
 | 4. Save Versioning + Migration | 0/TBD | Not started | - |

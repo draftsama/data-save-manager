@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 01
-current_phase_name: foundation-thread-safety-robustness-test-infrastructure
-status: executing
-stopped_at: Phase 1 context gathered
-last_updated: "2026-07-13T07:05:51.673Z"
-last_activity: 2026-07-09
-last_activity_desc: Phase 01 execution started
+current_phase: 02
+current_phase_name: encryption-hardening
+status: ready
+stopped_at: Phase 01 complete, Task 3 checkpoint approved
+last_updated: "2026-07-13T07:41:00.000Z"
+last_activity: 2026-07-13
+last_activity_desc: Phase 01 (foundation-thread-safety-robustness-test-infrastructure) complete — 3/3 plans, full EditMode suite human-verified green
 progress:
   total_phases: 5
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 3
-  completed_plans: 2
-  percent: 0
+  completed_plans: 3
+  percent: 20
 ---
 
 # Project State
@@ -24,16 +24,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-08)
 
 **Core value:** Save/load must be correct and safe — no silent data loss, no silent decryption failures, no corruption under concurrent access.
-**Current focus:** Phase 01 — foundation-thread-safety-robustness-test-infrastructure
+**Current focus:** Phase 02 — encryption-hardening (not yet planned)
 
 ## Current Position
 
-Phase: 01 (foundation-thread-safety-robustness-test-infrastructure) — EXECUTING
+Phase: 01 (foundation-thread-safety-robustness-test-infrastructure) — COMPLETE
 Plan: 3 of 3
-Status: Ready to execute
-Last activity: 2026-07-09 — Phase 01 execution started
+Status: Phase complete, ready to plan Phase 02
+Last activity: 2026-07-13 — Task 3 checkpoint approved (full 34-test EditMode suite green)
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [██░░░░░░░░] 20%
 
 ## Performance Metrics
 
@@ -57,6 +57,7 @@ Progress: [░░░░░░░░░░] 0%
 *Updated after each plan completion*
 | Phase 01 P01 | 12min | 3 tasks | 7 files |
 | Phase 01 P02 | 20min | 3 tasks | 3 files |
+| Phase 01 P03 | ~12min + fix cycle | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -70,6 +71,7 @@ Recent decisions affecting current work:
 - Roadmap: Batched watchers, performance/caching work, and Editor tooling merged into one closing Phase 5 (research proposed these as two phases) to avoid a thin single-requirement "Batched Watchers" phase, per standard granularity guidance
 - [Phase ?]: Debounce rewrite (D-01/CONC-02) drops CancellationTokenSource entirely - single long-lived loop with a monotonic request-version counter replaces per-Set() CTS churn; no lifetime CTS retained since DSMSlot has no teardown method
 - [Phase ?]: Unity Editor was already open on the project this session, blocking automated -runTests batchmode execution for Plan 02 Tasks 2-3; verified via dotnet build (0 errors) and manual trace instead - flagged as an open item for a human to confirm via Test Runner before Phase 2
+- [Phase 01]: NUnit's `Assert.DoesNotThrowAsync` must not be used in Unity EditMode async tests — it blocks synchronously via `AsyncToSyncAdapter` and deadlocks Unity's main thread against its own `SynchronizationContext` when the awaited call needs to marshal back onto that thread. Await directly in a try/catch instead. Found and fixed during Phase 01 Plan 03's Task 3 checkpoint (froze the whole Editor, required force-quit).
 
 ### Pending Todos
 
@@ -92,6 +94,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-13T07:05:15.274Z
-Stopped at: Session resumed, proceeding to execute-phase 01 (Plan 01-02, Task 2 mid-TDD: DSMSlotDebounceTests.cs written, DSMSlot.cs debounce rewrite pending)
-Resume file: .planning/phases/01-foundation-thread-safety-robustness-test-infrastructure/01-02-PLAN.md
+Last session: 2026-07-13T07:41:00.000Z
+Stopped at: Phase 01 complete (3/3 plans). Task 3 checkpoint approved by user after full 34-test EditMode suite verified green. Phase 02 (Encryption Hardening) not yet planned.
+Resume file: none — next step is `/gsd-plan-phase 02`
