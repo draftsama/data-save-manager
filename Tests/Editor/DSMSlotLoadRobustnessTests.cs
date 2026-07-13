@@ -60,11 +60,20 @@ public class DSMSlotLoadRobustnessTests
         var slot = new DSMSlot("corrupt-async", _config, _serializer, _tempDir, null);
         LogAssert.ignoreFailingMessages = true;
 
-        // Act & Assert
-        Assert.DoesNotThrowAsync(async () => await slot.LoadAsync());
+        // Act & Assert — await directly instead of Assert.DoesNotThrowAsync, which
+        // blocks synchronously via NUnit's AsyncToSyncAdapter and deadlocks against
+        // Unity's editor SynchronizationContext when the awaited continuation needs
+        // to marshal back onto the (blocked) main thread.
+        try
+        {
+            await slot.LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Assert.Fail($"LoadAsync threw: {ex}");
+        }
         Assert.That(slot.Get("hp", 50), Is.EqualTo(50));
 
-        await Task.CompletedTask;
         LogAssert.ignoreFailingMessages = false;
     }
 
