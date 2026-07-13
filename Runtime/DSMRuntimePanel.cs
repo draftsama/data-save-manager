@@ -41,7 +41,14 @@ public sealed class DSMRuntimePanel : MonoBehaviour
 
             var go = Instantiate(widgetPrefab.gameObject, _container);
             var label = string.IsNullOrEmpty(entry.Label) ? entry.Key : entry.Label;
-            go.GetComponent<IDSMWidget>()?.Setup(entry.Key, entry.Type, label, slot);
+
+            var widgetComponent = go.GetComponent<IDSMWidget>();
+            if (widgetComponent == null)
+            {
+                Debug.LogError($"DSMRuntimePanel on '{gameObject.name}': widget prefab for '{entry.Key}' has no IDSMWidget component.", this);
+                continue;
+            }
+            widgetComponent.Setup(entry.Key, entry.Type, label, slot);
         }
     }
 }

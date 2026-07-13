@@ -127,10 +127,18 @@ public sealed class DSMSlot
                 ? DSMEncryptor.Decrypt(File.ReadAllBytes(path), _config.EncryptionKey)
                 : File.ReadAllText(path);
 
-            var deserialized = _serializer.Deserialize(json);
-            lock (_dataLock)
+            try
             {
-                _data = deserialized;
+                var deserialized = _serializer.Deserialize(json);
+                lock (_dataLock)
+                {
+                    _data = deserialized;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"DSM: slot '{_slotName}' has malformed save data, seeding defaults: {ex.Message}");
+                SeedDefaults();
             }
         }
         finally
@@ -194,10 +202,18 @@ public sealed class DSMSlot
                 json = await File.ReadAllTextAsync(path);
             }
 
-            var deserialized = _serializer.Deserialize(json);
-            lock (_dataLock)
+            try
             {
-                _data = deserialized;
+                var deserialized = _serializer.Deserialize(json);
+                lock (_dataLock)
+                {
+                    _data = deserialized;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"DSM: slot '{_slotName}' has malformed save data, seeding defaults: {ex.Message}");
+                SeedDefaults();
             }
         }
         finally
