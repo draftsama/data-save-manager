@@ -38,7 +38,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 1/3 plans executed
 
 - [x] 01-01-PLAN.md
-- [ ] 01-02-PLAN.md
+- [x] 01-02-PLAN.md
 - [ ] 01-03-PLAN.md
 
 **UI hint**: yes

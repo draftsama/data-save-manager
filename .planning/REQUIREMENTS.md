@@ -17,8 +17,8 @@ Requirements for this hardening milestone. Each maps to roadmap phases.
 ### Concurrency & Reliability
 
 - [x] **CONC-01**: Make `DSMSlot._data` and `DSMSlotManager._slots` thread-safe (synchronized collections + an I/O gate for compound Load/Save/Rotate operations spanning `await`)
-- [ ] **CONC-02**: Fix the debounce-timer / `CancellationTokenSource` disposal race in `DSMSlot.ScheduleSave()` (same root cause as CONC-01 — sequence together)
-- [ ] **CONC-03**: Atomic write-temp-then-rename for all slot save operations (foundational prerequisite for key rotation and migration)
+- [x] **CONC-02**: Fix the debounce-timer / `CancellationTokenSource` disposal race in `DSMSlot.ScheduleSave()` (same root cause as CONC-01 — sequence together)
+- [x] **CONC-03**: Atomic write-temp-then-rename for all slot save operations (foundational prerequisite for key rotation and migration)
 - [x] **CONC-04**: Concurrency regression tests asserting final-state correctness, not just absence of exceptions
 
 ### Encryption Hardening
@@ -94,8 +94,8 @@ Which phases cover which requirements. Populated during roadmap creation.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | CONC-01 | Phase 1 | Complete |
-| CONC-02 | Phase 1 | Pending |
-| CONC-03 | Phase 1 | Pending |
+| CONC-02 | Phase 1 | Complete |
+| CONC-03 | Phase 1 | Complete |
 | CONC-04 | Phase 1 | Complete |
 | TEST-01 | Phase 1 | Complete |
 | BUGS-02 | Phase 2 | Pending |
