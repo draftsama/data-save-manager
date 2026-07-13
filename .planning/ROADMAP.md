@@ -56,7 +56,10 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Calling `DSM.RotateEncryptionKeyAsync(newKey)` re-encrypts every slot with the new key and only commits the new key to `DSMConfig` after all slots succeed — an interruption mid-rotation still leaves every slot readable with a consistent key, never a mixed or unrecoverable state
   4. Automated tests cover wrong key, truncated file, empty key, and key-change-between-saves scenarios, all passing
 
-**Plans**: TBD
+**Plans**: 2 plans
+
+- [ ] 02-01-PLAN.md — Tamper-evident encryption (AES-CBC + HMAC-SHA256 Encrypt-then-MAC) + centralized key validation (ENC-01, BUGS-02, TEST-02)
+- [ ] 02-02-PLAN.md — Atomic encryption key rotation with staging + journal recovery (ENC-02, TEST-02)
 
 ### Phase 3: Schema Validation
 
@@ -112,7 +115,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation — Thread-Safety, Robustness & Test Infrastructure | 3/3 | Complete | 2026-07-13 |
-| 2. Encryption Hardening — Key Validation & Rotation | 0/TBD | Not started | - |
+| 2. Encryption Hardening — Key Validation & Rotation | 0/2 | Not started | - |
 | 3. Schema Validation | 0/TBD | Not started | - |
 | 4. Save Versioning + Migration | 0/TBD | Not started | - |
 | 5. Performance, Reactivity & Editor Tooling | 0/TBD | Not started | - |
