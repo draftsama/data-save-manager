@@ -23,7 +23,12 @@ public sealed class DSMConfig : ScriptableObject
     // NOT serialized — set programmatically to keep secrets out of asset files
     [field: NonSerialized]
     public string EncryptionKey { get; private set; } = string.Empty;
-    public void SetEncryptionKey(string key) => EncryptionKey = key;
+
+    public void SetEncryptionKey(string key)
+    {
+        DSMEncryptionKey.Validate(key);
+        EncryptionKey = key;
+    }
 
     [SerializeField, FormerlySerializedAs("<SavePath>k__BackingField")]
     private string _savePath = string.Empty;
