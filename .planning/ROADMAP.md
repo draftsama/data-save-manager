@@ -57,8 +57,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. Automated tests cover wrong key, truncated file, empty key, and key-change-between-saves scenarios, all passing
 
 **Plans**: 2 plans
+**Wave 1**
 
 - [ ] 02-01-PLAN.md — Tamper-evident encryption (AES-CBC + HMAC-SHA256 Encrypt-then-MAC) + centralized key validation (ENC-01, BUGS-02, TEST-02)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 02-02-PLAN.md — Atomic encryption key rotation with staging + journal recovery (ENC-02, TEST-02)
 
 ### Phase 3: Schema Validation
