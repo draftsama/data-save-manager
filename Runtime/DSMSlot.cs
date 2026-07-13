@@ -18,9 +18,11 @@ public sealed class DSMSlot
     private readonly string _saveDirectory;
     private readonly Type? _constantType;
     private Dictionary<string, JToken> _data = new();
-    private CancellationTokenSource? _debounceCts;
     private readonly object _dataLock = new();
     private readonly SemaphoreSlim _ioGate = new(1, 1);
+    private readonly object _debounceLock = new();
+    private long _debounceRequestVersion;
+    private bool _debounceLoopRunning;
 
     public DSMSlot(string slotName, DSMConfig config, DSMSerializer serializer, string saveDirectory, Type? constantType)
     {
@@ -228,26 +230,62 @@ public sealed class DSMSlot
         }
     }
 
+    // Single long-lived debounce loop (D-01/CONC-02): each Set() bumps a request
+    // version and, only if no loop is already running, starts ONE loop that waits
+    // the debounce window and re-checks the version — if a newer request arrived
+    // during the wait it loops again, otherwise it saves and exits. There is no
+    // per-Set() CancellationTokenSource, so the disposal race cannot occur.
     private void ScheduleSave()
     {
-        // Reset the debounce timer on every Set() call
-        _debounceCts?.Cancel();
-        _debounceCts?.Dispose();
-        _debounceCts = new CancellationTokenSource();
-        DebouncedSaveAsync(_debounceCts.Token).Forget();
+        lock (_debounceLock)
+        {
+            _debounceRequestVersion++;
+            if (_debounceLoopRunning) return;
+            _debounceLoopRunning = true;
+        }
+        DebouncedSaveLoopAsync().Forget();
     }
 
-    private async UniTaskVoid DebouncedSaveAsync(CancellationToken token)
+    private async UniTaskVoid DebouncedSaveLoopAsync()
     {
-        await UniTask.Delay(TimeSpan.FromSeconds(_config.AutoSaveDebounce), cancellationToken: token);
-        await SaveAsync();
+        try
+        {
+            while (true)
+            {
+                long observedVersion;
+                lock (_debounceLock)
+                {
+                    observedVersion = _debounceRequestVersion;
+                }
+
+                await UniTask.Delay(TimeSpan.FromSeconds(_config.AutoSaveDebounce));
+
+                lock (_debounceLock)
+                {
+                    if (_debounceRequestVersion != observedVersion)
+                        continue; // a newer Set() arrived during the wait — loop again
+                    break; // no newer request since the wait started — settle and save
+                }
+            }
+
+            await SaveAsync();
+        }
+        finally
+        {
+            lock (_debounceLock)
+            {
+                _debounceLoopRunning = false;
+            }
+        }
     }
 
     private void CancelDebounce()
     {
-        _debounceCts?.Cancel();
-        _debounceCts?.Dispose();
-        _debounceCts = null;
+        // The debounce loop is self-terminating — there is no per-call
+        // CancellationTokenSource to cancel/dispose here anymore. An explicit
+        // Save()/SaveAsync() simply proceeds; any still-pending loop iteration
+        // will observe up-to-date state the next time it wakes. Safe no-op,
+        // never throws when nothing is pending.
     }
 
     private string GetSavePath()
