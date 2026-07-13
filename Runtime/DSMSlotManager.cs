@@ -35,6 +35,7 @@ public sealed class DSMSlotManager
 
     public void DeleteSlot(string name)
     {
+        DSMSlotNameValidator.Validate(name);
         lock (_slotsLock)
         {
             _slots.Remove(name);
@@ -68,6 +69,7 @@ public sealed class DSMSlotManager
 
     private DSMSlot GetOrCreateSlot(string name)
     {
+        DSMSlotNameValidator.Validate(name);
         lock (_slotsLock)
         {
             if (_slots.TryGetValue(name, out var slot)) return slot;
