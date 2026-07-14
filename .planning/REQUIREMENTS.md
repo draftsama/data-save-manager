@@ -24,7 +24,7 @@ Requirements for this hardening milestone. Each maps to roadmap phases.
 ### Encryption Hardening
 
 - [x] **ENC-01**: Switch encryption from AES-GCM-style expectations to AES-CBC + HMAC-SHA256 (Encrypt-then-MAC) — fully managed, works on every Unity target platform including WebGL
-- [ ] **ENC-02**: Encryption key rotation (`DSM.RotateEncryptionKeyAsync`) via atomic decrypt-with-old-key / re-encrypt-with-new-key per slot; commit new key to `DSMConfig` only after all slots succeed
+- [x] **ENC-02**: Encryption key rotation (`DSM.RotateEncryptionKeyAsync`) via atomic decrypt-with-old-key / re-encrypt-with-new-key per slot; commit new key to `DSMConfig` only after all slots succeed
 
 ### Schema Validation
 
@@ -51,7 +51,7 @@ Requirements for this hardening milestone. Each maps to roadmap phases.
 ### Testing
 
 - [x] **TEST-01**: Stand up `Tests/Editor` and `Tests/Runtime` asmdefs using Unity Test Framework (NUnit) — this package currently has zero automated tests
-- [ ] **TEST-02**: Tests for encryption edge cases (wrong key, truncated file, empty key, key change between saves/loads)
+- [x] **TEST-02**: Tests for encryption edge cases (wrong key, truncated file, empty key, key change between saves/loads)
 - [x] **TEST-03**: Tests for concurrent slot operations (`Set`+`Load`, `SaveAsync`+`Get`, multi-watcher)
 - [ ] **TEST-04**: Tests for invalid inputs (null keys, empty slot names, malformed JSON)
 - [ ] **TEST-05**: Tests for Editor window state transitions (slot switch/delete while selected)
@@ -100,7 +100,7 @@ Which phases cover which requirements. Populated during roadmap creation.
 | TEST-01 | Phase 1 | Complete |
 | BUGS-02 | Phase 2 | Complete |
 | ENC-01 | Phase 2 | Complete |
-| ENC-02 | Phase 2 | Pending |
+| ENC-02 | Phase 2 | Complete |
 | BUGS-01 | Phase 5 | Pending |
 | BUGS-03 | Phase 1 | Pending |
 | BUGS-04 | Phase 1 | Pending |
@@ -116,7 +116,7 @@ Which phases cover which requirements. Populated during roadmap creation.
 | PERF-02 | Phase 5 | Pending |
 | PERF-03 | Phase 5 | Pending |
 | PERF-04 | Phase 5 | Pending |
-| TEST-02 | Phase 2 | Pending |
+| TEST-02 | Phase 2 | Complete |
 | TEST-03 | Phase 1 | Complete |
 | TEST-04 | Phase 1 | Pending |
 | TEST-05 | Phase 5 | Pending |
