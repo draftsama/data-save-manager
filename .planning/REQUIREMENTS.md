@@ -10,7 +10,7 @@ Requirements for this hardening milestone. Each maps to roadmap phases.
 ### Bugs & Security
 
 - [ ] **BUGS-01**: Replace broad `catch { return null; }` in `DSMManagerWindow.cs` with specific exception handling and visible, user-facing errors
-- [ ] **BUGS-02**: Centralize encryption key validation (reject empty/short keys) behind a single accessor used by both runtime and Editor
+- [x] **BUGS-02**: Centralize encryption key validation (reject empty/short keys) behind a single accessor used by both runtime and Editor
 - [ ] **BUGS-03**: Validate slot names against path traversal and Windows-reserved names in `DSMSlotManager`
 - [ ] **BUGS-04**: Log a warning when a widget prefab is instantiated without an `IDSMWidget` component in `DSMRuntimePanel`
 
@@ -23,7 +23,7 @@ Requirements for this hardening milestone. Each maps to roadmap phases.
 
 ### Encryption Hardening
 
-- [ ] **ENC-01**: Switch encryption from AES-GCM-style expectations to AES-CBC + HMAC-SHA256 (Encrypt-then-MAC) — fully managed, works on every Unity target platform including WebGL
+- [x] **ENC-01**: Switch encryption from AES-GCM-style expectations to AES-CBC + HMAC-SHA256 (Encrypt-then-MAC) — fully managed, works on every Unity target platform including WebGL
 - [ ] **ENC-02**: Encryption key rotation (`DSM.RotateEncryptionKeyAsync`) via atomic decrypt-with-old-key / re-encrypt-with-new-key per slot; commit new key to `DSMConfig` only after all slots succeed
 
 ### Schema Validation
@@ -98,8 +98,8 @@ Which phases cover which requirements. Populated during roadmap creation.
 | CONC-03 | Phase 1 | Complete |
 | CONC-04 | Phase 1 | Complete |
 | TEST-01 | Phase 1 | Complete |
-| BUGS-02 | Phase 2 | Pending |
-| ENC-01 | Phase 2 | Pending |
+| BUGS-02 | Phase 2 | Complete |
+| ENC-01 | Phase 2 | Complete |
 | ENC-02 | Phase 2 | Pending |
 | BUGS-01 | Phase 5 | Pending |
 | BUGS-03 | Phase 1 | Pending |

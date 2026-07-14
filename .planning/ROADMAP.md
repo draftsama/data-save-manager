@@ -56,10 +56,10 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Calling `DSM.RotateEncryptionKeyAsync(newKey)` re-encrypts every slot with the new key and only commits the new key to `DSMConfig` after all slots succeed — an interruption mid-rotation still leaves every slot readable with a consistent key, never a mixed or unrecoverable state
   4. Automated tests cover wrong key, truncated file, empty key, and key-change-between-saves scenarios, all passing
 
-**Plans**: 2 plans
+**Plans**: 1/2 plans executed
 **Wave 1**
 
-- [ ] 02-01-PLAN.md — Tamper-evident encryption (AES-CBC + HMAC-SHA256 Encrypt-then-MAC) + centralized key validation (ENC-01, BUGS-02, TEST-02)
+- [x] 02-01-PLAN.md — Tamper-evident encryption (AES-CBC + HMAC-SHA256 Encrypt-then-MAC) + centralized key validation (ENC-01, BUGS-02, TEST-02)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 

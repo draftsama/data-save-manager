@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 01
-current_phase_name: foundation-thread-safety-robustness-test-infrastructure
+current_phase: 02
+current_phase_name: encryption-hardening-key-validation-rotation
 status: executing
-stopped_at: Phase 01 complete, Task 3 checkpoint approved
-last_updated: "2026-07-13T11:53:19.435Z"
+stopped_at: Phase 02 Plan 01 complete, Plan 02 not yet started
+last_updated: "2026-07-13T12:08:41Z"
 last_activity: 2026-07-13
-last_activity_desc: Task 3 checkpoint approved (full 34-test EditMode suite green)
+last_activity_desc: Completed 02-01-PLAN.md (encryption hardening — key validation, Encrypt-then-MAC)
 progress:
   total_phases: 5
   completed_phases: 1
-  total_plans: 3
-  completed_plans: 3
+  total_plans: 5
+  completed_plans: 4
   percent: 20
 ---
 
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-08)
 
 **Core value:** Save/load must be correct and safe — no silent data loss, no silent decryption failures, no corruption under concurrent access.
-**Current focus:** Phase 02 — encryption-hardening (not yet planned)
+**Current focus:** Phase 02 — encryption-hardening-key-validation-rotation
 
 ## Current Position
 
-Phase: 01 (foundation-thread-safety-robustness-test-infrastructure) — COMPLETE
-Plan: 3 of 3
-Status: Ready to execute
-Last activity: 2026-07-13 — Task 3 checkpoint approved (full 34-test EditMode suite green)
+Phase: 02 (encryption-hardening-key-validation-rotation) — EXECUTING
+Plan: 2 of 2
+Status: Executing Phase 02
+Last activity: 2026-07-13 — Completed 02-01-PLAN.md (encryption hardening — key validation, Encrypt-then-MAC)
 
 Progress: [██░░░░░░░░] 20%
 
@@ -58,6 +58,7 @@ Progress: [██░░░░░░░░] 20%
 | Phase 01 P01 | 12min | 3 tasks | 7 files |
 | Phase 01 P02 | 20min | 3 tasks | 3 files |
 | Phase 01 P03 | ~12min + fix cycle | 3 tasks | 8 files |
+| Phase 02 P01 | 8min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -72,6 +73,8 @@ Recent decisions affecting current work:
 - [Phase ?]: Debounce rewrite (D-01/CONC-02) drops CancellationTokenSource entirely - single long-lived loop with a monotonic request-version counter replaces per-Set() CTS churn; no lifetime CTS retained since DSMSlot has no teardown method
 - [Phase ?]: Unity Editor was already open on the project this session, blocking automated -runTests batchmode execution for Plan 02 Tasks 2-3; verified via dotnet build (0 errors) and manual trace instead - flagged as an open item for a human to confirm via Test Runner before Phase 2
 - [Phase 01]: NUnit's `Assert.DoesNotThrowAsync` must not be used in Unity EditMode async tests — it blocks synchronously via `AsyncToSyncAdapter` and deadlocks Unity's main thread against its own `SynchronizationContext` when the awaited call needs to marshal back onto that thread. Await directly in a try/catch instead. Found and fixed during Phase 01 Plan 03's Task 3 checkpoint (froze the whole Editor, required force-quit).
+- [Phase 02 P01]: `DSMEncryptionKey.MinLength = 8` and PBKDF2 `Iterations = 600000` are both documented Claude's-Discretion defaults — MinLength is a defensible floor (not a strength guarantee), and the iteration count follows OWASP guidance but still needs local hardware benchmarking (carried over from the pre-existing blocker below). Encrypted-save format bumped to magic `"DSM2"`/version `2` with no backward compatibility, per PROJECT.md's explicit breaking-change allowance.
+- [Phase 02 P01]: Unity Editor was open during this session, blocking `-runTests` batchmode (same finding as Phase 01). Verified GREEN via `dotnet build` (0 errors, 3 assemblies) plus a standalone net10 console harness executing the actual `DSMEncryptionKey.cs`/`DSMEncryptor.cs` source against all 11 test assertions (11/11 passed). Unity Test Runner confirmation is still open for a human.
 
 ### Pending Todos
 
@@ -94,6 +97,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-13T07:41:00.000Z
-Stopped at: Phase 01 complete (3/3 plans). Task 3 checkpoint approved by user after full 34-test EditMode suite verified green. Phase 02 (Encryption Hardening) not yet planned.
-Resume file: none — next step is `/gsd-plan-phase 02`
+Last session: 2026-07-13T12:08:41Z
+Stopped at: Phase 02 Plan 01 complete (encryption hardening: DSMEncryptionKey.Validate + Encrypt-then-MAC DSMEncryptor). Plan 02 (key rotation) not yet started. Open item: a human should confirm DSMEncryptionKeyTests/DSMEncryptorTests are green in Unity Test Runner once the Editor is free (batchmode was blocked this session).
+Resume file: .planning/phases/02-encryption-hardening-key-validation-rotation/02-02-PLAN.md (not yet created — next step is to plan/execute Plan 02-02)
