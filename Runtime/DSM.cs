@@ -65,6 +65,18 @@ public static class DSM
     /// <summary>Asynchronously loads the active slot from disk, seeding defaults if no file exists.</summary>
     public static UniTask LoadAsync() => Manager.ActiveSlot.LoadAsync();
 
+    // --- Key rotation ---
+
+    /// <summary>
+    /// Re-encrypts every encrypted slot from the current key to <paramref name="newKey"/> and
+    /// commits the new key only after every slot succeeds. Staging (decrypt-old/re-encrypt-new)
+    /// is all-or-nothing: any failure leaves every slot readable with the old key and the config
+    /// key unchanged. The commit burst that follows is journal-backed, so an interruption there
+    /// is completed automatically by the next <see cref="DSMSlotManager"/> construction — no
+    /// slot is ever left unreadable.
+    /// </summary>
+    public static UniTask RotateEncryptionKeyAsync(string newKey) => Manager.RotateEncryptionKeyAsync(newKey);
+
     // --- Change notification ---
 
     /// <summary>Returns an async stream that emits the current value immediately, then emits each subsequent value when the key is updated via <see cref="Set{T}"/>.</summary>

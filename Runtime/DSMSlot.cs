@@ -222,6 +222,79 @@ public sealed class DSMSlot
         }
     }
 
+    // --- Key rotation (ENC-02): stage/commit re-encrypt, reusing _ioGate + ReplaceFile ---
+
+    /// <summary>
+    /// Decrypts the slot's on-disk .enc file with <paramref name="oldKey"/>, re-encrypts it
+    /// with <paramref name="newKey"/>, and writes the result to a sibling .tmp file — verifying
+    /// the .tmp decrypts with <paramref name="newKey"/> before returning. Does not touch the
+    /// destination .enc file. Runs under the same _ioGate that serializes Save/Load so a
+    /// concurrent autosave cannot race the stage. Throws (propagating to the caller for
+    /// cleanup) on any decrypt/encrypt/IO failure — never logs oldKey/newKey.
+    /// </summary>
+    internal async UniTask StageReencryptAsync(string oldKey, string newKey)
+    {
+        await _ioGate.WaitAsync();
+        try
+        {
+            var encPath = GetSavePath();
+            var tmpPath = encPath + ".tmp";
+
+            var bytes = await File.ReadAllBytesAsync(encPath);
+            var json = DSMEncryptor.Decrypt(bytes, oldKey);
+            var reencrypted = DSMEncryptor.Encrypt(json, newKey);
+            await File.WriteAllBytesAsync(tmpPath, reencrypted);
+
+            // Verify the staged file actually decrypts with the new key before the
+            // stage counts as successful — never leave a bad .tmp for the commit phase.
+            var verifyBytes = await File.ReadAllBytesAsync(tmpPath);
+            DSMEncryptor.Decrypt(verifyBytes, newKey);
+        }
+        finally
+        {
+            _ioGate.Release();
+        }
+    }
+
+    /// <summary>
+    /// Atomically renames the staged .tmp (written by <see cref="StageReencryptAsync"/>) into
+    /// the slot's .enc file using the existing <see cref="ReplaceFile"/> primitive. Runs under
+    /// _ioGate.
+    /// </summary>
+    internal void CommitReencrypt()
+    {
+        _ioGate.Wait();
+        try
+        {
+            var encPath = GetSavePath();
+            var tmpPath = encPath + ".tmp";
+            ReplaceFile(tmpPath, encPath);
+        }
+        finally
+        {
+            _ioGate.Release();
+        }
+    }
+
+    /// <summary>
+    /// Deletes a leftover staged .tmp file (used by the manager to abort a rotation after a
+    /// staging failure). Never throws — cleanup must not mask the original failure.
+    /// </summary>
+    internal void CleanupStagedTemp()
+    {
+        try
+        {
+            var encPath = GetSavePath();
+            var tmpPath = encPath + ".tmp";
+            if (File.Exists(tmpPath))
+                File.Delete(tmpPath);
+        }
+        catch
+        {
+            // Best-effort cleanup only — never mask the original staging failure.
+        }
+    }
+
     public IUniTaskAsyncEnumerable<T> WatchAsync<T>(string key) =>
         _watcher.Watch<T>(key, () =>
         {
