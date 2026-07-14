@@ -89,7 +89,8 @@ None yet.
 
 - Phase 2 flagged by research for a deeper research pass on PBKDF2 iteration counts (OWASP guidance needs local verification/benchmarking) before finalizing implementation
 - Phase 4's `IDSMMigration` contract shape (composable per-step transforms vs. full rebuild) needs to be pinned down explicitly during `/gsd-discuss-phase`, not assumed from research alone
-- Human should confirm all DSMKeyRotationTests + Phase 1 + Plan 02-01 suite are green in Unity Test Runner once the Editor is free (batchmode blocked this session, same as prior two plans)
+- Human should confirm all DSMKeyRotationTests + Phase 1 + Plan 02-01 suite are green in Unity Test Runner once the Editor is free (batchmode blocked this session, same as prior two plans) — now includes 3 new regression tests added 2026-07-15 for the code-review fixes below
+- 2026-07-15: Phase 02 code review findings (02-REVIEW.md) fixed — 3 critical + 4 warnings in `DSMSlot.cs`/`DSMSlotManager.cs` (rotation temp-path collision, mid-commit recovery, legacy-format error message, stage-verify cleanup, concurrent-rotation guard, recovery error handling, data-race snapshot). Verified via `dotnet build` (0 errors); Unity Test Runner confirmation still pending human.
 
 ## Deferred Items
 

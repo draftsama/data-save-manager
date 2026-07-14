@@ -22,6 +22,44 @@ findings:
 status: issues_found
 ---
 
+## Resolution (2026-07-15)
+
+All 3 critical and 4 warning findings below have been fixed in `Runtime/DSMSlot.cs` and
+`Runtime/DSMSlotManager.cs`:
+
+- **CR-01** — rotation staging now uses a distinct `{slot}.enc.rotate.tmp` path
+  (`DSMSlot.GetRotationTempPath`), and `DSMSlot.BeginRotation`/`EndRotation` suspend the
+  autosave debounce path (`ScheduleSave`) for the duration of a rotation.
+- **CR-02** — the COMMIT loop retries best-effort on failure; if slots remain uncommitted it
+  throws the new `DSMRotationInterruptedException` telling the caller to restart, and leaves
+  the journal in place for next-launch recovery.
+- **CR-03** — `DSMEncryptor.Decrypt` now distinguishes a missing/wrong magic prefix
+  ("unrecognized or pre-DSM2 legacy format") from a version mismatch and from genuine
+  MAC/integrity failure, instead of one generic "corrupt or wrong key" message. No legacy
+  fallback decoder was added (per PROJECT.md's breaking-change allowance) — the message just
+  stops being misleading.
+- **WR-01** — `StageReencryptAsync` now deletes its own `.rotate.tmp` if the post-write verify
+  step throws.
+- **WR-02** — `DSMSlotManager._rotationGate` rejects a second concurrent
+  `RotateEncryptionKeyAsync` call with `InvalidOperationException`.
+- **WR-03** — `RecoverInterruptedRotation` now catches per-slot and journal-read failures,
+  logs a warning, and leaves the journal in place instead of throwing out of the constructor.
+- **WR-04** — `Save()`/`SaveAsync()` now snapshot `_data` under `_dataLock`
+  (`DSMSlot.SerializeSnapshot`) before serializing.
+
+New regression tests added to `Tests/Editor/DSMKeyRotationTests.cs`:
+`Rotate_ConcurrentAutosave_DoesNotCorruptOrThrow`, `Rotate_ConcurrentCall_SecondRejected`,
+`Decrypt_LegacyFormat_ThrowsDistinguishableError`. `Rotate_JournalRecovery_...` updated for
+the new temp filename.
+
+Verified via `dotnet build` on `DMS.Runtime.csproj` and `DMS.Tests.Editor.csproj` (0 errors).
+**Unity Test Runner confirmation is still open for a human** — batchmode execution is not run
+by the agent in this project (see `.claude/CLAUDE.md`).
+
+IN-01 (doc-comment accuracy) not addressed — informational only, no functional risk.
+
+---
+
 # Phase 02: Code Review Report
 
 **Reviewed:** 2026-07-14T13:55:00Z

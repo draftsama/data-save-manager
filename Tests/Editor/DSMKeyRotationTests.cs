@@ -2,6 +2,9 @@
 
 using System;
 using System.IO;
+using System.Linq;
+using System.Security.Cryptography;
+using System.Threading;
 using System.Threading.Tasks;
 using NUnit.Framework;
 
@@ -87,7 +90,7 @@ public class DSMKeyRotationTests
         await File.WriteAllBytesAsync(Path.Combine(_tempDir, "corrupt-slot.enc"), badBytes);
 
         // Act / Assert — rotation throws
-        Assert.ThrowsAsync<DSMEncryptionException>(async () => await manager.RotateEncryptionKeyAsync(KeyB));
+        await AssertRotateThrows<DSMEncryptionException>(manager, KeyB);
 
         // Assert — config key unchanged
         Assert.That(config.EncryptionKey, Is.EqualTo(KeyA));
@@ -113,7 +116,7 @@ public class DSMKeyRotationTests
         var encPath = Path.Combine(_tempDir, $"{slotName}.enc");
         await File.WriteAllBytesAsync(encPath, DSMEncryptor.Encrypt("{\"value\":\"old\"}", KeyA));
 
-        var tmpPath = encPath + ".tmp";
+        var tmpPath = encPath + ".rotate.tmp";
         await File.WriteAllBytesAsync(tmpPath, DSMEncryptor.Encrypt("{\"value\":\"new\"}", KeyB));
 
         var journalPath = Path.Combine(_tempDir, DSMSlotManager.RotationJournalName);
@@ -154,7 +157,7 @@ public class DSMKeyRotationTests
     }
 
     [Test]
-    public void Rotate_ToWeakKey_Rejected()
+    public async Task Rotate_ToWeakKey_Rejected()
     {
         // Arrange
         var config = DSMTestConfig.Create(encrypt: true, encryptionKey: KeyA, savePath: _tempDir);
@@ -166,8 +169,8 @@ public class DSMKeyRotationTests
         slot.Save();
 
         // Act / Assert — empty and too-short keys are rejected
-        Assert.ThrowsAsync<ArgumentException>(async () => await manager.RotateEncryptionKeyAsync(""));
-        Assert.ThrowsAsync<ArgumentException>(async () => await manager.RotateEncryptionKeyAsync("short"));
+        await AssertRotateThrows<ArgumentException>(manager, "");
+        await AssertRotateThrows<ArgumentException>(manager, "short");
 
         // Assert — config key unchanged and no slot files modified
         Assert.That(config.EncryptionKey, Is.EqualTo(KeyA));
@@ -178,5 +181,128 @@ public class DSMKeyRotationTests
         var encPath = Path.Combine(_tempDir, $"{slotName}.enc");
         var originalBytes = File.ReadAllBytes(encPath);
         Assert.DoesNotThrow(() => DSMEncryptor.Decrypt(originalBytes, KeyA));
+    }
+
+    [Test]
+    public void Decrypt_LegacyFormat_ThrowsDistinguishableError()
+    {
+        // Regression test for CR-03: a pre-DSM2 file (no magic/version prefix) must fail with
+        // a distinguishable "unsupported legacy format" error, not the generic
+        // corrupt-or-wrong-key integrity message.
+        var legacyIv = new byte[16];
+        var legacySalt = new byte[32];
+        RandomNumberGenerator.Fill(legacyIv);
+        RandomNumberGenerator.Fill(legacySalt);
+        var legacyBuffer = legacyIv.Concat(legacySalt).Concat(new byte[32]).ToArray();
+
+        var ex = Assert.Throws<DSMEncryptionException>(() => DSMEncryptor.Decrypt(legacyBuffer, KeyA));
+        Assert.That(ex!.Message, Does.Contain("legacy format"));
+    }
+
+    [Test]
+    public async Task Rotate_ConcurrentAutosave_DoesNotCorruptOrThrow()
+    {
+        // Regression test for CR-01: a debounced autosave firing on a rotating slot between
+        // StageReencryptAsync and CommitReencrypt must not clobber the staged file or throw.
+        var config = DSMTestConfig.Create(autoSave: true, autoSaveDebounce: 0.02f, encrypt: true,
+            encryptionKey: KeyA, savePath: _tempDir);
+        var manager = new DSMSlotManager(config);
+
+        // Enough slots to widen the stage/commit window so the concurrent autosave loop
+        // below has a real chance of firing mid-rotation.
+        var names = Enumerable.Range(0, 25).Select(i => $"slot-{i}").ToArray();
+        foreach (var name in names)
+        {
+            var slot = manager.GetSlot(name);
+            slot.Set("value", name);
+            await slot.SaveAsync();
+        }
+
+        var target = manager.GetSlot(names[0]);
+
+        using var cts = new CancellationTokenSource();
+        var autosaveLoop = Task.Run(async () =>
+        {
+            var i = 0;
+            while (!cts.IsCancellationRequested)
+            {
+                target.Set("value", $"concurrent-{i++}"); // AutoSave schedules a debounced save
+                await Task.Delay(5);
+            }
+        });
+
+        Exception? rotateException = null;
+        try
+        {
+            await manager.RotateEncryptionKeyAsync(KeyB);
+        }
+        catch (Exception ex)
+        {
+            rotateException = ex;
+        }
+
+        cts.Cancel();
+        try { await autosaveLoop; } catch (OperationCanceledException) { }
+
+        Assert.That(rotateException, Is.Null,
+            $"rotation must not throw when autosave fires concurrently, got: {rotateException}");
+
+        // The rotated file must be readable with the new key — not corrupted, not stuck on old key.
+        var bytes = await File.ReadAllBytesAsync(Path.Combine(_tempDir, $"{names[0]}.enc"));
+        Assert.DoesNotThrow(() => DSMEncryptor.Decrypt(bytes, KeyB));
+        Assert.Throws<DSMEncryptionException>(() => DSMEncryptor.Decrypt(bytes, KeyA));
+    }
+
+    [Test]
+    public async Task Rotate_ConcurrentCall_SecondRejected()
+    {
+        // Regression test for WR-02: a second rotation must not be allowed to start while
+        // one is already in flight.
+        var config = DSMTestConfig.Create(encrypt: true, encryptionKey: KeyA, savePath: _tempDir);
+        var manager = new DSMSlotManager(config);
+
+        var names = Enumerable.Range(0, 15).Select(i => $"slot-{i}").ToArray();
+        foreach (var name in names)
+        {
+            var slot = manager.GetSlot(name);
+            slot.Set("value", name);
+            await slot.SaveAsync();
+        }
+
+        // RotateEncryptionKeyAsync acquires the rotation gate synchronously before its first
+        // await, so this call has already claimed the gate by the time the line returns.
+        var rotateTask1 = manager.RotateEncryptionKeyAsync(KeyB);
+
+        var thrown = false;
+        try
+        {
+            await manager.RotateEncryptionKeyAsync(KeyC);
+        }
+        catch (InvalidOperationException)
+        {
+            thrown = true;
+        }
+
+        await rotateTask1;
+        Assert.That(thrown, Is.True, "a second concurrent rotation call must be rejected");
+    }
+
+    // NUnit's Assert.ThrowsAsync blocks the calling thread on the returned Task via its
+    // internal AsyncToSyncAdapter; awaiting a UniTask inside that delegate needs the same
+    // (now-blocked) main thread to resume its continuation, which deadlocks the Editor.
+    // Awaiting the rotation directly from this already-async [Test] method avoids the adapter.
+    private static async Task AssertRotateThrows<TException>(DSMSlotManager manager, string newKey)
+        where TException : Exception
+    {
+        TException? thrown = null;
+        try
+        {
+            await manager.RotateEncryptionKeyAsync(newKey);
+        }
+        catch (TException ex)
+        {
+            thrown = ex;
+        }
+        Assert.That(thrown, Is.Not.Null, $"expected {typeof(TException).Name} to be thrown");
     }
 }

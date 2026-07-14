@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
 
@@ -19,6 +20,7 @@ public sealed class DSMSlotManager
     private readonly DSMSerializer _serializer = new();
     private DSMSlot _activeSlot;
     private readonly object _slotsLock = new();
+    private readonly SemaphoreSlim _rotationGate = new(1, 1);
 
     private static Type? s_constantType;
 
@@ -90,53 +92,100 @@ public sealed class DSMSlotManager
         if (!_config.Encrypt)
             throw new InvalidOperationException("DSM: key rotation requires encryption to be enabled.");
 
-        var oldKey = _config.EncryptionKey;
+        // Reject a second rotation while one is already in flight — concurrent rotations
+        // would race GetAllSlots(), the per-slot _ioGates, and _config.SetEncryptionKey.
+        if (!_rotationGate.Wait(0))
+            throw new InvalidOperationException("DSM: a key rotation is already in progress.");
         try
         {
-            DSMEncryptionKey.Validate(oldKey);
-        }
-        catch (ArgumentException)
-        {
-            throw new InvalidOperationException("DSM: key rotation requires a valid current encryption key.");
-        }
-
-        var dir = SaveDirectory;
-        var encryptedSlotNames = GetAllSlots()
-            .Where(name => File.Exists(Path.Combine(dir, $"{name}.enc")))
-            .ToArray();
-
-        // STAGE — decrypt with oldKey, re-encrypt with newKey, write {slot}.enc.tmp.
-        // On ANY failure, clean up every slot staged so far and rethrow: the config key
-        // is never touched here, so every original .enc file remains readable with oldKey.
-        var stagedSlots = new List<DSMSlot>();
-        try
-        {
-            foreach (var name in encryptedSlotNames)
+            var oldKey = _config.EncryptionKey;
+            try
             {
-                var slot = GetOrCreateSlot(name);
-                await slot.StageReencryptAsync(oldKey, newKey);
-                stagedSlots.Add(slot);
+                DSMEncryptionKey.Validate(oldKey);
+            }
+            catch (ArgumentException)
+            {
+                throw new InvalidOperationException("DSM: key rotation requires a valid current encryption key.");
+            }
+
+            var dir = SaveDirectory;
+            var encryptedSlotNames = GetAllSlots()
+                .Where(name => File.Exists(Path.Combine(dir, $"{name}.enc")))
+                .ToArray();
+
+            var rotatingSlots = encryptedSlotNames.Select(GetOrCreateSlot).ToArray();
+
+            // Suspend autosave on every rotating slot so no slot's .enc is rewritten with
+            // the stale key while its re-encryption is staged/committed (see DSMSlot.ScheduleSave).
+            foreach (var slot in rotatingSlots)
+                slot.BeginRotation();
+            try
+            {
+                // STAGE — decrypt with oldKey, re-encrypt with newKey, write the rotation .tmp.
+                // On ANY failure, clean up every slot staged so far and rethrow: the config key
+                // is never touched here, so every original .enc file remains readable with oldKey.
+                var stagedSlots = new List<DSMSlot>();
+                try
+                {
+                    foreach (var slot in rotatingSlots)
+                    {
+                        await slot.StageReencryptAsync(oldKey, newKey);
+                        stagedSlots.Add(slot);
+                    }
+                }
+                catch
+                {
+                    foreach (var slot in stagedSlots)
+                        slot.CleanupStagedTemp();
+                    throw;
+                }
+
+                // Mark commit-in-progress before mutating any file, so an interruption during the
+                // commit burst below is recoverable on the next DSMSlotManager construction.
+                WriteRotationJournal(dir, encryptedSlotNames);
+
+                // COMMIT — rename every staged .tmp into place. CommitReencrypt is idempotent
+                // (a no-op once its .tmp is gone), so on a mid-burst failure we retry the whole
+                // set best-effort to converge on-disk state before deciding the outcome.
+                try
+                {
+                    foreach (var slot in stagedSlots)
+                        slot.CommitReencrypt();
+                }
+                catch
+                {
+                    var remaining = 0;
+                    foreach (var slot in stagedSlots)
+                    {
+                        try { slot.CommitReencrypt(); }
+                        catch { remaining++; }
+                    }
+
+                    if (remaining > 0)
+                        // Some slots are still on old-key ciphertext and could not be committed
+                        // in-process. Leave the journal in place so the next construction finishes
+                        // the renames, and tell the caller the process must restart — already-
+                        // committed slots would fail to decrypt with the unrotated config key.
+                        throw new DSMRotationInterruptedException(
+                            "DSM: key rotation was interrupted mid-commit and could not be completed in-process. " +
+                            "The application must restart before further save/load calls — recovery will finish on next launch.");
+                }
+
+                // Commit the new key LAST, only after every slot commit succeeded.
+                _config.SetEncryptionKey(newKey);
+
+                DeleteRotationJournal(dir);
+            }
+            finally
+            {
+                foreach (var slot in rotatingSlots)
+                    slot.EndRotation();
             }
         }
-        catch
+        finally
         {
-            foreach (var slot in stagedSlots)
-                slot.CleanupStagedTemp();
-            throw;
+            _rotationGate.Release();
         }
-
-        // Mark commit-in-progress before mutating any file, so an interruption during the
-        // commit burst below is recoverable on the next DSMSlotManager construction.
-        WriteRotationJournal(dir, encryptedSlotNames);
-
-        // COMMIT — rename every staged .tmp into place.
-        foreach (var slot in stagedSlots)
-            slot.CommitReencrypt();
-
-        // Commit the new key LAST, only after every slot commit succeeded.
-        _config.SetEncryptionKey(newKey);
-
-        DeleteRotationJournal(dir);
     }
 
     /// <summary>
@@ -150,17 +199,38 @@ public sealed class DSMSlotManager
         var journalPath = Path.Combine(SaveDirectory, RotationJournalName);
         if (!File.Exists(journalPath)) return;
 
-        var slotNames = File.ReadAllLines(journalPath).Where(l => !string.IsNullOrWhiteSpace(l));
-        foreach (var name in slotNames)
+        string[] slotNames;
+        try
         {
-            var tmpPath = Path.Combine(SaveDirectory, $"{name}.enc.tmp");
-            if (!File.Exists(tmpPath)) continue; // already committed before the interruption
-
-            var slot = GetOrCreateSlot(name);
-            slot.CommitReencrypt();
+            slotNames = File.ReadAllLines(journalPath).Where(l => !string.IsNullOrWhiteSpace(l)).ToArray();
+        }
+        catch (Exception ex)
+        {
+            // A malformed/unreadable journal must not brick DSMSlotManager construction —
+            // leave it in place for manual inspection rather than losing the whole facade.
+            Debug.LogWarning($"DSM: could not read rotation journal, skipping recovery: {ex.Message}");
+            return;
         }
 
-        File.Delete(journalPath);
+        var recoveredAll = true;
+        foreach (var name in slotNames)
+        {
+            try
+            {
+                var slot = GetOrCreateSlot(name);
+                slot.CommitReencrypt(); // idempotent — no-op if this slot was already committed
+            }
+            catch (Exception ex)
+            {
+                recoveredAll = false;
+                Debug.LogWarning($"DSM: failed to recover rotation for slot '{name}': {ex.Message}");
+            }
+        }
+
+        // Only delete the journal once every listed slot recovered — otherwise leave it so a
+        // future launch (or manual intervention) can retry the pending renames.
+        if (recoveredAll)
+            File.Delete(journalPath);
     }
 
     private static void WriteRotationJournal(string dir, IEnumerable<string> slotNames)
@@ -205,5 +275,18 @@ public sealed class DSMSlotManager
             catch (Exception ex) { Debug.LogWarning($"DSM: {ex.Message}"); }
         }
         return null;
+    }
+}
+
+/// <summary>
+/// Thrown by <see cref="DSMSlotManager.RotateEncryptionKeyAsync"/> when a key rotation
+/// fails partway through the commit burst and cannot be completed in-process. The rotation
+/// journal is left on disk so <see cref="DSMSlotManager"/>'s next construction finishes the
+/// pending renames; the application must restart before further save/load calls succeed.
+/// </summary>
+public sealed class DSMRotationInterruptedException : Exception
+{
+    public DSMRotationInterruptedException(string message) : base(message)
+    {
     }
 }

@@ -85,18 +85,19 @@ public static class DSMEncryptor
     {
         DSMEncryptionKey.Validate(password);
 
-        if (data.Length < MinFramedLength)
+        if (data.Length < HeaderSize || data[0] != MagicBytes[0] || data[1] != MagicBytes[1] ||
+            data[2] != MagicBytes[2] || data[3] != MagicBytes[3])
             throw new DSMEncryptionException(
-                "DSM: encrypted save failed integrity verification — file is corrupt, truncated, or the key is wrong.");
-
-        for (var i = 0; i < MagicBytes.Length; i++)
-        {
-            if (data[i] != MagicBytes[i])
-                throw new DSMEncryptionException(
-                    "DSM: encrypted save failed integrity verification — file is corrupt, truncated, or the key is wrong.");
-        }
+                "DSM: encrypted save uses an unrecognized or pre-DSM2 legacy format and cannot be read. " +
+                "This save was written before the DSM2 encrypted-save format (Encrypt-then-MAC) and is not " +
+                "forward-compatible — delete or migrate it manually.");
 
         if (data[MagicBytes.Length] != FormatVersion)
+            throw new DSMEncryptionException(
+                $"DSM: encrypted save has format version {data[MagicBytes.Length]}, expected {FormatVersion} — " +
+                "written by an incompatible DSM version.");
+
+        if (data.Length < MinFramedLength)
             throw new DSMEncryptionException(
                 "DSM: encrypted save failed integrity verification — file is corrupt, truncated, or the key is wrong.");
 

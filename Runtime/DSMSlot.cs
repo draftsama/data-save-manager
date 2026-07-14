@@ -23,6 +23,7 @@ public sealed class DSMSlot
     private readonly object _debounceLock = new();
     private long _debounceRequestVersion;
     private bool _debounceLoopRunning;
+    private volatile bool _rotationInProgress;
 
     public DSMSlot(string slotName, DSMConfig config, DSMSerializer serializer, string saveDirectory, Type? constantType)
     {
@@ -85,7 +86,7 @@ public sealed class DSMSlot
         try
         {
             CancelDebounce();
-            var json = _serializer.Serialize(_data, _config.PrettyPrint);
+            var json = SerializeSnapshot();
             var path = GetSavePath();
             var tmpPath = path + ".tmp";
 
@@ -153,7 +154,7 @@ public sealed class DSMSlot
         try
         {
             CancelDebounce();
-            var json = _serializer.Serialize(_data, _config.PrettyPrint);
+            var json = SerializeSnapshot();
             var path = GetSavePath();
             var tmpPath = path + ".tmp";
 
@@ -238,17 +239,25 @@ public sealed class DSMSlot
         try
         {
             var encPath = GetSavePath();
-            var tmpPath = encPath + ".tmp";
+            var tmpPath = GetRotationTempPath();
 
             var bytes = await File.ReadAllBytesAsync(encPath);
             var json = DSMEncryptor.Decrypt(bytes, oldKey);
             var reencrypted = DSMEncryptor.Encrypt(json, newKey);
             await File.WriteAllBytesAsync(tmpPath, reencrypted);
 
-            // Verify the staged file actually decrypts with the new key before the
-            // stage counts as successful — never leave a bad .tmp for the commit phase.
-            var verifyBytes = await File.ReadAllBytesAsync(tmpPath);
-            DSMEncryptor.Decrypt(verifyBytes, newKey);
+            try
+            {
+                // Verify the staged file actually decrypts with the new key before the
+                // stage counts as successful — never leave a bad .tmp for the commit phase.
+                var verifyBytes = await File.ReadAllBytesAsync(tmpPath);
+                DSMEncryptor.Decrypt(verifyBytes, newKey);
+            }
+            catch
+            {
+                if (File.Exists(tmpPath)) File.Delete(tmpPath);
+                throw;
+            }
         }
         finally
         {
@@ -267,7 +276,10 @@ public sealed class DSMSlot
         try
         {
             var encPath = GetSavePath();
-            var tmpPath = encPath + ".tmp";
+            var tmpPath = GetRotationTempPath();
+            // Idempotent: a missing .tmp means this slot was already committed (e.g. a
+            // best-effort retry after a mid-burst failure, or journal recovery re-running).
+            if (!File.Exists(tmpPath)) return;
             ReplaceFile(tmpPath, encPath);
         }
         finally
@@ -284,8 +296,7 @@ public sealed class DSMSlot
     {
         try
         {
-            var encPath = GetSavePath();
-            var tmpPath = encPath + ".tmp";
+            var tmpPath = GetRotationTempPath();
             if (File.Exists(tmpPath))
                 File.Delete(tmpPath);
         }
@@ -294,6 +305,14 @@ public sealed class DSMSlot
             // Best-effort cleanup only — never mask the original staging failure.
         }
     }
+
+    internal void BeginRotation() => _rotationInProgress = true;
+
+    internal void EndRotation() => _rotationInProgress = false;
+
+    // Rotation staging uses a temp name distinct from Save/SaveAsync's "{slot}.enc.tmp"
+    // so an ordinary autosave can never clobber or consume a staged re-encrypted file.
+    internal string GetRotationTempPath() => GetSavePath() + ".rotate.tmp";
 
     public IUniTaskAsyncEnumerable<T> WatchAsync<T>(string key) =>
         _watcher.Watch<T>(key, () =>
@@ -326,6 +345,11 @@ public sealed class DSMSlot
     // per-Set() CancellationTokenSource, so the disposal race cannot occur.
     private void ScheduleSave()
     {
+        // Never persist while a key rotation is in flight — an autosave here would
+        // write this slot's .enc with the still-current (old) key, leaving it on a
+        // different key than the slots the rotation is committing. The in-memory
+        // change is retained and will be saved on the next Set() after rotation ends.
+        if (_rotationInProgress) return;
         lock (_debounceLock)
         {
             _debounceRequestVersion++;
@@ -357,6 +381,9 @@ public sealed class DSMSlot
                 }
             }
 
+            // A rotation may have started while this loop was waiting; skip the write
+            // rather than persist stale-key data mid-rotation (see ScheduleSave).
+            if (_rotationInProgress) return;
             await SaveAsync();
         }
         finally
@@ -375,6 +402,16 @@ public sealed class DSMSlot
         // Save()/SaveAsync() simply proceeds; any still-pending loop iteration
         // will observe up-to-date state the next time it wakes. Safe no-op,
         // never throws when nothing is pending.
+    }
+
+    private string SerializeSnapshot()
+    {
+        Dictionary<string, JToken> snapshot;
+        lock (_dataLock)
+        {
+            snapshot = new Dictionary<string, JToken>(_data);
+        }
+        return _serializer.Serialize(snapshot, _config.PrettyPrint);
     }
 
     private string GetSavePath()
