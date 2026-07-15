@@ -77,7 +77,10 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. `DSMConfig.StrictSchema` defaults to lenient (warn + coerce) so existing call sites keep working after upgrading, and can be switched to strict mode without touching call sites
   3. Schema definitions are derived from existing `DSMConstant`/codegen metadata — no second, separately-maintained source of truth for key types
 
-**Plans**: TBD
+**Plans**: 1 plan
+**Wave 1**
+
+- [ ] 03-01-PLAN.md — DSMSchema (reflected from DSMConstant) + DSMConfig.StrictSchema (lenient default) + Set/Get type validation (SCHM-01, SCHM-02)
 
 ### Phase 4: Save Versioning + Migration
 
@@ -120,6 +123,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 |-------|----------------|--------|-----------|
 | 1. Foundation — Thread-Safety, Robustness & Test Infrastructure | 3/3 | Complete | 2026-07-13 |
 | 2. Encryption Hardening — Key Validation & Rotation | 2/2 | Complete   | 2026-07-14 |
-| 3. Schema Validation | 0/TBD | Not started | - |
+| 3. Schema Validation | 0/1 | Not started | - |
 | 4. Save Versioning + Migration | 0/TBD | Not started | - |
 | 5. Performance, Reactivity & Editor Tooling | 0/TBD | Not started | - |
