@@ -5,7 +5,7 @@ milestone_name: milestone
 current_phase: 03
 current_phase_name: schema-validation
 status: verifying
-stopped_at: Phase 02 Plan 01 complete, Plan 02 not yet started
+stopped_at: Phase 03 code-complete (build green, committed); pending human Unity Test Runner + deferred code-review findings (03-REVIEW.md)
 last_updated: "2026-07-15T04:01:26.821Z"
 last_activity: 2026-07-15
 last_activity_desc: Phase 03 execution started
@@ -94,6 +94,8 @@ None yet.
 - Phase 4's `IDSMMigration` contract shape (composable per-step transforms vs. full rebuild) needs to be pinned down explicitly during `/gsd-discuss-phase`, not assumed from research alone
 - Human should confirm all DSMKeyRotationTests + Phase 1 + Plan 02-01 suite are green in Unity Test Runner once the Editor is free (batchmode blocked this session, same as prior two plans) — now includes 3 new regression tests added 2026-07-15 for the code-review fixes below
 - 2026-07-15: Phase 02 code review findings (02-REVIEW.md) fixed — 3 critical + 4 warnings in `DSMSlot.cs`/`DSMSlotManager.cs` (rotation temp-path collision, mid-commit recovery, legacy-format error message, stage-verify cleanup, concurrent-rotation guard, recovery error handling, data-race snapshot). Verified via `dotnet build` (0 errors); Unity Test Runner confirmation still pending human.
+- 2026-07-15 [Phase 03]: Human must run Unity Test Runner (EditMode) — `DSMSchemaValidationTests` (8 tests) plus full Phase 1/2 regression suite. Never run automatically (CLAUDE.md batchmode constraint). This is the real acceptance gate for SCHM-01/SCHM-02; automated gate was `dotnet build` (0 errors) + grep source assertions only.
+- 2026-07-15 [Phase 03]: Code review (03-REVIEW.md, commit ffa569a) found 1 critical + 4 warnings — USER CHOSE TO DEFER, not fixed. CR-01 (critical): `DSMSlot.cs:57` lenient coercion-failure logs `ex.Message` (Newtonsoft) which embeds the offending value → leaks secrets to Unity log on the untrusted-input path, violating the phase's own no-value-leak must_have (T-03-01). WR-02 (`DSMSlot.cs:90` lenient Get `ToObject<T>` unguarded, can throw + leak, breaks "lenient never throws"), WR-04 (`DSMSlot.cs:58` fallback `FromObject` in catch unguarded). WR-03 (exact `typeof(T)!=expected` false-positives for assignable types — plan-intended, latent). WR-01 (`WatchAsync` reads `_data` outside `_dataLock` — PRE-EXISTING, not introduced this phase). Close via `/gsd-code-review 03 --fix` or a gap-closure phase.
 
 ## Deferred Items
 
@@ -108,5 +110,5 @@ Items acknowledged and carried forward from previous milestone close:
 ## Session Continuity
 
 Last session: 2026-07-15T04:01:26.817Z
-Stopped at: Phase 02 Plan 01 complete (encryption hardening: DSMEncryptionKey.Validate + Encrypt-then-MAC DSMEncryptor). Plan 02 (key rotation) not yet started. Open item: a human should confirm DSMEncryptionKeyTests/DSMEncryptorTests are green in Unity Test Runner once the Editor is free (batchmode was blocked this session).
+Stopped at: Phase 03 (schema-validation) executed — DSMSchema + StrictSchema flag + Set/Get validation gate + 8-test EditMode fixture. `dotnet build DMS.Runtime.csproj` green (0 errors); ROADMAP marks Phase 3 complete. Two open items: (1) human Unity Test Runner run of DSMSchemaValidationTests + Phase 1/2 regression (never auto-run per CLAUDE.md), (2) deferred code-review findings in 03-REVIEW.md (CR-01 critical lenient-path value leak + warnings) — see Blockers/Concerns.
 Resume file: None
