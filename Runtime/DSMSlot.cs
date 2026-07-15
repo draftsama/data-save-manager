@@ -17,6 +17,7 @@ public sealed class DSMSlot
     private readonly DSMWatcher _watcher = new();
     private readonly string _saveDirectory;
     private readonly Type? _constantType;
+    private readonly DSMSchema _schema;
     private Dictionary<string, JToken> _data = new();
     private readonly object _dataLock = new();
     private readonly SemaphoreSlim _ioGate = new(1, 1);
@@ -32,11 +33,36 @@ public sealed class DSMSlot
         _serializer = serializer;
         _saveDirectory = saveDirectory;
         _constantType = constantType;
+        _schema = DSMSchema.For(_constantType);
     }
 
     public void Set<T>(string key, T value) where T : notnull
     {
-        var token = JToken.FromObject(value, _serializer.JsonSerializer);
+        JToken token;
+        if (_schema.TryGetExpectedType(key, out var expected) && typeof(T) != expected)
+        {
+            if (_config.StrictSchema)
+                throw new DSMSchemaViolationException(key, expected, typeof(T));
+
+            Debug.LogWarning($"DSM: key '{key}' expected type '{expected.Name}' but got '{typeof(T).Name}' — coercing.");
+            try
+            {
+                var coerced = JToken.FromObject(value, _serializer.JsonSerializer).ToObject(expected, _serializer.JsonSerializer);
+                token = JToken.FromObject(coerced!, _serializer.JsonSerializer);
+            }
+            catch (Exception ex)
+            {
+                // Uncoercible value: fall back to storing it as-is rather than losing the
+                // write entirely — lenient mode never throws, it only ever warns.
+                Debug.LogWarning($"DSM: could not coerce value for key '{key}': {ex.Message}");
+                token = JToken.FromObject(value, _serializer.JsonSerializer);
+            }
+        }
+        else
+        {
+            token = JToken.FromObject(value, _serializer.JsonSerializer);
+        }
+
         lock (_dataLock)
         {
             _data[key] = token;
@@ -48,6 +74,14 @@ public sealed class DSMSlot
 
     public T Get<T>(string key, T defaultValue)
     {
+        if (_schema.TryGetExpectedType(key, out var expectedGet) && typeof(T) != expectedGet)
+        {
+            if (_config.StrictSchema)
+                throw new DSMSchemaViolationException(key, expectedGet, typeof(T));
+
+            Debug.LogWarning($"DSM: key '{key}' expected type '{expectedGet.Name}' but requested as '{typeof(T).Name}'.");
+        }
+
         JToken? token;
         lock (_dataLock)
         {

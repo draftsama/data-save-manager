@@ -20,6 +20,10 @@ public sealed class DSMConfig : ScriptableObject
     private bool _encrypt;
     public bool Encrypt => _encrypt;
 
+    [SerializeField]
+    private bool _strictSchema;
+    public bool StrictSchema => _strictSchema;
+
     // NOT serialized — set programmatically to keep secrets out of asset files
     [field: NonSerialized]
     public string EncryptionKey { get; private set; } = string.Empty;
