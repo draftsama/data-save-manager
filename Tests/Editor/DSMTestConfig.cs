@@ -15,7 +15,8 @@ public static class DSMTestConfig
         float autoSaveDebounce = 0.05f,
         bool encrypt = false,
         string? savePath = null,
-        string? encryptionKey = null)
+        string? encryptionKey = null,
+        bool strictSchema = false)
     {
         var config = ScriptableObject.CreateInstance<DSMConfig>();
 
@@ -26,6 +27,7 @@ public static class DSMTestConfig
             SetField(config, "_savePath", savePath);
         if (encryptionKey != null)
             config.SetEncryptionKey(encryptionKey);
+        SetField(config, "_strictSchema", strictSchema);
 
         return config;
     }
