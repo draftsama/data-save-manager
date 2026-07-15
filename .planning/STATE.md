@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-current_phase: 02
-current_phase_name: encryption-hardening-key-validation-rotation
-status: executing
+current_phase: 03
+current_phase_name: schema-validation
+status: verifying
 stopped_at: Phase 02 Plan 01 complete, Plan 02 not yet started
-last_updated: "2026-07-15T00:55:04.504Z"
-last_activity: 2026-07-14
-last_activity_desc: Phase 02 execution resumed (wave continue)
+last_updated: "2026-07-15T04:01:26.821Z"
+last_activity: 2026-07-15
+last_activity_desc: Phase 03 execution started
 progress:
   total_phases: 5
-  completed_phases: 2
-  total_plans: 5
-  completed_plans: 5
-  percent: 40
+  completed_phases: 3
+  total_plans: 6
+  completed_plans: 6
+  percent: 60
 ---
 
 # Project State
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-08)
 
 **Core value:** Save/load must be correct and safe — no silent data loss, no silent decryption failures, no corruption under concurrent access.
-**Current focus:** Phase 02 — encryption-hardening-key-validation-rotation
+**Current focus:** Phase 03 — schema-validation
 
 ## Current Position
 
-Phase: 02 (encryption-hardening-key-validation-rotation) — EXECUTING
-Plan: 2 of 2
-Status: Ready to execute
-Last activity: 2026-07-14 — Phase 02 execution resumed (wave continue)
+Phase: 03 (schema-validation) — EXECUTING
+Plan: 1 of 1
+Status: Phase complete — ready for verification
+Last activity: 2026-07-15 — Phase 03 execution started
 
 Progress: [██░░░░░░░░] 20%
 
@@ -60,6 +60,7 @@ Progress: [██░░░░░░░░] 20%
 | Phase 01 P03 | ~12min + fix cycle | 3 tasks | 8 files |
 | Phase 02 P01 | 8min | 2 tasks | 6 files |
 | Phase 02 P02 | 9min | 2 tasks | 5 files |
+| Phase 03-schema-validation P01 | 10min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -80,6 +81,8 @@ Recent decisions affecting current work:
 - [Phase ?]: Journal recovery reuses DSMSlot.CommitReencrypt (which reuses ReplaceFile) instead of duplicating a File.Replace/Move call in DSMSlotManager, keeping ReplaceFile the single atomic-rename primitive
 - [Phase ?]: Rotation with an unusable current key throws InvalidOperationException, distinct from the ArgumentException a weak/empty newKey throws
 - [Phase ?]: Phase 02 (encryption hardening, key validation, rotation) complete: ENC-01, ENC-02, BUGS-02, TEST-02 all delivered across Plans 02-01 and 02-02
+- [Phase 03-schema-validation]: DSMSchema reflects DSMConstant's public static fields into a per-Type-cached key->CLR-type map; DSMSchema.For(null) returns a shared empty pass-through schema — Avoids a second, separately-maintained key-type table (reuses the same fields DSMSlot.SeedDefaults already reflects) and avoids reallocating for the common no-DSMConstant case
+- [Phase 03-schema-validation]: Lenient Set coercion round-trips through JToken.FromObject(value).ToObject(expected) and re-wraps via JToken.FromObject before storing; Get does not rewrite the stored token, only warns and defers to the existing best-effort ToObject<T>() read — Matches the plan's exact recipe, keeps coercion logic in one place (Set), and never throws in lenient mode even when coercion itself fails
 
 ### Pending Todos
 
@@ -104,6 +107,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-14T13:51:15.395Z
+Last session: 2026-07-15T04:01:26.817Z
 Stopped at: Phase 02 Plan 01 complete (encryption hardening: DSMEncryptionKey.Validate + Encrypt-then-MAC DSMEncryptor). Plan 02 (key rotation) not yet started. Open item: a human should confirm DSMEncryptionKeyTests/DSMEncryptorTests are green in Unity Test Runner once the Editor is free (batchmode was blocked this session).
-Resume file: .planning/phases/02-encryption-hardening-key-validation-rotation/02-02-PLAN.md (not yet created — next step is to plan/execute Plan 02-02)
+Resume file: None

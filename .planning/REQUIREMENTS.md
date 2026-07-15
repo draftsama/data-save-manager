@@ -28,8 +28,8 @@ Requirements for this hardening milestone. Each maps to roadmap phases.
 
 ### Schema Validation
 
-- [ ] **SCHM-01**: Type-safe validation on `Set`/`Get` against a schema derived from existing `DSMConstant` codegen metadata (new `DSMSchema` component)
-- [ ] **SCHM-02**: `DSMConfig.StrictSchema` flag, defaulting to lenient (warn + coerce) to avoid breaking existing call sites on upgrade
+- [x] **SCHM-01**: Type-safe validation on `Set`/`Get` against a schema derived from existing `DSMConstant` codegen metadata (new `DSMSchema` component)
+- [x] **SCHM-02**: `DSMConfig.StrictSchema` flag, defaulting to lenient (warn + coerce) to avoid breaking existing call sites on upgrade
 
 ### Versioning & Migration
 
@@ -104,8 +104,8 @@ Which phases cover which requirements. Populated during roadmap creation.
 | BUGS-01 | Phase 5 | Pending |
 | BUGS-03 | Phase 1 | Pending |
 | BUGS-04 | Phase 1 | Pending |
-| SCHM-01 | Phase 3 | Pending |
-| SCHM-02 | Phase 3 | Pending |
+| SCHM-01 | Phase 3 | Complete |
+| SCHM-02 | Phase 3 | Complete |
 | MIGR-01 | Phase 4 | Pending |
 | MIGR-02 | Phase 4 | Pending |
 | MIGR-03 | Phase 4 | Pending |
