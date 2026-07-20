@@ -59,7 +59,19 @@ public sealed class DSMSlot
                 Debug.LogWarning(
                     $"DSM: could not coerce key '{key}' from '{typeof(T).Name}' to '{expected.Name}' " +
                     $"({ex.GetType().Name}) — storing as-is.");
-                token = JToken.FromObject(value, _serializer.JsonSerializer);
+                try
+                {
+                    token = JToken.FromObject(value, _serializer.JsonSerializer);
+                }
+                catch (Exception fallbackEx)
+                {
+                    // Unserializable value: drop the write rather than throw — the lenient
+                    // mode invariant is "warn, never throw" (no value in the message).
+                    Debug.LogWarning(
+                        $"DSM: key '{key}' value of type '{typeof(T).Name}' is not serializable " +
+                        $"({fallbackEx.GetType().Name}) — write dropped.");
+                    return;
+                }
             }
         }
         else
