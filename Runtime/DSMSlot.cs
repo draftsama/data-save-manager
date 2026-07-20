@@ -39,7 +39,7 @@ public sealed class DSMSlot
     public void Set<T>(string key, T value) where T : notnull
     {
         JToken token;
-        if (_schema.TryGetExpectedType(key, out var expected) && typeof(T) != expected)
+        if (_schema.TryGetExpectedType(key, out var expected) && !expected.IsAssignableFrom(typeof(T)))
         {
             if (_config.StrictSchema)
                 throw new DSMSchemaViolationException(key, expected, typeof(T));
@@ -78,7 +78,7 @@ public sealed class DSMSlot
 
     public T Get<T>(string key, T defaultValue)
     {
-        if (_schema.TryGetExpectedType(key, out var expectedGet) && typeof(T) != expectedGet)
+        if (_schema.TryGetExpectedType(key, out var expectedGet) && !expectedGet.IsAssignableFrom(typeof(T)))
         {
             if (_config.StrictSchema)
                 throw new DSMSchemaViolationException(key, expectedGet, typeof(T));
