@@ -25,8 +25,9 @@ public sealed class DSMSlot
     private long _debounceRequestVersion;
     private bool _debounceLoopRunning;
     private volatile bool _rotationInProgress;
+    private readonly DSMMigrationRunner _migrationRunner;
 
-    public DSMSlot(string slotName, DSMConfig config, DSMSerializer serializer, string saveDirectory, Type? constantType)
+    public DSMSlot(string slotName, DSMConfig config, DSMSerializer serializer, string saveDirectory, Type? constantType, DSMMigrationRunner? migrationRunner = null)
     {
         _slotName = slotName;
         _config = config;
@@ -34,6 +35,7 @@ public sealed class DSMSlot
         _saveDirectory = saveDirectory;
         _constantType = constantType;
         _schema = DSMSchema.For(_constantType);
+        _migrationRunner = migrationRunner ?? DSMMigrationRunner.Empty;
     }
 
     public void Set<T>(string key, T value) where T : notnull
@@ -149,29 +151,36 @@ public sealed class DSMSlot
         try
         {
             CancelDebounce();
-            var json = SerializeSnapshot();
-            var path = GetSavePath();
-            var tmpPath = path + ".tmp";
-
-            try
-            {
-                if (_config.Encrypt)
-                    File.WriteAllBytes(tmpPath, DSMEncryptor.Encrypt(json, _config.EncryptionKey));
-                else
-                    File.WriteAllText(tmpPath, json);
-
-                ReplaceFile(tmpPath, path);
-            }
-            catch
-            {
-                if (File.Exists(tmpPath))
-                    File.Delete(tmpPath);
-                throw;
-            }
+            WriteJsonToDisk(SerializeSnapshot());
         }
         finally
         {
             _ioGate.Release();
+        }
+    }
+
+    // Caller MUST already hold _ioGate. The load-time migration write-back reuses this
+    // core while the gate is held; _ioGate is a non-reentrant SemaphoreSlim(1,1), so this
+    // must never call Save() (that would re-acquire the gate and deadlock the slot).
+    private void WriteJsonToDisk(string json)
+    {
+        var path = GetSavePath();
+        var tmpPath = path + ".tmp";
+
+        try
+        {
+            if (_config.Encrypt)
+                File.WriteAllBytes(tmpPath, DSMEncryptor.Encrypt(json, _config.EncryptionKey));
+            else
+                File.WriteAllText(tmpPath, json);
+
+            ReplaceFile(tmpPath, path);
+        }
+        catch
+        {
+            if (File.Exists(tmpPath))
+                File.Delete(tmpPath);
+            throw;
         }
     }
 
@@ -191,19 +200,28 @@ public sealed class DSMSlot
                 ? DSMEncryptor.Decrypt(File.ReadAllBytes(path), _config.EncryptionKey)
                 : File.ReadAllText(path);
 
+            JObject root;
             try
             {
-                var deserialized = _serializer.Deserialize(json);
-                lock (_dataLock)
-                {
-                    _data = deserialized;
-                }
+                root = JObject.Parse(json);
             }
             catch (Exception ex)
             {
                 Debug.LogWarning($"DSM: slot '{_slotName}' has malformed save data, seeding defaults: {ex.Message}");
                 SeedDefaults();
+                return;
             }
+
+            // A future/unknown version or broken chain throws DSMSaveVersionException out of
+            // Load with the file untouched — it must NOT be caught into seed-defaults (T-04-03).
+            var isEnvelope = DSMSaveEnvelope.TryUnwrap(root, out var loadedVersion, out var dataObj);
+            var newVersion = _migrationRunner.Migrate(dataObj, loadedVersion);
+            ApplyPayload(dataObj);
+
+            // Write the upgraded envelope back through the gate-held core while _ioGate is
+            // still held — never Save(), which would re-acquire the non-reentrant gate (T-04-02).
+            if (!isEnvelope || loadedVersion < newVersion)
+                WriteJsonToDisk(SerializeSnapshot());
         }
         finally
         {
@@ -217,29 +235,34 @@ public sealed class DSMSlot
         try
         {
             CancelDebounce();
-            var json = SerializeSnapshot();
-            var path = GetSavePath();
-            var tmpPath = path + ".tmp";
-
-            try
-            {
-                if (_config.Encrypt)
-                    await File.WriteAllBytesAsync(tmpPath, DSMEncryptor.Encrypt(json, _config.EncryptionKey));
-                else
-                    await File.WriteAllTextAsync(tmpPath, json);
-
-                ReplaceFile(tmpPath, path);
-            }
-            catch
-            {
-                if (File.Exists(tmpPath))
-                    File.Delete(tmpPath);
-                throw;
-            }
+            await WriteJsonToDiskAsync(SerializeSnapshot());
         }
         finally
         {
             _ioGate.Release();
+        }
+    }
+
+    // Caller MUST already hold _ioGate (see WriteJsonToDisk) — never call SaveAsync() from here.
+    private async UniTask WriteJsonToDiskAsync(string json)
+    {
+        var path = GetSavePath();
+        var tmpPath = path + ".tmp";
+
+        try
+        {
+            if (_config.Encrypt)
+                await File.WriteAllBytesAsync(tmpPath, DSMEncryptor.Encrypt(json, _config.EncryptionKey));
+            else
+                await File.WriteAllTextAsync(tmpPath, json);
+
+            ReplaceFile(tmpPath, path);
+        }
+        catch
+        {
+            if (File.Exists(tmpPath))
+                File.Delete(tmpPath);
+            throw;
         }
     }
 
@@ -266,19 +289,26 @@ public sealed class DSMSlot
                 json = await File.ReadAllTextAsync(path);
             }
 
+            JObject root;
             try
             {
-                var deserialized = _serializer.Deserialize(json);
-                lock (_dataLock)
-                {
-                    _data = deserialized;
-                }
+                root = JObject.Parse(json);
             }
             catch (Exception ex)
             {
                 Debug.LogWarning($"DSM: slot '{_slotName}' has malformed save data, seeding defaults: {ex.Message}");
                 SeedDefaults();
+                return;
             }
+
+            // See Load(): a future/unknown version throws out of LoadAsync with the file
+            // untouched (T-04-03); the write-back reuses the gate-held core, never SaveAsync().
+            var isEnvelope = DSMSaveEnvelope.TryUnwrap(root, out var loadedVersion, out var dataObj);
+            var newVersion = _migrationRunner.Migrate(dataObj, loadedVersion);
+            ApplyPayload(dataObj);
+
+            if (!isEnvelope || loadedVersion < newVersion)
+                await WriteJsonToDiskAsync(SerializeSnapshot());
         }
         finally
         {
@@ -478,6 +508,17 @@ public sealed class DSMSlot
         // never throws when nothing is pending.
     }
 
+    private void ApplyPayload(JObject dataObj)
+    {
+        var payload = new Dictionary<string, JToken>();
+        foreach (var prop in dataObj.Properties())
+            payload[prop.Name] = prop.Value;
+        lock (_dataLock)
+        {
+            _data = payload;
+        }
+    }
+
     private string SerializeSnapshot()
     {
         Dictionary<string, JToken> snapshot;
@@ -485,7 +526,7 @@ public sealed class DSMSlot
         {
             snapshot = new Dictionary<string, JToken>(_data);
         }
-        return _serializer.Serialize(snapshot, _config.PrettyPrint);
+        return _serializer.SerializeEnvelope(snapshot, _migrationRunner.CurrentVersion, _config.PrettyPrint);
     }
 
     private string GetSavePath()

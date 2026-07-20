@@ -1,11 +1,14 @@
 #nullable enable
 
+using System;
+using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
 
 public static class DSM
 {
     private static DSMSlotManager? s_manager;
+    private static readonly List<IDSMMigration> s_migrations = new();
 
     private static DSMSlotManager Manager => s_manager ??= Initialize();
 
@@ -14,8 +17,27 @@ public static class DSM
     {
         if (s_manager != null)
             Application.quitting -= s_manager.SaveActiveSlot;
-        s_manager = new DSMSlotManager(config);
+        s_manager = new DSMSlotManager(config, new DSMMigrationRunner(s_migrations));
         Application.quitting += s_manager.SaveActiveSlot;
+    }
+
+    // --- Migration registry ---
+
+    /// <summary>Registers a save migration applied lazily to each slot on load. Must be called before the first DSM access (before the manager is built), else throws <see cref="InvalidOperationException"/>.</summary>
+    public static void RegisterMigration(IDSMMigration migration)
+    {
+        if (s_manager != null)
+            throw new InvalidOperationException("DSM: migrations must be registered before the first DSM access — the manager is already built.");
+        s_migrations.Add(migration);
+    }
+
+    /// <summary>Clears all registered migrations and drops the current manager so the next access rebuilds with the cleared set.</summary>
+    public static void ClearMigrations()
+    {
+        s_migrations.Clear();
+        if (s_manager != null)
+            Application.quitting -= s_manager.SaveActiveSlot;
+        s_manager = null;
     }
 
     // --- Slot management ---
@@ -90,7 +112,7 @@ public static class DSM
         var config = Resources.Load<DSMConfig>("DSMConfig")
                      ?? ScriptableObject.CreateInstance<DSMConfig>();
 
-        var manager = new DSMSlotManager(config);
+        var manager = new DSMSlotManager(config, new DSMMigrationRunner(s_migrations));
         Application.quitting += manager.SaveActiveSlot;
         return manager;
     }

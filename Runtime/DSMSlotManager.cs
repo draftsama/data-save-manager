@@ -21,15 +21,17 @@ public sealed class DSMSlotManager
     private DSMSlot _activeSlot;
     private readonly object _slotsLock = new();
     private readonly SemaphoreSlim _rotationGate = new(1, 1);
+    private readonly DSMMigrationRunner _migrationRunner;
 
     private static Type? s_constantType;
 
     public DSMSlot ActiveSlot => _activeSlot;
     public string SaveDirectory => DSMPaths.GetSaveDirectory(_config.SavePath);
 
-    public DSMSlotManager(DSMConfig config)
+    public DSMSlotManager(DSMConfig config, DSMMigrationRunner? migrationRunner = null)
     {
         _config = config;
+        _migrationRunner = migrationRunner ?? DSMMigrationRunner.Empty;
         RecoverInterruptedRotation();
         _activeSlot = GetOrCreateSlot(config.DefaultSlot);
         _activeSlot.Load();
@@ -252,7 +254,7 @@ public sealed class DSMSlotManager
         lock (_slotsLock)
         {
             if (_slots.TryGetValue(name, out var slot)) return slot;
-            slot = new DSMSlot(name, _config, _serializer, SaveDirectory, ResolveConstantType());
+            slot = new DSMSlot(name, _config, _serializer, SaveDirectory, ResolveConstantType(), _migrationRunner);
             _slots[name] = slot;
             return slot;
         }
