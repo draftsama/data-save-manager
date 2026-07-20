@@ -91,7 +91,15 @@ public sealed class DSMSlot
         {
             if (!_data.TryGetValue(key, out token)) return defaultValue;
         }
-        return token.ToObject<T>(_serializer.JsonSerializer) ?? defaultValue;
+        try
+        {
+            return token.ToObject<T>(_serializer.JsonSerializer) ?? defaultValue;
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning($"DSM: key '{key}' could not be read as '{typeof(T).Name}' ({ex.GetType().Name}).");
+            return defaultValue;
+        }
     }
 
     public bool Has(string key)
