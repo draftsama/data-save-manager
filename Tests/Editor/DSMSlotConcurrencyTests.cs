@@ -108,18 +108,19 @@ public class DSMSlotConcurrencyTests
         // Final settle save so the persisted file reflects a well-defined end state
         await slot.SaveAsync();
 
-        // Assert — persisted file always parses via DSMSerializer.Deserialize, and every
-        // key present in the file is a valid subset of the expected in-memory snapshot
+        // Assert — persisted file always parses as a versioned envelope, and every payload
+        // key under `data` is a valid subset of the expected in-memory snapshot
         var destPath = Path.Combine(_tempDir, "set-save-matrix.json");
         Assert.That(File.Exists(destPath), Is.True);
         var json = File.ReadAllText(destPath);
-        Dictionary<string, JToken> persisted = null!;
-        Assert.DoesNotThrow(() => persisted = _serializer.Deserialize(json));
-        foreach (var (key, token) in persisted)
+        JObject root = null!;
+        Assert.DoesNotThrow(() => root = JObject.Parse(json));
+        var persisted = (JObject)root[DSMSaveEnvelope.DataKey]!;
+        foreach (var prop in persisted.Properties())
         {
-            Assert.That(slot.Has(key), Is.True, $"persisted key '{key}' must be present in in-memory state");
-            var expected = int.Parse(key.Replace("key", ""));
-            Assert.That((int)token, Is.EqualTo(expected));
+            Assert.That(slot.Has(prop.Name), Is.True, $"persisted key '{prop.Name}' must be present in in-memory state");
+            var expected = int.Parse(prop.Name.Replace("key", ""));
+            Assert.That((int)prop.Value!, Is.EqualTo(expected));
         }
     }
 

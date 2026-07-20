@@ -63,7 +63,7 @@ public class DSMSlotDebounceTests
         // Assert
         var destPath = Path.Combine(_tempDir, "storm-value.json");
         Assert.That(File.Exists(destPath), Is.True, "debounced save should have fired after settling");
-        var root = JObject.Parse(File.ReadAllText(destPath));
-        Assert.That((int)root["counter"]!, Is.EqualTo(199));
+        var data = (JObject)JObject.Parse(File.ReadAllText(destPath))[DSMSaveEnvelope.DataKey]!;
+        Assert.That((int)data["counter"]!, Is.EqualTo(199));
     }
 }

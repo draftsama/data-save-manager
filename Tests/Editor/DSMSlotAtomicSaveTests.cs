@@ -65,9 +65,9 @@ public class DSMSlotAtomicSaveTests
         // Assert — destination always fully parseable (temp-then-replace, never truncated)
         var destPath = Path.Combine(_tempDir, "atomic-sync.json");
         var json = File.ReadAllText(destPath);
-        var root = JObject.Parse(json);
-        Assert.That((int)root["hp"]!, Is.EqualTo(99));
-        Assert.That((int)root["mp"]!, Is.EqualTo(55));
+        var data = (JObject)JObject.Parse(json)[DSMSaveEnvelope.DataKey]!;
+        Assert.That((int)data["hp"]!, Is.EqualTo(99));
+        Assert.That((int)data["mp"]!, Is.EqualTo(55));
 
         var leftoverTmp = Directory.GetFiles(_tempDir, "*.tmp");
         Assert.That(leftoverTmp, Is.Empty, "no .tmp file should remain after a successful save");
@@ -98,9 +98,9 @@ public class DSMSlotAtomicSaveTests
 
         var destPath = Path.Combine(_tempDir, "atomic-concurrent.json");
         Assert.That(File.Exists(destPath), Is.True);
-        var root = JObject.Parse(File.ReadAllText(destPath));
+        var data = (JObject)JObject.Parse(File.ReadAllText(destPath))[DSMSaveEnvelope.DataKey]!;
         for (var i = 0; i < count; i++)
-            Assert.That((int)root[$"key{i}"]!, Is.EqualTo(i));
+            Assert.That((int)data[$"key{i}"]!, Is.EqualTo(i));
 
         var leftoverTmp = Directory.GetFiles(_tempDir, "*.tmp");
         Assert.That(leftoverTmp, Is.Empty, "no .tmp file should remain after the gate serializes concurrent saves");
