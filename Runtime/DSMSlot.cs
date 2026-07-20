@@ -54,7 +54,11 @@ public sealed class DSMSlot
             {
                 // Uncoercible value: fall back to storing it as-is rather than losing the
                 // write entirely — lenient mode never throws, it only ever warns.
-                Debug.LogWarning($"DSM: could not coerce value for key '{key}': {ex.Message}");
+                // Never interpolate ex.Message: Newtonsoft conversion errors embed the
+                // offending value, which would leak it into the log (T-03-01).
+                Debug.LogWarning(
+                    $"DSM: could not coerce key '{key}' from '{typeof(T).Name}' to '{expected.Name}' " +
+                    $"({ex.GetType().Name}) — storing as-is.");
                 token = JToken.FromObject(value, _serializer.JsonSerializer);
             }
         }
