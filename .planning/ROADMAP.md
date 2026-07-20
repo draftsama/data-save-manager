@@ -16,7 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Foundation — Thread-Safety, Robustness & Test Infrastructure** - Synchronize shared slot state, fix the debounce/CTS race, make saves atomic, harden slot-name/input validation, and stand up the test framework
 - [x] **Phase 2: Encryption Hardening — Key Validation & Rotation** - Centralize key validation, switch to Encrypt-then-MAC (AES-CBC + HMAC-SHA256), and add atomic key rotation (completed 2026-07-14)
 - [x] **Phase 3: Schema Validation** - Type-safe `Set`/`Get` validation built from existing codegen metadata (completed 2026-07-15)
-- [ ] **Phase 4: Save Versioning + Migration** - Versioned save envelope with lazy, composable per-slot migration on load
+- [x] **Phase 4: Save Versioning + Migration** - Versioned save envelope with lazy, composable per-slot migration on load
 - [ ] **Phase 5: Performance, Reactivity & Editor Tooling** - Batched watcher notifications, `DSMManagerWindow` decomposition/caching, and new version/migration/rotate-key Editor UI
 
 ## Phase Details
@@ -95,7 +95,9 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. Migrations are expressed as small, composable per-step transforms (v1→v2→v3…) via `IDSMMigration`/`DSMMigrationRunner`, so a renamed or removed key is explicitly remapped rather than silently replaced with a default
   4. A `TestFixtures/` directory of versioned sample save files exists, and regression tests confirm each fixture migrates to the expected current-version output
 
-**Plans**: TBD
+**Plans**:
+
+- [x] 04-01-PLAN.md — Versioned `{ version, data }` envelope + IDSMMigration/DSMMigrationRunner + lazy migrate-on-load with gate-safe write-back + TestFixtures regression (MIGR-01, MIGR-02, MIGR-03, TEST-06)
 
 ### Phase 5: Performance, Reactivity & Editor Tooling
 
@@ -124,5 +126,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 1. Foundation — Thread-Safety, Robustness & Test Infrastructure | 3/3 | Complete | 2026-07-13 |
 | 2. Encryption Hardening — Key Validation & Rotation | 2/2 | Complete   | 2026-07-14 |
 | 3. Schema Validation | 1/1 | Complete    | 2026-07-15 |
-| 4. Save Versioning + Migration | 0/TBD | Not started | - |
+| 4. Save Versioning + Migration | 1/1 | Complete | 2026-07-21 |
 | 5. Performance, Reactivity & Editor Tooling | 0/TBD | Not started | - |
