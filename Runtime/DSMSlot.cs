@@ -355,9 +355,20 @@ public sealed class DSMSlot
     public IUniTaskAsyncEnumerable<T> WatchAsync<T>(string key) =>
         _watcher.Watch<T>(key, () =>
         {
-            if (!_data.TryGetValue(key, out var token)) return (false, default!);
-            var value = token.ToObject<T>(_serializer.JsonSerializer);
-            return value is not null ? (true, value) : (false, default!);
+            JToken? token;
+            lock (_dataLock)
+            {
+                if (!_data.TryGetValue(key, out token)) return (false, default!);
+            }
+            try
+            {
+                var value = token.ToObject<T>(_serializer.JsonSerializer);
+                return value is not null ? (true, value) : (false, default!);
+            }
+            catch
+            {
+                return (false, default!);
+            }
         });
 
     private void SeedDefaults()
