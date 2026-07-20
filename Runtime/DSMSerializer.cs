@@ -28,6 +28,15 @@ public sealed class DSMSerializer
         return root.ToString(prettyPrint ? Formatting.Indented : Formatting.None);
     }
 
+    public string SerializeEnvelope(Dictionary<string, JToken> data, int version, bool prettyPrint)
+    {
+        var payload = new JObject();
+        foreach (var (key, token) in data)
+            payload[key] = token;
+        var envelope = DSMSaveEnvelope.Wrap(payload, version);
+        return envelope.ToString(prettyPrint ? Formatting.Indented : Formatting.None);
+    }
+
     public Dictionary<string, JToken> Deserialize(string json)
     {
         var root = JObject.Parse(json);
