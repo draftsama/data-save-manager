@@ -39,6 +39,7 @@ public sealed class DSMSlot
     public void Set<T>(string key, T value) where T : notnull
     {
         JToken token;
+        object notifyValue = value;
         if (_schema.TryGetExpectedType(key, out var expected) && !expected.IsAssignableFrom(typeof(T)))
         {
             if (_config.StrictSchema)
@@ -49,6 +50,10 @@ public sealed class DSMSlot
             {
                 var coerced = JToken.FromObject(value, _serializer.JsonSerializer).ToObject(expected, _serializer.JsonSerializer);
                 token = JToken.FromObject(coerced!, _serializer.JsonSerializer);
+                // Notify with the coerced value so WatchAsync<T> subscribers whose T matches
+                // the stored (schema) type receive it — the raw value would fail their is-T
+                // filter and be silently dropped (WR-05).
+                notifyValue = coerced!;
             }
             catch (Exception ex)
             {
@@ -83,7 +88,7 @@ public sealed class DSMSlot
         {
             _data[key] = token;
         }
-        _watcher.Notify(key, value);
+        _watcher.Notify(key, notifyValue);
         if (_config.AutoSave)
             ScheduleSave();
     }
