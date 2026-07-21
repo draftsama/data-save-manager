@@ -182,9 +182,11 @@ None in code — plan executed as written. One environment-only adjustment (not 
 ## Issues Encountered
 The first `dotnet build` after Task 2 failed with `CS0103: DSMSaveEnvelope does not exist` — the new file was not in the gitignored Unity csproj's explicit `<Compile Include>` list. Resolved by adding the Compile entries locally (see Deviations). No other issues.
 
-## Open Human-Verification Item (Unity Test Runner)
+## Human-Verification Item (Unity Test Runner) — ✅ PASSED 2026-07-21
 
-**This is the acceptance gate for MIGR-01/MIGR-02/MIGR-03 + TEST-06 and has NOT been run by this agent** — per `.claude/CLAUDE.md`, Unity tests (EditMode/PlayMode, batchmode, `-runTests`) must never be run by the executor; Unity batchmode has previously deadlocked this project and hit Unix-domain-socket path failures. A migration bug can manifest as a deadlock on load (the exact failure the batchmode ban exists to avoid), so this must be run interactively.
+**RESOLVED:** Human ran Unity Test Runner (EditMode) on 2026-07-21 — `DSMMigrationTests` (11 tests + 3-fixture regression) plus the full Phase 1/2/3 regression suite all passed. Acceptance gate for MIGR-01/MIGR-02/MIGR-03 + TEST-06 satisfied. Phase 4 closed.
+
+Original instructions (kept for reference) — per `.claude/CLAUDE.md`, Unity tests (EditMode/PlayMode, batchmode, `-runTests`) must never be run by the executor; Unity batchmode has previously deadlocked this project and hit Unix-domain-socket path failures. A migration bug can manifest as a deadlock on load (the exact failure the batchmode ban exists to avoid), so this must be run interactively.
 
 **What the human must do:**
 1. Open Unity Editor → Window → General → Test Runner → EditMode tab.

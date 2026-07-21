@@ -5,10 +5,10 @@ milestone_name: milestone
 current_phase: 5
 current_phase_name: Performance, Reactivity & Editor Tooling
 status: executing
-stopped_at: "Phase 04 (save-versioning-migration) executed — { version, data } envelope (DSMSaveEnvelope) + IDSMMigration/DSMMigrationRunner (contiguity-validated chain, CurrentVersion derived) + lazy migrate-on-load with gate-safe (non-reentrant _ioGate) write-back in DSMSlot + DSM.RegisterMigration registry + 11-test DSMMigrationTests backed by 3 committed TestFixtures. `dotnet build DMS.Runtime.csproj` green (0 errors); ROADMAP marks Phase 4 complete (1/1). Open items: (1) human Unity Test Runner run of DSMMigrationTests + full Phase 1/2/3 regression (never auto-run per CLAUDE.md — a migration bug can deadlock on load), (2) Phase 5 not yet planned, (3) deferred Phase 03 code-review CR-01 still open — see Blockers/Concerns."
-last_updated: "2026-07-20T23:05:00.000Z"
+stopped_at: "Phase 04 (save-versioning-migration) CLOSED — { version, data } envelope (DSMSaveEnvelope) + IDSMMigration/DSMMigrationRunner (contiguity-validated chain, CurrentVersion derived) + lazy migrate-on-load with gate-safe (non-reentrant _ioGate) write-back in DSMSlot + DSM.RegisterMigration registry + 11-test DSMMigrationTests backed by 3 committed TestFixtures. `dotnet build DMS.Runtime.csproj` green (0 errors). Human Unity Test Runner (EditMode) run 2026-07-21 — DSMMigrationTests + full Phase 1/2/3 regression PASS; acceptance gate satisfied. ROADMAP marks Phase 4 complete (1/1). Open items: (1) Phase 5 not yet planned, (2) deferred Phase 03 code-review CR-01 still open — see Blockers/Concerns."
+last_updated: "2026-07-21T05:04:00.000Z"
 last_activity: 2026-07-21
-last_activity_desc: Phase 04 complete, transitioned to Phase 5
+last_activity_desc: Phase 04 closed — human Unity Test Runner acceptance passed
 progress:
   total_phases: 5
   completed_phases: 4
@@ -30,8 +30,8 @@ See: .planning/PROJECT.md (updated 2026-07-08)
 
 Phase: 5 — Performance, Reactivity & Editor Tooling
 Plan: Not started (Phase 5 not yet planned)
-Status: Phase 4 complete — automated gates green (dotnet build 0 errors + grep asserts); human Unity Test Runner acceptance pending
-Last activity: 2026-07-21 — Phase 04 complete, transitioned to Phase 5
+Status: Phase 4 CLOSED — automated gates green + human Unity Test Runner (EditMode) PASS (2026-07-21); acceptance gate satisfied
+Last activity: 2026-07-21 — Phase 04 closed, human Test Runner acceptance passed
 
 Progress: [████████░░] 80%
 
@@ -98,7 +98,7 @@ None yet.
 - 2026-07-15: Phase 02 code review findings (02-REVIEW.md) fixed — 3 critical + 4 warnings in `DSMSlot.cs`/`DSMSlotManager.cs` (rotation temp-path collision, mid-commit recovery, legacy-format error message, stage-verify cleanup, concurrent-rotation guard, recovery error handling, data-race snapshot). Verified via `dotnet build` (0 errors); Unity Test Runner confirmation still pending human.
 - 2026-07-15 [Phase 03]: Human must run Unity Test Runner (EditMode) — `DSMSchemaValidationTests` (8 tests) plus full Phase 1/2 regression suite. Never run automatically (CLAUDE.md batchmode constraint). This is the real acceptance gate for SCHM-01/SCHM-02; automated gate was `dotnet build` (0 errors) + grep source assertions only.
 - 2026-07-15 [Phase 03]: Code review (03-REVIEW.md, commit ffa569a) found 1 critical + 4 warnings — USER CHOSE TO DEFER, not fixed. CR-01 (critical): `DSMSlot.cs:57` lenient coercion-failure logs `ex.Message` (Newtonsoft) which embeds the offending value → leaks secrets to Unity log on the untrusted-input path, violating the phase's own no-value-leak must_have (T-03-01). WR-02 (`DSMSlot.cs:90` lenient Get `ToObject<T>` unguarded, can throw + leak, breaks "lenient never throws"), WR-04 (`DSMSlot.cs:58` fallback `FromObject` in catch unguarded). WR-03 (exact `typeof(T)!=expected` false-positives for assignable types — plan-intended, latent). WR-01 (`WatchAsync` reads `_data` outside `_dataLock` — PRE-EXISTING, not introduced this phase). Close via `/gsd-code-review 03 --fix` or a gap-closure phase.
-- 2026-07-21 [Phase 04]: Human must run Unity Test Runner (EditMode) — `DSMMigrationTests` (11 tests + 3-fixture regression) plus the FULL Phase 1/2/3 regression suite (`DSMSlotLoadRobustnessTests`, `DSMSlotAtomicSaveTests`, `DSMSlotConcurrencyTests`, `DSMSlotDebounceTests`, `DSMKeyRotationTests`, `DSMSchemaValidationTests`). Acceptance gate for MIGR-01/02/03 + TEST-06; never auto-run (CLAUDE.md batchmode constraint — a migration bug can DEADLOCK on load). Automated gate was `dotnet build DMS.Runtime.csproj` (0 errors) + grep source assertions only. Watch especially: a future-version fixture load must throw `DSMSaveVersionException` with the file bytes unchanged and NO hang; legacy-flat load must migrate + write back the envelope without re-entering `_ioGate`.
+- 2026-07-21 [Phase 04] RESOLVED: Human ran Unity Test Runner (EditMode) 2026-07-21 — `DSMMigrationTests` (11 tests + 3-fixture regression) + FULL Phase 1/2/3 regression suite all PASS. Acceptance gate for MIGR-01/02/03 + TEST-06 satisfied; Phase 4 closed.
 
 ## Deferred Items
 
