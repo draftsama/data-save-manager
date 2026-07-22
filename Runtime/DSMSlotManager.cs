@@ -28,6 +28,7 @@ public sealed class DSMSlotManager
 
     public DSMSlot ActiveSlot => _activeSlot;
     public string SaveDirectory => DSMPaths.GetSaveDirectory(_config.SavePath);
+    public int CurrentVersion => _migrationRunner.CurrentVersion;
 
     public DSMSlotManager(DSMConfig config, DSMMigrationRunner? migrationRunner = null)
     {

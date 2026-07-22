@@ -54,6 +54,9 @@ public static class DSM
     /// <summary>Returns the names of all save slots found on disk.</summary>
     public static string[] GetAllSlots() => Manager.GetAllSlots();
 
+    /// <summary>The save version the registered migrations bring a save up to.</summary>
+    public static int CurrentSaveVersion => Manager.CurrentVersion;
+
     // --- Core get / set ---
 
     /// <summary>Sets <paramref name="value"/> for <paramref name="key"/> in the active slot. Triggers AutoSave debounce if enabled.</summary>
