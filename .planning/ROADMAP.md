@@ -17,7 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2: Encryption Hardening — Key Validation & Rotation** - Centralize key validation, switch to Encrypt-then-MAC (AES-CBC + HMAC-SHA256), and add atomic key rotation (completed 2026-07-14)
 - [x] **Phase 3: Schema Validation** - Type-safe `Set`/`Get` validation built from existing codegen metadata (completed 2026-07-15)
 - [x] **Phase 4: Save Versioning + Migration** - Versioned save envelope with lazy, composable per-slot migration on load
-- [ ] **Phase 5: Performance, Reactivity & Editor Tooling** - Batched watcher notifications, `DSMManagerWindow` decomposition/caching, and new version/migration/rotate-key Editor UI
+- [x] **Phase 5: Performance, Reactivity & Editor Tooling** - Batched watcher notifications, `DSMManagerWindow` decomposition/caching, and new version/migration/rotate-key Editor UI (completed 2026-07-22)
 
 ## Phase Details
 
@@ -113,13 +113,13 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. The Editor Manager window shows each slot's save version and migration status and exposes a rotate-key action via new dedicated classes — not appended to `DSMManagerWindow.cs` — and error handling in that window surfaces specific, visible errors instead of silently swallowing exceptions
   5. Switching or deleting the selected slot in the Editor window while it's open never leaves the UI in a broken or stale state, verified by automated Editor tests
 
-**Plans**: 4/5 plans executed
+**Plans**: 5/5 plans complete
 
 - [x] 05-01-PLAN.md
 - [x] 05-02-PLAN.md
 - [x] 05-03-PLAN.md
 - [x] 05-04-PLAN.md
-- [ ] 05-05-PLAN.md
+- [x] 05-05-PLAN.md
   - **Wave 1** *(parallel — disjoint files)*: 05-01 batched WatchAsync (WATCH-01) + folded CR-01/WR-05 regression tests · 05-02 GetAllSlots cache (PERF-03) + UniTask pin (PERF-04) · 05-03 DSMManagerWindow decomposition + reflection cache (PERF-01/02) + visible errors (BUGS-01)
   - **Wave 2** *(blocked on Wave 1: needs 05-03 decomposed window)*: 05-04 Editor version/migration status + rotate-key panels (EDIT-01)
   - **Wave 3** *(blocked on Wave 2: needs 05-03 + 05-04)*: 05-05 Editor state-transition tests (TEST-05)
@@ -137,4 +137,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 2. Encryption Hardening — Key Validation & Rotation | 2/2 | Complete   | 2026-07-14 |
 | 3. Schema Validation | 1/1 | Complete    | 2026-07-15 |
 | 4. Save Versioning + Migration | 1/1 | Complete | 2026-07-21 |
-| 5. Performance, Reactivity & Editor Tooling | 4/5 | In Progress|  |
+| 5. Performance, Reactivity & Editor Tooling | 5/5 | Complete   | 2026-07-22 |

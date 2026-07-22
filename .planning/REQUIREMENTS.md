@@ -54,7 +54,7 @@ Requirements for this hardening milestone. Each maps to roadmap phases.
 - [x] **TEST-02**: Tests for encryption edge cases (wrong key, truncated file, empty key, key change between saves/loads)
 - [x] **TEST-03**: Tests for concurrent slot operations (`Set`+`Load`, `SaveAsync`+`Get`, multi-watcher)
 - [ ] **TEST-04**: Tests for invalid inputs (null keys, empty slot names, malformed JSON)
-- [ ] **TEST-05**: Tests for Editor window state transitions (slot switch/delete while selected)
+- [x] **TEST-05**: Tests for Editor window state transitions (slot switch/delete while selected)
 - [ ] **TEST-06**: `TestFixtures/` directory of versioned sample save files, with regression tests, so migration logic doesn't silently rot
 
 ### Editor Tooling
@@ -119,7 +119,7 @@ Which phases cover which requirements. Populated during roadmap creation.
 | TEST-02 | Phase 2 | Complete |
 | TEST-03 | Phase 1 | Complete |
 | TEST-04 | Phase 1 | Pending |
-| TEST-05 | Phase 5 | Pending |
+| TEST-05 | Phase 5 | Complete |
 
 **Coverage:**
 
