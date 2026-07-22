@@ -45,8 +45,8 @@ Requirements for this hardening milestone. Each maps to roadmap phases.
 
 - [ ] **PERF-01**: Split `DSMManagerWindow.cs` (825 lines) into focused classes (UI rendering, reflection/defaults sync, slot operations)
 - [ ] **PERF-02**: Cache the reflection scan in `DSMManagerWindow` instead of rescanning assemblies on every window open
-- [ ] **PERF-03**: Cache `GetAllSlots()` results in `DSMSlotManager`, invalidate only on slot create/delete
-- [ ] **PERF-04**: Pin the UniTask git dependency to a commit hash instead of tracking `main`
+- [x] **PERF-03**: Cache `GetAllSlots()` results in `DSMSlotManager`, invalidate only on slot create/delete
+- [x] **PERF-04**: Pin the UniTask git dependency to a commit hash instead of tracking `main`
 
 ### Testing
 
@@ -114,8 +114,8 @@ Which phases cover which requirements. Populated during roadmap creation.
 | EDIT-01 | Phase 5 | Pending |
 | PERF-01 | Phase 5 | Pending |
 | PERF-02 | Phase 5 | Pending |
-| PERF-03 | Phase 5 | Pending |
-| PERF-04 | Phase 5 | Pending |
+| PERF-03 | Phase 5 | Complete |
+| PERF-04 | Phase 5 | Complete |
 | TEST-02 | Phase 2 | Complete |
 | TEST-03 | Phase 1 | Complete |
 | TEST-04 | Phase 1 | Pending |
