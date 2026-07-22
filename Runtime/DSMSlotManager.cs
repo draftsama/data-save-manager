@@ -20,6 +20,7 @@ public sealed class DSMSlotManager
     private readonly DSMSerializer _serializer = new();
     private DSMSlot _activeSlot;
     private readonly object _slotsLock = new();
+    private string[]? _allSlotsCache;
     private readonly SemaphoreSlim _rotationGate = new(1, 1);
     private readonly DSMMigrationRunner _migrationRunner;
 
@@ -57,24 +58,37 @@ public sealed class DSMSlotManager
         var encPath = Path.Combine(dir, $"{name}.enc");
         if (File.Exists(jsonPath)) File.Delete(jsonPath);
         if (File.Exists(encPath)) File.Delete(encPath);
+        lock (_slotsLock)
+        {
+            // Invalidate after the files are gone: a re-scan racing an earlier
+            // invalidation would cache the deleted slot right back in.
+            _allSlotsCache = null;
+        }
     }
 
     public string[] GetAllSlots()
     {
-        var dir = SaveDirectory;
-        if (!Directory.Exists(dir)) return Array.Empty<string>();
-
-        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var file in Directory.GetFiles(dir))
+        lock (_slotsLock)
         {
-            var ext = Path.GetExtension(file);
-            if (ext.Equals(".json", StringComparison.OrdinalIgnoreCase) ||
-                ext.Equals(".enc",  StringComparison.OrdinalIgnoreCase))
-                names.Add(Path.GetFileNameWithoutExtension(file)!);
+            // Only slot create/delete through this manager clears the cache — read
+            // paths never do, so the directory is walked once per slot-set change.
+            if (_allSlotsCache != null) return _allSlotsCache;
+
+            var dir = SaveDirectory;
+            if (!Directory.Exists(dir)) return _allSlotsCache = Array.Empty<string>();
+
+            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var file in Directory.GetFiles(dir))
+            {
+                var ext = Path.GetExtension(file);
+                if (ext.Equals(".json", StringComparison.OrdinalIgnoreCase) ||
+                    ext.Equals(".enc",  StringComparison.OrdinalIgnoreCase))
+                    names.Add(Path.GetFileNameWithoutExtension(file)!);
+            }
+            var result = new string[names.Count];
+            names.CopyTo(result);
+            return _allSlotsCache = result;
         }
-        var result = new string[names.Count];
-        names.CopyTo(result);
-        return result;
     }
 
     public void SaveActiveSlot() => _activeSlot.Save();
@@ -256,6 +270,7 @@ public sealed class DSMSlotManager
             if (_slots.TryGetValue(name, out var slot)) return slot;
             slot = new DSMSlot(name, _config, _serializer, SaveDirectory, ResolveConstantType(), _migrationRunner);
             _slots[name] = slot;
+            _allSlotsCache = null;
             return slot;
         }
     }
