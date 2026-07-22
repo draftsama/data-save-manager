@@ -174,7 +174,9 @@ internal sealed class DSMManagerSlotOps
             return;
         }
         DiscoverSlots();
-        SelectSlot(_availableSlots[0]);
+        // DiscoverSlots always re-adds the configured default slot, so it is the deterministic
+        // landing place after the selected slot disappears.
+        SelectSlot(GetSlotName());
     }
 
     public void CreateSlot(string slot)

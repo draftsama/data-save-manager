@@ -15,14 +15,26 @@ internal sealed class DSMSlotVersionPanel
     private static GUIStyle? s_okStyle;
     private static GUIStyle? s_warnStyle;
 
+    internal IEnumerable<string> InspectedSlots
+    {
+        get
+        {
+            foreach (var reading in _readings)
+                yield return reading.Slot;
+        }
+    }
+
     // Readings are taken on refresh, never per OnGUI frame: each one is a file read plus a
     // decrypt for encrypted slots.
-    public void Refresh(DSMConfig? config, IEnumerable<string> slotNames, Func<string, string> resolveSlotPath)
+    public void Refresh(DSMConfig? config, IEnumerable<string> slotNames, Func<string, string> resolveSlotPath,
+        int? currentVersion = null)
     {
         _readings.Clear();
         if (config == null) return;
 
-        _currentVersion = DSM.CurrentSaveVersion;
+        // Callers that already know the target version pass it in; reading DSM.CurrentSaveVersion
+        // builds the global manager, which tests must not do.
+        _currentVersion = currentVersion ?? DSM.CurrentSaveVersion;
         foreach (var slot in slotNames)
         {
             var known = DSMSaveInspector.TryReadOnDiskVersion(resolveSlotPath(slot), config, out var version);
