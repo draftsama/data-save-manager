@@ -59,6 +59,13 @@ internal sealed class DSMManagerSlotOps
         _availableSlots = names.OrderBy(n => n).ToArray();
     }
 
+    public string ResolveSlotPath(string slot)
+    {
+        var dir = DSMPaths.GetSaveDirectory(_config?.SavePath);
+        var enc = Path.Combine(dir, $"{slot}.enc");
+        return File.Exists(enc) ? enc : Path.Combine(dir, $"{slot}.json");
+    }
+
     public void LoadSlotData(string slot)
     {
         _slotData = new Dictionary<string, JToken>(StringComparer.Ordinal);

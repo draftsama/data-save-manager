@@ -15,6 +15,8 @@ public sealed class DSMManagerWindow : EditorWindow
     // ── State ────────────────────────────────────────────────────────────────
 
     private readonly DSMManagerSlotOps _slotOps = new();
+    private readonly DSMSlotVersionPanel _versionPanel = new();
+    private DSMKeyRotationPanel? _rotationPanel;
     private DSMConfig? _config;
     private UnityEditor.SerializedObject? _configSO;
     private string _searchText = string.Empty;
@@ -78,8 +80,12 @@ public sealed class DSMManagerWindow : EditorWindow
             _slotOps.ActiveSlot = _slotOps.GetSlotName();
         _slotOps.DefaultsDirty = false;
         _slotOps.LoadSlotData(_slotOps.ActiveSlot);
+        RefreshVersionPanel();
         Repaint();
     }
+
+    private void RefreshVersionPanel() =>
+        _versionPanel.Refresh(_config, _slotOps.AvailableSlots, _slotOps.ResolveSlotPath);
 
     // ── Main GUI ──────────────────────────────────────────────────────────────
 
@@ -91,6 +97,8 @@ public sealed class DSMManagerWindow : EditorWindow
         DrawConfigSection();
         DrawSlotBar();
         DrawNewSlotInput();
+        _versionPanel.Draw();
+        (_rotationPanel ??= new DSMKeyRotationPanel(Repaint)).Draw();
         DrawSearchBar();
         DrawEntryList();
         DrawAddPanel();
@@ -232,6 +240,7 @@ public sealed class DSMManagerWindow : EditorWindow
             if (GUILayout.Button("Create", EditorStyles.miniButton, GUILayout.Width(50)))
             {
                 _slotOps.CreateSlot(trimmed);
+                RefreshVersionPanel();
                 _showNewSlotInput = false;
             }
         }
@@ -242,6 +251,7 @@ public sealed class DSMManagerWindow : EditorWindow
         if (!EditorUtility.DisplayDialog("Delete Slot",
             $"Delete slot '{_slotOps.ActiveSlot}'? This cannot be undone.", "Delete", "Cancel")) return;
         _slotOps.DeleteActiveSlot();
+        RefreshVersionPanel();
     }
 
     // ── Search bar ────────────────────────────────────────────────────────────
