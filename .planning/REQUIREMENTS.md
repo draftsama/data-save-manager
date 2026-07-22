@@ -39,7 +39,7 @@ Requirements for this hardening milestone. Each maps to roadmap phases.
 
 ### Reactive Watching
 
-- [ ] **WATCH-01**: Batched/per-frame-flush notifications for `WatchAsync<T>` instead of synchronous notification on every `Set()`
+- [x] **WATCH-01**: Batched/per-frame-flush notifications for `WatchAsync<T>` instead of synchronous notification on every `Set()`
 
 ### Tech Debt & Performance
 
@@ -110,7 +110,7 @@ Which phases cover which requirements. Populated during roadmap creation.
 | MIGR-02 | Phase 4 | Pending |
 | MIGR-03 | Phase 4 | Pending |
 | TEST-06 | Phase 4 | Pending |
-| WATCH-01 | Phase 5 | Pending |
+| WATCH-01 | Phase 5 | Complete |
 | EDIT-01 | Phase 5 | Pending |
 | PERF-01 | Phase 5 | Pending |
 | PERF-02 | Phase 5 | Pending |

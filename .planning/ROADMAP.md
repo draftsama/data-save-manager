@@ -113,10 +113,17 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. The Editor Manager window shows each slot's save version and migration status and exposes a rotate-key action via new dedicated classes — not appended to `DSMManagerWindow.cs` — and error handling in that window surfaces specific, visible errors instead of silently swallowing exceptions
   5. Switching or deleting the selected slot in the Editor window while it's open never leaves the UI in a broken or stale state, verified by automated Editor tests
 
-**Plans**: 5 (3 waves)
+**Plans**: 1/5 plans executed
+
+- [x] 05-01-PLAN.md
+- [ ] 05-02-PLAN.md
+- [ ] 05-03-PLAN.md
+- [ ] 05-04-PLAN.md
+- [ ] 05-05-PLAN.md
   - **Wave 1** *(parallel — disjoint files)*: 05-01 batched WatchAsync (WATCH-01) + folded CR-01/WR-05 regression tests · 05-02 GetAllSlots cache (PERF-03) + UniTask pin (PERF-04) · 05-03 DSMManagerWindow decomposition + reflection cache (PERF-01/02) + visible errors (BUGS-01)
   - **Wave 2** *(blocked on Wave 1: needs 05-03 decomposed window)*: 05-04 Editor version/migration status + rotate-key panels (EDIT-01)
   - **Wave 3** *(blocked on Wave 2: needs 05-03 + 05-04)*: 05-05 Editor state-transition tests (TEST-05)
+
 **UI hint**: yes *(Unity IMGUI editor tooling — UI-SPEC gate skipped; not a web-frontend design contract)*
 
 ## Progress
@@ -130,4 +137,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5
 | 2. Encryption Hardening — Key Validation & Rotation | 2/2 | Complete   | 2026-07-14 |
 | 3. Schema Validation | 1/1 | Complete    | 2026-07-15 |
 | 4. Save Versioning + Migration | 1/1 | Complete | 2026-07-21 |
-| 5. Performance, Reactivity & Editor Tooling | 0/5 | Planned | - |
+| 5. Performance, Reactivity & Editor Tooling | 1/5 | In Progress|  |
