@@ -426,6 +426,8 @@ public sealed class DSMSlot
             }
         });
 
+    internal void FlushWatchers() => _watcher.Flush();
+
     private void SeedDefaults()
     {
         lock (_dataLock)
