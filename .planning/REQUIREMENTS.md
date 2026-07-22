@@ -9,7 +9,7 @@ Requirements for this hardening milestone. Each maps to roadmap phases.
 
 ### Bugs & Security
 
-- [ ] **BUGS-01**: Replace broad `catch { return null; }` in `DSMManagerWindow.cs` with specific exception handling and visible, user-facing errors
+- [x] **BUGS-01**: Replace broad `catch { return null; }` in `DSMManagerWindow.cs` with specific exception handling and visible, user-facing errors
 - [x] **BUGS-02**: Centralize encryption key validation (reject empty/short keys) behind a single accessor used by both runtime and Editor
 - [ ] **BUGS-03**: Validate slot names against path traversal and Windows-reserved names in `DSMSlotManager`
 - [ ] **BUGS-04**: Log a warning when a widget prefab is instantiated without an `IDSMWidget` component in `DSMRuntimePanel`
@@ -43,8 +43,8 @@ Requirements for this hardening milestone. Each maps to roadmap phases.
 
 ### Tech Debt & Performance
 
-- [ ] **PERF-01**: Split `DSMManagerWindow.cs` (825 lines) into focused classes (UI rendering, reflection/defaults sync, slot operations)
-- [ ] **PERF-02**: Cache the reflection scan in `DSMManagerWindow` instead of rescanning assemblies on every window open
+- [x] **PERF-01**: Split `DSMManagerWindow.cs` (825 lines) into focused classes (UI rendering, reflection/defaults sync, slot operations)
+- [x] **PERF-02**: Cache the reflection scan in `DSMManagerWindow` instead of rescanning assemblies on every window open
 - [x] **PERF-03**: Cache `GetAllSlots()` results in `DSMSlotManager`, invalidate only on slot create/delete
 - [x] **PERF-04**: Pin the UniTask git dependency to a commit hash instead of tracking `main`
 
@@ -101,7 +101,7 @@ Which phases cover which requirements. Populated during roadmap creation.
 | BUGS-02 | Phase 2 | Complete |
 | ENC-01 | Phase 2 | Complete |
 | ENC-02 | Phase 2 | Complete |
-| BUGS-01 | Phase 5 | Pending |
+| BUGS-01 | Phase 5 | Complete |
 | BUGS-03 | Phase 1 | Pending |
 | BUGS-04 | Phase 1 | Pending |
 | SCHM-01 | Phase 3 | Complete |
@@ -112,8 +112,8 @@ Which phases cover which requirements. Populated during roadmap creation.
 | TEST-06 | Phase 4 | Pending |
 | WATCH-01 | Phase 5 | Complete |
 | EDIT-01 | Phase 5 | Pending |
-| PERF-01 | Phase 5 | Pending |
-| PERF-02 | Phase 5 | Pending |
+| PERF-01 | Phase 5 | Complete |
+| PERF-02 | Phase 5 | Complete |
 | PERF-03 | Phase 5 | Complete |
 | PERF-04 | Phase 5 | Complete |
 | TEST-02 | Phase 2 | Complete |
