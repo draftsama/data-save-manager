@@ -59,7 +59,7 @@ Requirements for this hardening milestone. Each maps to roadmap phases.
 
 ### Editor Tooling
 
-- [ ] **EDIT-01**: New, separate Editor classes for version/migration status and the rotate-key action — not appended to `DSMManagerWindow.cs`
+- [x] **EDIT-01**: New, separate Editor classes for version/migration status and the rotate-key action — not appended to `DSMManagerWindow.cs`
 
 ## v2 Requirements
 
@@ -111,7 +111,7 @@ Which phases cover which requirements. Populated during roadmap creation.
 | MIGR-03 | Phase 4 | Pending |
 | TEST-06 | Phase 4 | Pending |
 | WATCH-01 | Phase 5 | Complete |
-| EDIT-01 | Phase 5 | Pending |
+| EDIT-01 | Phase 5 | Complete |
 | PERF-01 | Phase 5 | Complete |
 | PERF-02 | Phase 5 | Complete |
 | PERF-03 | Phase 5 | Complete |
