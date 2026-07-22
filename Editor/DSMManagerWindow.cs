@@ -6,9 +6,6 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Reflection;
-using System.Text;
-using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
@@ -17,10 +14,7 @@ public sealed class DSMManagerWindow : EditorWindow
 {
     // ── State ────────────────────────────────────────────────────────────────
 
-    private List<DSMDataEntry> _defaults = new();          // read from DSMConstant via reflection
-    private Dictionary<string, JToken> _slotData = new(); // current values from active slot
-    private string _activeSlot = "default";
-    private string[] _availableSlots = Array.Empty<string>();
+    private readonly DSMManagerSlotOps _slotOps = new();
     private DSMConfig? _config;
     private UnityEditor.SerializedObject? _configSO;
     private string _searchText = string.Empty;
@@ -29,7 +23,6 @@ public sealed class DSMManagerWindow : EditorWindow
     private bool _showAddPanel;
     private bool _showNewSlotInput;
     private string _newSlotName = string.Empty;
-    private bool _defaultsDirty;
 
     // Add-panel transient fields
     private string _newKey = string.Empty;
@@ -78,222 +71,15 @@ public sealed class DSMManagerWindow : EditorWindow
     {
         _config = Resources.Load<DSMConfig>("DSMConfig");
         _configSO = _config != null ? new UnityEditor.SerializedObject(_config) : null;
-        LoadDefaultsFromReflection();
-        DiscoverSlots();
-        if (!_availableSlots.Any(s => s == _activeSlot))
-            _activeSlot = GetSlotName();
-        _defaultsDirty = false;
-        LoadSlotData(_activeSlot);
+        _slotOps.BindConfig(_config, _configSO);
+        _slotOps.ResetDefaults(DSMConstantReflectionCache.GetDefaults());
+        _slotOps.DiscoverSlots();
+        if (!_slotOps.AvailableSlots.Any(s => s == _slotOps.ActiveSlot))
+            _slotOps.ActiveSlot = _slotOps.GetSlotName();
+        _slotOps.DefaultsDirty = false;
+        _slotOps.LoadSlotData(_slotOps.ActiveSlot);
         Repaint();
     }
-
-    // ── Reflection: defaults from DSMConstant ─────────────────────────────────
-
-    private void LoadDefaultsFromReflection()
-    {
-        _defaults = new List<DSMDataEntry>();
-
-        Type? constantType = null;
-        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
-        {
-            try
-            {
-                foreach (var t in assembly.GetTypes())
-                {
-                    if (t.Name == "DSMConstant" && t.IsClass && t.IsAbstract && t.IsSealed)
-                    { constantType = t; break; }
-                }
-            }
-            catch (ReflectionTypeLoadException) { /* Expected — some assemblies cannot be fully reflected */ }
-            catch (Exception ex) { Debug.LogWarning($"DSM: Unexpected exception scanning assembly for DSMConstant: {ex.Message}"); }
-            if (constantType != null) break;
-        }
-
-        if (constantType == null) return;
-
-        foreach (var field in constantType.GetFields(BindingFlags.Public | BindingFlags.Static))
-        {
-            var value = field.GetValue(null);
-            if (value == null) continue;
-            _defaults.Add(new DSMDataEntry
-            {
-                Key = field.Name,
-                Type = FieldToType(field.FieldType),
-                SerializedDefault = ValueToSerialized(value)
-            });
-        }
-    }
-
-    private static DSMDataType FieldToType(Type t)
-    {
-        if (t == typeof(int))     return DSMDataType.Int;
-        if (t == typeof(float))   return DSMDataType.Float;
-        if (t == typeof(double))  return DSMDataType.Double;
-        if (t == typeof(long))    return DSMDataType.Long;
-        if (t == typeof(bool))    return DSMDataType.Bool;
-        if (t == typeof(string))  return DSMDataType.String;
-        if (t == typeof(Vector2)) return DSMDataType.Vector2;
-        if (t == typeof(Vector3)) return DSMDataType.Vector3;
-        if (t == typeof(Vector4)) return DSMDataType.Vector4;
-        if (t == typeof(Color))   return DSMDataType.Color;
-        return DSMDataType.String;
-    }
-
-    private static string ValueToSerialized(object value) => value switch
-    {
-        Vector2 v => $"{Fs(v.x)},{Fs(v.y)}",
-        Vector3 v => $"{Fs(v.x)},{Fs(v.y)},{Fs(v.z)}",
-        Vector4 v => $"{Fs(v.x)},{Fs(v.y)},{Fs(v.z)},{Fs(v.w)}",
-        Color c   => $"{Fs(c.r)},{Fs(c.g)},{Fs(c.b)},{Fs(c.a)}",
-        float f   => f.ToString("G", CultureInfo.InvariantCulture),
-        double d  => d.ToString("G", CultureInfo.InvariantCulture),
-        _         => value.ToString() ?? string.Empty
-    };
-
-    // ── Slot I/O ──────────────────────────────────────────────────────────────
-
-    private string GetSlotName() =>
-        string.IsNullOrEmpty(_config?.DefaultSlot) ? "default" : _config.DefaultSlot;
-
-    private void DiscoverSlots()
-    {
-        var dir = DSMPaths.GetSaveDirectory(_config?.SavePath);
-        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        names.Add(GetSlotName());
-        if (Directory.Exists(dir))
-        {
-            foreach (var f in Directory.GetFiles(dir))
-            {
-                var ext = Path.GetExtension(f);
-                if (ext.Equals(".json", StringComparison.OrdinalIgnoreCase) ||
-                    ext.Equals(".enc",  StringComparison.OrdinalIgnoreCase))
-                    names.Add(Path.GetFileNameWithoutExtension(f));
-            }
-        }
-        _availableSlots = names.OrderBy(n => n).ToArray();
-    }
-
-    private void LoadSlotData(string slot)
-    {
-        _slotData = new Dictionary<string, JToken>(StringComparer.Ordinal);
-        var jObj = ReadSlotJObject(slot);
-        if (jObj == null) return;
-        foreach (var prop in jObj.Properties())
-            _slotData[prop.Name] = prop.Value;
-        SyncRuntimeKeys();
-    }
-
-    private void SyncRuntimeKeys()
-    {
-        foreach (var kvp in _slotData)
-        {
-            if (_defaults.Exists(e => e.Key == kvp.Key)) continue;
-            var (type, serialized) = InferFromToken(kvp.Value);
-            _defaults.Add(new DSMDataEntry { Key = kvp.Key, Type = type, SerializedDefault = serialized });
-            _defaultsDirty = true;
-        }
-    }
-
-    private JObject? ReadSlotJObject(string slot)
-    {
-        var dir = DSMPaths.GetSaveDirectory(_config?.SavePath);
-        var enc  = Path.Combine(dir, $"{slot}.enc");
-        var json = Path.Combine(dir, $"{slot}.json");
-        try
-        {
-            string content;
-            if (File.Exists(enc))
-                content = DSMEncryptor.Decrypt(File.ReadAllBytes(enc), _config?.EncryptionKey ?? string.Empty);
-            else if (File.Exists(json))
-                content = File.ReadAllText(json, Encoding.UTF8);
-            else return null;
-            return JObject.Parse(content);
-        }
-        catch { return null; }
-    }
-
-    private void WriteSlotJObject(string slot, JObject data)
-    {
-        var dir = DSMPaths.GetSaveDirectory(_config?.SavePath);
-        Directory.CreateDirectory(dir);
-        var pretty = _config?.PrettyPrint == true ? Formatting.Indented : Formatting.None;
-        var json = data.ToString(pretty);
-        if (_config?.Encrypt == true)
-            File.WriteAllBytes(Path.Combine(dir, $"{slot}.enc"),
-                DSMEncryptor.Encrypt(json, _config.EncryptionKey));
-        else
-            File.WriteAllText(Path.Combine(dir, $"{slot}.json"), json, Encoding.UTF8);
-    }
-
-    // ── Type inference from JToken ────────────────────────────────────────────
-
-    private static (DSMDataType, string) InferFromToken(JToken token)
-    {
-        switch (token.Type)
-        {
-            case JTokenType.Boolean: return (DSMDataType.Bool, token.Value<bool>().ToString());
-            case JTokenType.Integer:
-                var lv = token.Value<long>();
-                return lv >= int.MinValue && lv <= int.MaxValue
-                    ? (DSMDataType.Int, ((int)lv).ToString())
-                    : (DSMDataType.Long, lv.ToString());
-            case JTokenType.Float:
-                return (DSMDataType.Float, token.Value<float>().ToString("G", CultureInfo.InvariantCulture));
-            case JTokenType.String:
-                return (DSMDataType.String, token.Value<string>() ?? string.Empty);
-            case JTokenType.Object:
-                return InferObjectToken((JObject)token);
-            default:
-                return (DSMDataType.String, token.ToString(Formatting.None));
-        }
-    }
-
-    private static (DSMDataType, string) InferObjectToken(JObject obj)
-    {
-        var keys = obj.Properties().Select(p => p.Name).ToHashSet();
-        if (keys.Contains("r") && keys.Contains("g") && keys.Contains("b"))
-        {
-            var r = obj["r"]?.Value<float>() ?? 1f; var g = obj["g"]?.Value<float>() ?? 1f;
-            var b = obj["b"]?.Value<float>() ?? 1f; var a = obj["a"]?.Value<float>() ?? 1f;
-            return (DSMDataType.Color, $"{Fs(r)},{Fs(g)},{Fs(b)},{Fs(a)}");
-        }
-        if (keys.Contains("x") && keys.Contains("y"))
-        {
-            var x = obj["x"]?.Value<float>() ?? 0f; var y = obj["y"]?.Value<float>() ?? 0f;
-            if (keys.Contains("z"))
-            {
-                var z = obj["z"]?.Value<float>() ?? 0f;
-                if (keys.Contains("w")) { var w = obj["w"]?.Value<float>() ?? 0f; return (DSMDataType.Vector4, $"{Fs(x)},{Fs(y)},{Fs(z)},{Fs(w)}"); }
-                return (DSMDataType.Vector3, $"{Fs(x)},{Fs(y)},{Fs(z)}");
-            }
-            return (DSMDataType.Vector2, $"{Fs(x)},{Fs(y)}");
-        }
-        return (DSMDataType.String, obj.ToString(Formatting.None));
-    }
-
-    private static JToken EntryToJToken(DSMDataEntry e)
-    {
-        var d = e.SerializedDefault;
-        return e.Type switch
-        {
-            DSMDataType.Int    => JToken.FromObject(int.TryParse(d, out var i) ? i : 0),
-            DSMDataType.Float  => JToken.FromObject(float.TryParse(d, NumberStyles.Any, CultureInfo.InvariantCulture, out var f) ? f : 0f),
-            DSMDataType.Double => JToken.FromObject(double.TryParse(d, NumberStyles.Any, CultureInfo.InvariantCulture, out var dv) ? dv : 0.0),
-            DSMDataType.Long   => JToken.FromObject(long.TryParse(d, out var l) ? l : 0L),
-            DSMDataType.Bool   => JToken.FromObject(bool.TryParse(d, out var b) && b),
-            DSMDataType.String => JToken.FromObject(d),
-            DSMDataType.Vector2 => Vec2Token(d),
-            DSMDataType.Vector3 => Vec3Token(d),
-            DSMDataType.Vector4 => Vec4Token(d),
-            DSMDataType.Color   => ColorToken(d),
-            _ => JToken.FromObject(d)
-        };
-    }
-
-    private static JObject Vec2Token(string s) { var p = s.Split(','); return new JObject { ["x"] = Pf(p,0), ["y"] = Pf(p,1) }; }
-    private static JObject Vec3Token(string s) { var p = s.Split(','); return new JObject { ["x"] = Pf(p,0), ["y"] = Pf(p,1), ["z"] = Pf(p,2) }; }
-    private static JObject Vec4Token(string s) { var p = s.Split(','); return new JObject { ["x"] = Pf(p,0), ["y"] = Pf(p,1), ["z"] = Pf(p,2), ["w"] = Pf(p,3) }; }
-    private static JObject ColorToken(string s) { var p = s.Split(','); return new JObject { ["r"] = Pf(p,0), ["g"] = Pf(p,1), ["b"] = Pf(p,2), ["a"] = p.Length >= 4 ? Pf(p,3) : 1f }; }
 
     // ── Main GUI ──────────────────────────────────────────────────────────────
 
@@ -301,6 +87,7 @@ public sealed class DSMManagerWindow : EditorWindow
     {
         EnsureStyles();
         DrawToolbar();
+        DrawError();
         DrawConfigSection();
         DrawSlotBar();
         DrawNewSlotInput();
@@ -308,6 +95,12 @@ public sealed class DSMManagerWindow : EditorWindow
         DrawEntryList();
         DrawAddPanel();
         DrawFooter();
+    }
+
+    private void DrawError()
+    {
+        if (string.IsNullOrEmpty(_slotOps.LastError)) return;
+        EditorGUILayout.HelpBox(_slotOps.LastError + " See the Console for details.", MessageType.Error);
     }
 
     // ── Toolbar ───────────────────────────────────────────────────────────────
@@ -393,20 +186,20 @@ public sealed class DSMManagerWindow : EditorWindow
         using var h = new EditorGUILayout.HorizontalScope();
         GUILayout.Label("Slot", EditorStyles.miniLabel, GUILayout.Width(28));
 
-        var idx = Array.IndexOf(_availableSlots, _activeSlot);
+        var idx = Array.IndexOf(_slotOps.AvailableSlots, _slotOps.ActiveSlot);
         if (idx < 0) idx = 0;
-        var newIdx = EditorGUILayout.Popup(idx, _availableSlots, GUILayout.Width(120));
+        var newIdx = EditorGUILayout.Popup(idx, _slotOps.AvailableSlots, GUILayout.Width(120));
         if (newIdx != idx)
-        {
-            _activeSlot = _availableSlots[newIdx];
-            LoadSlotData(_activeSlot);
-        }
+            _slotOps.SelectSlot(_slotOps.AvailableSlots[newIdx]);
 
-        var isDefault = _config != null && _activeSlot == _config.DefaultSlot;
+        var isDefault = _config != null && _slotOps.ActiveSlot == _config.DefaultSlot;
         using (new EditorGUI.DisabledScope(isDefault))
         {
             if (GUILayout.Button(isDefault ? "✓ Default" : "Set Default", EditorStyles.miniButton, GUILayout.Width(76)))
-                SetDefaultSlot(_activeSlot);
+            {
+                _slotOps.SetDefaultSlot(_slotOps.ActiveSlot);
+                Repaint();
+            }
         }
 
         GUILayout.Space(4);
@@ -417,7 +210,7 @@ public sealed class DSMManagerWindow : EditorWindow
             _newSlotName = string.Empty;
         }
 
-        using (new EditorGUI.DisabledScope(_availableSlots.Length <= 1))
+        using (new EditorGUI.DisabledScope(_slotOps.AvailableSlots.Length <= 1))
         {
             if (GUILayout.Button("Delete", EditorStyles.miniButton, GUILayout.Width(46)))
                 DeleteActiveSlot();
@@ -433,18 +226,12 @@ public sealed class DSMManagerWindow : EditorWindow
         _newSlotName = EditorGUILayout.TextField(_newSlotName);
         var trimmed = _newSlotName.Trim();
         var valid = !string.IsNullOrWhiteSpace(trimmed) &&
-                    !_availableSlots.Any(s => string.Equals(s, trimmed, StringComparison.OrdinalIgnoreCase));
+                    !_slotOps.AvailableSlots.Any(s => string.Equals(s, trimmed, StringComparison.OrdinalIgnoreCase));
         using (new EditorGUI.DisabledScope(!valid))
         {
             if (GUILayout.Button("Create", EditorStyles.miniButton, GUILayout.Width(50)))
             {
-                var jObj = new JObject();
-                foreach (var entry in _defaults)
-                    jObj[entry.Key] = EntryToJToken(entry);
-                WriteSlotJObject(trimmed, jObj);
-                DiscoverSlots();
-                _activeSlot = trimmed;
-                LoadSlotData(_activeSlot);
+                _slotOps.CreateSlot(trimmed);
                 _showNewSlotInput = false;
             }
         }
@@ -453,16 +240,8 @@ public sealed class DSMManagerWindow : EditorWindow
     private void DeleteActiveSlot()
     {
         if (!EditorUtility.DisplayDialog("Delete Slot",
-            $"Delete slot '{_activeSlot}'? This cannot be undone.", "Delete", "Cancel")) return;
-        var dir = DSMPaths.GetSaveDirectory(_config?.SavePath);
-        foreach (var ext in new[] { ".json", ".enc" })
-        {
-            var path = Path.Combine(dir, _activeSlot + ext);
-            if (File.Exists(path)) File.Delete(path);
-        }
-        DiscoverSlots();
-        _activeSlot = _availableSlots[0];
-        LoadSlotData(_activeSlot);
+            $"Delete slot '{_slotOps.ActiveSlot}'? This cannot be undone.", "Delete", "Cancel")) return;
+        _slotOps.DeleteActiveSlot();
     }
 
     // ── Search bar ────────────────────────────────────────────────────────────
@@ -488,8 +267,8 @@ public sealed class DSMManagerWindow : EditorWindow
         // Union: defaults keys first, then any extra keys only in slot
         var allKeys = new List<string>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var d in _defaults)      { if (seen.Add(d.Key)) allKeys.Add(d.Key); }
-        foreach (var k in _slotData.Keys) { if (seen.Add(k))     allKeys.Add(k); }
+        foreach (var d in _slotOps.Defaults)      { if (seen.Add(d.Key)) allKeys.Add(d.Key); }
+        foreach (var k in _slotOps.SlotData.Keys) { if (seen.Add(k))     allKeys.Add(k); }
 
         if (allKeys.Count == 0)
         {
@@ -511,10 +290,10 @@ public sealed class DSMManagerWindow : EditorWindow
             if (!string.IsNullOrEmpty(filter) && !key.ToLower(CultureInfo.InvariantCulture).Contains(filter))
                 continue;
 
-            var defEntry = _defaults.Find(e => e.Key == key);
-            _slotData.TryGetValue(key, out var currentToken);
-            var displayType = defEntry?.Type ?? (currentToken != null ? InferFromToken(currentToken).Item1 : DSMDataType.String);
-            var currentStr  = currentToken != null ? InferFromToken(currentToken).Item2 : (defEntry?.SerializedDefault ?? string.Empty);
+            var defEntry = _slotOps.Defaults.Find(e => e.Key == key);
+            _slotOps.SlotData.TryGetValue(key, out var currentToken);
+            var displayType = defEntry?.Type ?? (currentToken != null ? DSMManagerSlotOps.InferFromToken(currentToken).Item1 : DSMDataType.String);
+            var currentStr  = currentToken != null ? DSMManagerSlotOps.InferFromToken(currentToken).Item2 : (defEntry?.SerializedDefault ?? string.Empty);
 
             using var row = new EditorGUILayout.VerticalScope(s_rowBox!);
             EditorGUI.DrawRect(row.rect, TypeColor(displayType));
@@ -532,7 +311,7 @@ public sealed class DSMManagerWindow : EditorWindow
                 if (defEntry != null)
                 {
                     var newType = (DSMDataType)EditorGUILayout.EnumPopup(defEntry.Type, GUILayout.Width(80));
-                    if (newType != defEntry.Type) { defEntry.Type = newType; _defaultsDirty = true; }
+                    if (newType != defEntry.Type) { defEntry.Type = newType; _slotOps.DefaultsDirty = true; }
 
                     GUILayout.FlexibleSpace();
                     GUILayout.Label("Expose", EditorStyles.miniLabel, GUILayout.Width(42));
@@ -582,7 +361,7 @@ public sealed class DSMManagerWindow : EditorWindow
                     if (EditorGUI.EndChangeCheck() && newDef != defEntry.SerializedDefault)
                     {
                         defEntry.SerializedDefault = newDef;
-                        _defaultsDirty = true;
+                        _slotOps.DefaultsDirty = true;
                     }
                 }
                 else
@@ -599,10 +378,10 @@ public sealed class DSMManagerWindow : EditorWindow
                 var newCurrent = DrawValueField(displayType, currentStr, GUILayout.ExpandWidth(true));
                 if (EditorGUI.EndChangeCheck() && newCurrent != currentStr)
                 {
-                    var jObj = ReadSlotJObject(_activeSlot) ?? new JObject();
-                    jObj[key] = EntryToJToken(new DSMDataEntry { Key = key, Type = displayType, SerializedDefault = newCurrent });
-                    WriteSlotJObject(_activeSlot, jObj);
-                    _slotData[key] = jObj[key]!;
+                    var jObj = _slotOps.ReadSlotJObject(_slotOps.ActiveSlot) ?? new JObject();
+                    jObj[key] = DSMManagerSlotOps.EntryToJToken(new DSMDataEntry { Key = key, Type = displayType, SerializedDefault = newCurrent });
+                    _slotOps.WriteSlotJObject(_slotOps.ActiveSlot, jObj);
+                    _slotOps.SlotData[key] = jObj[key]!;
                 }
             }
         }
@@ -610,11 +389,11 @@ public sealed class DSMManagerWindow : EditorWindow
         if (toRemoveKey != null)
         {
             if (EditorUtility.DisplayDialog("Remove Entry",
-                $"Remove '{toRemoveKey}' from DSMConstant and '{_activeSlot}' slot?", "Remove", "Cancel"))
+                $"Remove '{toRemoveKey}' from DSMConstant and '{_slotOps.ActiveSlot}' slot?", "Remove", "Cancel"))
             {
-                _defaults.RemoveAll(e => e.Key == toRemoveKey);
-                _defaultsDirty = true;
-                PropagateToAllSlots(jObj => jObj.Remove(toRemoveKey));
+                _slotOps.Defaults.RemoveAll(e => e.Key == toRemoveKey);
+                _slotOps.DefaultsDirty = true;
+                _slotOps.PropagateToAllSlots(jObj => jObj.Remove(toRemoveKey));
             }
         }
     }
@@ -657,7 +436,7 @@ public sealed class DSMManagerWindow : EditorWindow
         GUILayout.Label("Default Value", EditorStyles.label);
         DrawAddDefaultField();
 
-        var keyExists = _defaults.Exists(e => e.Key == _newKey.Trim());
+        var keyExists = _slotOps.Defaults.Exists(e => e.Key == _newKey.Trim());
         if (!string.IsNullOrWhiteSpace(_newKey) && keyExists)
             EditorGUILayout.HelpBox($"Key '{_newKey.Trim()}' already exists in DSMConstant.", MessageType.Warning);
 
@@ -669,7 +448,7 @@ public sealed class DSMManagerWindow : EditorWindow
         {
             if (GUILayout.Button("✚ Create", GUILayout.Width(80)))
             {
-                CommitNewEntry();
+                _slotOps.CommitNewEntry(_newKey.Trim(), _newType, _newSerializedDefault);
                 _showAddPanel = false;
             }
         }
@@ -698,17 +477,17 @@ public sealed class DSMManagerWindow : EditorWindow
     {
         DrawSeparator();
         using var h = new EditorGUILayout.HorizontalScope();
-        var statusLabel = _defaultsDirty
-            ? $"{_defaults.Count} defaults  ·  {_slotData.Count} in [{_activeSlot}]  ·  ● unsaved changes"
-            : $"{_defaults.Count} defaults  ·  {_slotData.Count} in [{_activeSlot}]";
+        var statusLabel = _slotOps.DefaultsDirty
+            ? $"{_slotOps.Defaults.Count} defaults  ·  {_slotOps.SlotData.Count} in [{_slotOps.ActiveSlot}]  ·  ● unsaved changes"
+            : $"{_slotOps.Defaults.Count} defaults  ·  {_slotOps.SlotData.Count} in [{_slotOps.ActiveSlot}]";
         GUILayout.Label(statusLabel, EditorStyles.miniLabel);
         GUILayout.FlexibleSpace();
-        using (new EditorGUI.DisabledScope(_defaults.Count == 0 || !_defaultsDirty))
+        using (new EditorGUI.DisabledScope(_slotOps.Defaults.Count == 0 || !_slotOps.DefaultsDirty))
         {
             if (GUILayout.Button("Save DSMConstant.cs", GUILayout.Height(26), GUILayout.Width(170)))
             {
-                DSMCodeGenerator.Generate(_defaults);
-                _defaultsDirty = false;
+                DSMCodeGenerator.Generate(_slotOps.Defaults);
+                _slotOps.DefaultsDirty = false;
             }
         }
     }
@@ -717,16 +496,6 @@ public sealed class DSMManagerWindow : EditorWindow
 
     private UnityEditor.SerializedProperty ConfigProp(string backingField) =>
         _configSO!.FindProperty(backingField);
-
-    private void SetDefaultSlot(string slotName)
-    {
-        if (_configSO == null) return;
-        _configSO.Update();
-        ConfigProp("_defaultSlot").stringValue = slotName;
-        _configSO.ApplyModifiedProperties();
-        AssetDatabase.SaveAssets();
-        Repaint();
-    }
 
     private void SaveConfig()
     {
@@ -749,37 +518,8 @@ public sealed class DSMManagerWindow : EditorWindow
     {
         _newBool = false; _newInt = 0; _newFloat = 0f; _newDouble = 0.0; _newLong = 0L;
         _newVec2 = Vector2.zero; _newVec3 = Vector3.zero; _newVec4 = Vector4.zero; _newColor = Color.white;
-        _newSerializedDefault = GetTypeDefault(_newType);
+        _newSerializedDefault = DSMConstantReflectionCache.GetTypeDefault(_newType);
     }
-
-    private void CommitNewEntry()
-    {
-        var key = _newKey.Trim();
-        _defaults.Add(new DSMDataEntry { Key = key, Type = _newType, SerializedDefault = _newSerializedDefault });
-        _defaultsDirty = true;
-        var token = EntryToJToken(new DSMDataEntry { Key = key, Type = _newType, SerializedDefault = _newSerializedDefault });
-        PropagateToAllSlots(jObj => jObj[key] = token);
-    }
-
-    private void PropagateToAllSlots(Action<JObject> mutate)
-    {
-        foreach (var slotName in _availableSlots)
-        {
-            var jObj = ReadSlotJObject(slotName) ?? new JObject();
-            mutate(jObj);
-            WriteSlotJObject(slotName, jObj);
-        }
-        LoadSlotData(_activeSlot);
-    }
-
-    private static string GetTypeDefault(DSMDataType type) => type switch
-    {
-        DSMDataType.Bool => "False", DSMDataType.Int => "0", DSMDataType.Float => "0",
-        DSMDataType.Double => "0",   DSMDataType.Long => "0", DSMDataType.String => string.Empty,
-        DSMDataType.Vector2 => "0,0", DSMDataType.Vector3 => "0,0,0",
-        DSMDataType.Vector4 => "0,0,0,0", DSMDataType.Color => "1,1,1,1",
-        _ => string.Empty
-    };
 
     private static void CreateConfigAsset()
     {
