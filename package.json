@@ -8,7 +8,7 @@
     "name": "draftsama"
   },
   "dependencies": {
-    "com.cysharp.unitask": "https://github.com/Cysharp/UniTask.git?path=src/UniTask/Assets/Plugins/UniTask",
+    "com.cysharp.unitask": "https://github.com/Cysharp/UniTask.git?path=src/UniTask/Assets/Plugins/UniTask#2.5.11",
     "com.unity.nuget.newtonsoft-json": "3.2.1"
   },
   "keywords": [
