@@ -7,6 +7,7 @@ using System.Linq;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
+using UnityEditorInternal;
 using UnityEngine;
 
 namespace DataSaveManager.Editor
@@ -16,26 +17,27 @@ namespace DataSaveManager.Editor
     {
         private static readonly Color DuplicateKeyColor = new(0.65f, 0.28f, 0.28f);
 
-        private const float KeyWidth = 110f;
-        private const float TypeWidth = 80f;
-        private const float LabelWidth = 100f;
-        private const float ExposedWidth = 30f;
-        private const float OverrideMarkWidth = 12f;
+        private const float TypeWidth = 90f;
+        private const float PrefixWidth = 58f;
+        private const float ToggleWidth = 18f;
+        private const float OverrideMarkWidth = 14f;
         private const float ResetWidth = 50f;
         private const float RemoveWidth = 24f;
+        private const float CardPadding = 4f;
+        private const float FieldSpacing = 4f;
+        private const float InlineLabelWidth = 40f;
 
         private static readonly GUIContent KeyHeader = new("Key", "Identifier used in code: DSM.Get<T>(key).");
         private static readonly GUIContent TypeHeader = new("Type");
         private static readonly GUIContent LabelHeader = new("Label", "Display name in the Runtime Panel. Falls back to the key when empty.");
-        private static readonly GUIContent ExposedHeader = new("Exp", "Exposed: shown in the Runtime Panel.");
+        private static readonly GUIContent ExposedHeader = new("Exposed", "Exposed: shown in the Runtime Panel.");
         private static readonly GUIContent DefaultHeader = new("Default", "Value used when there is no Override. Stored in the Config.");
         private static readonly GUIContent ValueHeader = new("Value", "Current value. \u25cf marks an Override stored in the Save File.");
         private static readonly GUIContent OverrideMark = new("\u25cf", "Overridden: this value is stored in the Save File. Reset returns it to the Default.");
 
-        private GUIStyle? _headerRowStyle;
-
         private DSMConfig? _config;
         private SerializedObject? _configSo;
+        private ReorderableList? _entriesList;
         private string _search = string.Empty;
         private Vector2 _entriesScroll;
         private bool _settingsFoldout = true;
@@ -70,6 +72,7 @@ namespace DataSaveManager.Editor
         {
             _config = Resources.Load<DSMConfig>("DSMConfig");
             _configSo = _config != null ? new SerializedObject(_config) : null;
+            _entriesList = null; // Rebuilt lazily against the fresh SerializedObject in DrawEntries.
             if (_config != null && fromDisk) DSM.Load();
         }
 
@@ -178,129 +181,205 @@ namespace DataSaveManager.Editor
 
         private void DrawEntries(IReadOnlyCollection<string> duplicates, bool valuesEditable)
         {
-            EditorGUILayout.LabelField("Entries", EditorStyles.boldLabel);
-
             var entriesProp = _configSo!.FindProperty("_entries");
             var filter = _search.Trim();
             var pendingRemoveIndex = -1;
 
-            DrawEntriesHeader();
+            var list = GetOrCreateEntriesList(entriesProp);
+            list.draggable = filter.Length == 0;
 
-            // The vertical scrollbar is always shown so the header above stays aligned with the rows.
-            using (var scroll = new EditorGUILayout.ScrollViewScope(_entriesScroll, false, true, GUILayout.ExpandHeight(true)))
+            bool Matches(int index)
+            {
+                if (filter.Length == 0) return true;
+                var element = entriesProp.GetArrayElementAtIndex(index);
+                var key = element.FindPropertyRelative("_key").stringValue;
+                var label = element.FindPropertyRelative("_label").stringValue;
+                return key.IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                       label.IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0;
+            }
+
+            list.elementHeightCallback = index => Matches(index) ? CardHeight : 0f;
+
+            list.drawElementCallback = (rect, index, isActive, isFocused) =>
+            {
+                if (!Matches(index)) return;
+
+                var element = entriesProp.GetArrayElementAtIndex(index);
+                var keyProp = element.FindPropertyRelative("_key");
+                var key = keyProp.stringValue;
+                var isDuplicate = duplicates.Contains(key);
+
+                if (DrawEntryCard(rect, element, isDuplicate, valuesEditable))
+                    pendingRemoveIndex = index;
+            };
+
+            using (var scroll = new EditorGUILayout.ScrollViewScope(_entriesScroll, false, false, GUILayout.ExpandHeight(true)))
             {
                 _entriesScroll = scroll.scrollPosition;
-
-                for (var i = 0; i < entriesProp.arraySize; i++)
-                {
-                    var elementProp = entriesProp.GetArrayElementAtIndex(i);
-                    var keyProp = elementProp.FindPropertyRelative("_key");
-                    var typeProp = elementProp.FindPropertyRelative("_type");
-                    var labelProp = elementProp.FindPropertyRelative("_label");
-                    var exposedProp = elementProp.FindPropertyRelative("_exposed");
-                    var defaultJsonProp = elementProp.FindPropertyRelative("_defaultJson");
-
-                    var key = keyProp.stringValue;
-                    if (filter.Length > 0 &&
-                        key.IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0 &&
-                        labelProp.stringValue.IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0)
-                        continue;
-
-                    var isDuplicate = duplicates.Contains(key);
-
-                    using (new EditorGUILayout.HorizontalScope(EditorStyles.helpBox))
-                    {
-                        var priorColor = GUI.backgroundColor;
-                        if (isDuplicate) GUI.backgroundColor = DuplicateKeyColor;
-                        keyProp.stringValue = EditorGUILayout.TextField(keyProp.stringValue, GUILayout.Width(KeyWidth));
-                        GUI.backgroundColor = priorColor;
-
-                        var currentType = (DSMDataType)typeProp.enumValueIndex;
-                        var newType = (DSMDataType)EditorGUILayout.EnumPopup(currentType, GUILayout.Width(TypeWidth));
-                        if (newType != currentType)
-                        {
-                            typeProp.enumValueIndex = (int)newType;
-                            defaultJsonProp.stringValue = DSMEntryDefinition.DefaultJsonFor(newType);
-                        }
-
-                        labelProp.stringValue = EditorGUILayout.TextField(labelProp.stringValue, GUILayout.Width(LabelWidth));
-                        exposedProp.boolValue = EditorGUILayout.Toggle(exposedProp.boolValue, GUILayout.Width(ExposedWidth));
-
-                        DrawDefaultField(defaultJsonProp, newType);
-                        DrawValueField(key, newType, valuesEditable);
-
-                        using (new EditorGUI.DisabledScope(!valuesEditable || !DSM.Store.HasOverride(key)))
-                        {
-                            if (GUILayout.Button("Reset", GUILayout.Width(ResetWidth)))
-                            {
-                                DSM.Reset(key);
-                                if (!EditorApplication.isPlaying) DSM.Save();
-                            }
-                        }
-
-                        if (GUILayout.Button("✕", GUILayout.Width(RemoveWidth)))
-                            pendingRemoveIndex = TryRemoveEntry(key, i);
-                    }
-                }
+                list.DoLayoutList();
             }
 
             if (pendingRemoveIndex >= 0)
                 entriesProp.DeleteArrayElementAtIndex(pendingRemoveIndex);
         }
 
-        private void DrawEntriesHeader()
+        private ReorderableList GetOrCreateEntriesList(SerializedProperty entriesProp)
         {
-            // Same padding as the helpBox rows, without the box, so columns line up.
-            _headerRowStyle ??= new GUIStyle(EditorStyles.helpBox) { normal = { background = null } };
-
-            using (new EditorGUILayout.HorizontalScope(_headerRowStyle))
+            if (_entriesList != null && _entriesList.serializedProperty.serializedObject == _configSo)
             {
-                var style = EditorStyles.miniBoldLabel;
-                GUILayout.Label(KeyHeader, style, GUILayout.Width(KeyWidth));
-                GUILayout.Label(TypeHeader, style, GUILayout.Width(TypeWidth));
-                GUILayout.Label(LabelHeader, style, GUILayout.Width(LabelWidth));
-                GUILayout.Label(ExposedHeader, style, GUILayout.Width(ExposedWidth));
-                GUILayout.Label(DefaultHeader, style, GUILayout.ExpandWidth(true));
-                GUILayout.Space(OverrideMarkWidth);
-                GUILayout.Label(ValueHeader, style, GUILayout.ExpandWidth(true));
-                GUILayout.Space(ResetWidth + RemoveWidth + GUI.skin.button.margin.horizontal);
-                GUILayout.Space(GUI.skin.verticalScrollbar.fixedWidth);
+                _entriesList.serializedProperty = entriesProp;
+                return _entriesList;
             }
+
+            _entriesList = new ReorderableList(_configSo, entriesProp, true, true, false, false)
+            {
+                headerHeight = EditorGUIUtility.singleLineHeight + 4f,
+                footerHeight = 0f
+            };
+            _entriesList.drawHeaderCallback = rect =>
+                EditorGUI.LabelField(rect, "Entries — drag ≡ to reorder (this is the Runtime Panel order)");
+
+            return _entriesList;
         }
 
-        private static void DrawDefaultField(SerializedProperty defaultJsonProp, DSMDataType type)
+        private static float CardHeight =>
+            CardPadding * 2f +
+            EditorGUIUtility.singleLineHeight * 4f +
+            EditorGUIUtility.standardVerticalSpacing * 3f;
+
+        // Every line shares one prefix column (label + override-mark slot) so all fields start at the same x.
+        private static float FieldStart(Rect line) => line.x + PrefixWidth + OverrideMarkWidth;
+
+        // Returns true when the row's remove button was clicked; the caller defers the actual
+        // DeleteArrayElementAtIndex until after the list has finished drawing.
+        private static bool DrawEntryCard(Rect rect, SerializedProperty elementProp, bool isDuplicate, bool valuesEditable)
+        {
+            var keyProp = elementProp.FindPropertyRelative("_key");
+            var typeProp = elementProp.FindPropertyRelative("_type");
+            var labelProp = elementProp.FindPropertyRelative("_label");
+            var exposedProp = elementProp.FindPropertyRelative("_exposed");
+            var defaultJsonProp = elementProp.FindPropertyRelative("_defaultJson");
+            var key = keyProp.stringValue;
+            var type = (DSMDataType)typeProp.enumValueIndex;
+
+            var lineH = EditorGUIUtility.singleLineHeight;
+            var vSpace = EditorGUIUtility.standardVerticalSpacing;
+            var line1 = new Rect(rect.x, rect.y + CardPadding, rect.width, lineH);
+            var line2 = new Rect(rect.x, line1.yMax + vSpace, rect.width, lineH);
+            var line3 = new Rect(rect.x, line2.yMax + vSpace, rect.width, lineH);
+            var line4 = new Rect(rect.x, line3.yMax + vSpace, rect.width, lineH);
+
+            var priorLabelWidth = EditorGUIUtility.labelWidth;
+            EditorGUIUtility.labelWidth = InlineLabelWidth;
+
+            var removeClicked = DrawKeyLine(line1, keyProp, typeProp, defaultJsonProp, isDuplicate, ref type);
+            DrawExposedLine(line2, exposedProp, labelProp);
+            DrawDefaultField(line3, defaultJsonProp, type);
+            DrawValueLine(line4, key, type, valuesEditable);
+
+            EditorGUIUtility.labelWidth = priorLabelWidth;
+            return removeClicked && TryRemoveEntry(key);
+        }
+
+        private static bool DrawKeyLine(
+            Rect rect,
+            SerializedProperty keyProp,
+            SerializedProperty typeProp,
+            SerializedProperty defaultJsonProp,
+            bool isDuplicate,
+            ref DSMDataType type)
+        {
+            var removeRect = new Rect(rect.xMax - RemoveWidth, rect.y, RemoveWidth, rect.height);
+            var typeRect = new Rect(removeRect.x - FieldSpacing - TypeWidth, rect.y, TypeWidth, rect.height);
+            var fieldX = FieldStart(rect);
+            var keyRect = new Rect(fieldX, rect.y, Mathf.Max(60f, typeRect.x - FieldSpacing - fieldX), rect.height);
+
+            EditorGUI.LabelField(new Rect(rect.x, rect.y, PrefixWidth, rect.height), KeyHeader);
+            var priorColor = GUI.backgroundColor;
+            if (isDuplicate) GUI.backgroundColor = DuplicateKeyColor;
+            keyProp.stringValue = EditorGUI.TextField(keyRect, keyProp.stringValue);
+            GUI.backgroundColor = priorColor;
+
+            var newType = (DSMDataType)EditorGUI.EnumPopup(typeRect, TypeHeader, type);
+            if (newType != type)
+            {
+                typeProp.enumValueIndex = (int)newType;
+                defaultJsonProp.stringValue = DSMEntryDefinition.DefaultJsonFor(newType);
+                type = newType;
+            }
+
+            return GUI.Button(removeRect, "✕");
+        }
+
+        private static void DrawExposedLine(Rect rect, SerializedProperty exposedProp, SerializedProperty labelProp)
+        {
+            var fieldX = FieldStart(rect);
+            EditorGUI.LabelField(new Rect(rect.x, rect.y, PrefixWidth, rect.height), ExposedHeader);
+            var toggleRect = new Rect(fieldX, rect.y, ToggleWidth, rect.height);
+            exposedProp.boolValue = EditorGUI.Toggle(toggleRect, exposedProp.boolValue);
+
+            if (!exposedProp.boolValue) return;
+
+            var labelX = toggleRect.xMax + FieldSpacing;
+            var labelRect = new Rect(labelX, rect.y, rect.xMax - RemoveWidth - FieldSpacing - labelX, rect.height);
+            labelProp.stringValue = EditorGUI.TextField(labelRect, LabelHeader, labelProp.stringValue);
+        }
+
+        private static void DrawDefaultField(Rect rect, SerializedProperty defaultJsonProp, DSMDataType type)
         {
             JToken? defaultToken;
             try { defaultToken = JToken.Parse(defaultJsonProp.stringValue); }
             catch { defaultToken = null; }
 
-            var newDefaultToken = DSMValueField.DrawField(GUIContent.none, type, defaultToken, out var changed);
+            var fieldX = FieldStart(rect);
+            var fieldRect = new Rect(fieldX, rect.y, rect.xMax - ResetWidth - FieldSpacing - fieldX, rect.height);
+            EditorGUI.LabelField(new Rect(rect.x, rect.y, PrefixWidth, rect.height), DefaultHeader);
+
+            var newDefaultToken = DSMValueField.DrawField(fieldRect, GUIContent.none, type, defaultToken, out var changed);
             if (changed)
                 defaultJsonProp.stringValue = newDefaultToken.ToString(Formatting.None);
         }
 
-        private static void DrawValueField(string key, DSMDataType type, bool valuesEditable)
+        private static void DrawValueLine(Rect rect, string key, DSMDataType type, bool valuesEditable)
         {
             var hasOverride = valuesEditable && DSM.Store.HasOverride(key);
-            GUILayout.Label(hasOverride ? OverrideMark : GUIContent.none, hasOverride ? EditorStyles.boldLabel : EditorStyles.label, GUILayout.Width(OverrideMarkWidth));
+
+            var resetRect = new Rect(rect.xMax - ResetWidth, rect.y, ResetWidth, rect.height);
+            var labelRect = new Rect(rect.x, rect.y, PrefixWidth, rect.height);
+            var markRect = new Rect(labelRect.xMax, rect.y, OverrideMarkWidth, rect.height);
+            var fieldX = FieldStart(rect);
+            var fieldRect = new Rect(fieldX, rect.y, resetRect.x - FieldSpacing - fieldX, rect.height);
+
+            EditorGUI.LabelField(labelRect, ValueHeader);
+            GUI.Label(markRect, hasOverride ? OverrideMark : GUIContent.none, hasOverride ? EditorStyles.boldLabel : EditorStyles.label);
 
             using (new EditorGUI.DisabledScope(!valuesEditable))
             {
                 var valueToken = valuesEditable ? DSM.Store.GetEffectiveToken(key) : null;
-                var newValueToken = DSMValueField.DrawField(GUIContent.none, type, valueToken, out var changed);
+                var newValueToken = DSMValueField.DrawField(fieldRect, GUIContent.none, type, valueToken, out var changed);
                 if (valuesEditable && changed)
                 {
                     DSM.Store.SetToken(key, newValueToken);
                     if (!EditorApplication.isPlaying) DSM.Save();
                 }
             }
+
+            using (new EditorGUI.DisabledScope(!valuesEditable || !DSM.Store.HasOverride(key)))
+            {
+                if (GUI.Button(resetRect, "Reset"))
+                {
+                    DSM.Reset(key);
+                    if (!EditorApplication.isPlaying) DSM.Save();
+                }
+            }
         }
 
-        // Returns the index to remove after the dialog(s), or -1 if the user cancelled.
-        private static int TryRemoveEntry(string key, int index)
+        // Returns true when the user confirmed removal; the caller still owns deleting the
+        // array element, deferred until after the list has finished drawing.
+        private static bool TryRemoveEntry(string key)
         {
             if (!EditorUtility.DisplayDialog("Remove Entry", $"Remove entry '{key}' from the config?", "Remove", "Cancel"))
-                return -1;
+                return false;
 
             if (EditorUtility.DisplayDialog("Reset Value", $"Also reset the current value for '{key}'?", "Reset", "Keep"))
             {
@@ -308,7 +387,7 @@ namespace DataSaveManager.Editor
                 if (!EditorApplication.isPlaying) DSM.Save();
             }
 
-            return index;
+            return true;
         }
 
         private void DrawAddEntry()

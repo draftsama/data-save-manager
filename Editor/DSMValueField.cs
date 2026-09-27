@@ -12,7 +12,7 @@ namespace DataSaveManager.Editor
     {
         private static readonly DSMSerializer Serializer = new();
 
-        public static JToken DrawField(GUIContent label, DSMDataType type, JToken? current, out bool changed)
+        public static JToken DrawField(Rect rect, GUIContent label, DSMDataType type, JToken? current, out bool changed)
         {
             var token = current ?? DefaultToken(type);
 
@@ -21,49 +21,49 @@ namespace DataSaveManager.Editor
                 case DSMDataType.Int:
                 {
                     var value = ToClr(token, 0);
-                    var next = EditorGUILayout.IntField(label, value);
+                    var next = EditorGUI.IntField(rect, label, value);
                     changed = next != value;
                     return ToJToken(next);
                 }
                 case DSMDataType.Float:
                 {
                     var value = ToClr(token, 0f);
-                    var next = EditorGUILayout.FloatField(label, value);
+                    var next = EditorGUI.FloatField(rect, label, value);
                     changed = next != value;
                     return ToJToken(next);
                 }
                 case DSMDataType.Bool:
                 {
                     var value = ToClr(token, false);
-                    var next = EditorGUILayout.Toggle(label, value);
+                    var next = EditorGUI.Toggle(rect, label, value);
                     changed = next != value;
                     return ToJToken(next);
                 }
                 case DSMDataType.String:
                 {
                     var value = ToClr(token, string.Empty);
-                    var next = EditorGUILayout.TextField(label, value);
+                    var next = EditorGUI.TextField(rect, label, value);
                     changed = next != value;
                     return ToJToken(next);
                 }
                 case DSMDataType.Vector2:
                 {
                     var value = ToClr(token, Vector2.zero);
-                    var next = EditorGUILayout.Vector2Field(label, value);
+                    var next = EditorGUI.Vector2Field(rect, label, value);
                     changed = next != value;
                     return ToJToken(next);
                 }
                 case DSMDataType.Vector3:
                 {
                     var value = ToClr(token, Vector3.zero);
-                    var next = EditorGUILayout.Vector3Field(label, value);
+                    var next = EditorGUI.Vector3Field(rect, label, value);
                     changed = next != value;
                     return ToJToken(next);
                 }
                 case DSMDataType.Color:
                 {
                     var value = ToClr(token, Color.white);
-                    var next = EditorGUILayout.ColorField(label, value);
+                    var next = EditorGUI.ColorField(rect, label, value);
                     changed = next != value;
                     return ToJToken(next);
                 }

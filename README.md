@@ -145,8 +145,9 @@ Example Save File — a flat JSON object of only the Overrides that have been se
 
 - **Settings** — edits AutoSave, AutoSave Debounce, Save Directory, and File Name on the Config
   asset; shows the resolved Save File path with buttons to open its folder or delete the file.
-- **Entries** — one row per Entry Definition: key, type, label, exposed toggle, default value,
-  current value, Reset, and remove. Duplicate keys are highlighted and reported.
+- **Entries** — one card per Entry Definition: key, type, label, exposed toggle, default value,
+  current value, Reset, and remove. Duplicate keys are highlighted and reported. Drag a card by
+  its handle to reorder it — that order is the Runtime Panel order.
 - **Add Entry** — key and type for a new Entry Definition.
 - **Footer** — Reset All Values, and a live count of current Overrides.
 
