@@ -164,6 +164,8 @@ quit).
 
 An in-game UI for an operator to view and edit Exposed Entries while the app runs.
 
+The Color widget takes a hex code (`#RGB`, `#RRGGBB`, or `#RRGGBBAA`; the leading `#` is optional).
+
 1. Drag `Prefab/DSMRuntimePanel.prefab` into a scene.
 2. Make sure the scene has an `EventSystem` (not included in the prefab).
 3. Mark the Entries you want visible as **Exposed** in the DSM Manager window.

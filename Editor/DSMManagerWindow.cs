@@ -24,7 +24,7 @@ namespace DataSaveManager.Editor
         private string _newKey = string.Empty;
         private DSMDataType _newType = DSMDataType.String;
 
-        [MenuItem("DSM/Open Manager")]
+        [MenuItem("Draft/DSM/Open Manager")]
         internal static void Open()
         {
             var window = GetWindow<DSMManagerWindow>("DSM Manager");

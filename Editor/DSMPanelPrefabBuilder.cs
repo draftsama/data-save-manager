@@ -18,9 +18,10 @@ namespace DataSaveManager.Editor
     {
         private const float RowHeight = 40f;
         private const float LabelWidth = 220f;
+        private const float RowSpacerWidth = 1000f;
         private const float FontSize = 20f;
 
-        [MenuItem("DSM/Build Runtime Panel Prefabs")]
+        [MenuItem("Draft/DSM/Build Runtime Panel Prefabs")]
         internal static void Build()
         {
             var font = TMP_Settings.defaultFontAsset;
@@ -97,6 +98,7 @@ namespace DataSaveManager.Editor
             SetField(widget, "_toggle", toggle);
 
             var saved = SaveAndDestroy(row, path);
+
             return saved.GetComponent<BoolWidget>();
         }
 
@@ -146,7 +148,9 @@ namespace DataSaveManager.Editor
         {
             var row = CreateRowRoot("Vector2Widget");
             var label = CreateRowLabel(row, font);
+            CreateAxisLabel(row, font, "x:");
             var xInput = CreateRowInput(row, font, TMP_InputField.ContentType.DecimalNumber);
+            CreateAxisLabel(row, font, "y:");
             var yInput = CreateRowInput(row, font, TMP_InputField.ContentType.DecimalNumber);
 
             var widget = row.AddComponent<Vector2Widget>();
@@ -162,8 +166,11 @@ namespace DataSaveManager.Editor
         {
             var row = CreateRowRoot("Vector3Widget");
             var label = CreateRowLabel(row, font);
+            CreateAxisLabel(row, font, "x:");
             var xInput = CreateRowInput(row, font, TMP_InputField.ContentType.DecimalNumber);
+            CreateAxisLabel(row, font, "y:");
             var yInput = CreateRowInput(row, font, TMP_InputField.ContentType.DecimalNumber);
+            CreateAxisLabel(row, font, "z:");
             var zInput = CreateRowInput(row, font, TMP_InputField.ContentType.DecimalNumber);
 
             var widget = row.AddComponent<Vector3Widget>();
@@ -180,18 +187,14 @@ namespace DataSaveManager.Editor
         {
             var row = CreateRowRoot("ColorWidget");
             var label = CreateRowLabel(row, font);
-            var rInput = CreateRowInput(row, font, TMP_InputField.ContentType.DecimalNumber);
-            var gInput = CreateRowInput(row, font, TMP_InputField.ContentType.DecimalNumber);
-            var bInput = CreateRowInput(row, font, TMP_InputField.ContentType.DecimalNumber);
-            var aInput = CreateRowInput(row, font, TMP_InputField.ContentType.DecimalNumber);
+            var hexInput = CreateRowInput(row, font, TMP_InputField.ContentType.Standard);
+            hexInput.characterLimit = 9;
+            if (hexInput.placeholder is TextMeshProUGUI placeholder) placeholder.text = "#RRGGBBAA";
             var swatch = CreateRowSwatch(row);
 
             var widget = row.AddComponent<ColorWidget>();
             SetField(widget, "_label", label);
-            SetField(widget, "_rInput", rInput);
-            SetField(widget, "_gInput", gInput);
-            SetField(widget, "_bInput", bInput);
-            SetField(widget, "_aInput", aInput);
+            SetField(widget, "_hexInput", hexInput);
             SetField(widget, "_swatch", swatch);
 
             var saved = SaveAndDestroy(row, path);
@@ -368,7 +371,7 @@ namespace DataSaveManager.Editor
 
         private static Button CreateFooterButton(GameObject footer, string goName, string text, TMP_FontAsset font)
         {
-            var go = TMP_DefaultControls.CreateButton(new TMP_DefaultControls.Resources());
+            var go = TMP_DefaultControls.CreateButton(TmpUiResources());
             go.transform.SetParent(footer.transform, false);
             go.name = goName;
 
@@ -396,16 +399,31 @@ namespace DataSaveManager.Editor
             var rowLayoutGroup = row.AddComponent<HorizontalLayoutGroup>();
             rowLayoutGroup.spacing = 8f;
             rowLayoutGroup.padding = new RectOffset(4, 4, 4, 4);
+
             rowLayoutGroup.childControlWidth = true;
             rowLayoutGroup.childControlHeight = true;
-            rowLayoutGroup.childForceExpandWidth = true;
-            rowLayoutGroup.childForceExpandHeight = false;
+            rowLayoutGroup.childForceExpandWidth = false;
+            rowLayoutGroup.childForceExpandHeight = true;
+
+
             rowLayoutGroup.childAlignment = TextAnchor.MiddleLeft;
 
             var rowLayoutElement = row.AddComponent<LayoutElement>();
             rowLayoutElement.preferredHeight = RowHeight;
 
             return row;
+        }
+
+        private static void CreateRowSpacer(GameObject row)
+        {
+            var go = new GameObject("RowSpaceer", typeof(RectTransform));
+            go.transform.SetParent(row.transform, false);
+
+
+
+            var layout = go.AddComponent<LayoutElement>();
+            layout.preferredWidth = RowSpacerWidth;
+
         }
 
         private static TextMeshProUGUI CreateRowLabel(GameObject row, TMP_FontAsset font)
@@ -424,9 +442,27 @@ namespace DataSaveManager.Editor
             return label;
         }
 
+        private static TextMeshProUGUI CreateAxisLabel(GameObject row, TMP_FontAsset font, string text)
+        {
+            var go = new GameObject("AxisLabel", typeof(RectTransform));
+            go.transform.SetParent(row.transform, false);
+
+            var label = go.AddComponent<TextMeshProUGUI>();
+            label.text = text;
+            label.font = font;
+            label.fontSize = FontSize;
+            label.alignment = TextAlignmentOptions.Right;
+
+            var layout = go.AddComponent<LayoutElement>();
+            layout.preferredWidth = 28f;
+            layout.flexibleWidth = 0f;
+
+            return label;
+        }
+
         private static TMP_InputField CreateRowInput(GameObject row, TMP_FontAsset font, TMP_InputField.ContentType contentType)
         {
-            var go = TMP_DefaultControls.CreateInputField(new TMP_DefaultControls.Resources());
+            var go = TMP_DefaultControls.CreateInputField(TmpUiResources());
             go.transform.SetParent(row.transform, false);
 
             var input = go.GetComponent<TMP_InputField>();
@@ -449,7 +485,7 @@ namespace DataSaveManager.Editor
 
         private static Toggle CreateRowToggle(GameObject row)
         {
-            var go = DefaultControls.CreateToggle(new DefaultControls.Resources());
+            var go = DefaultControls.CreateToggle(UiResources());
             go.transform.SetParent(row.transform, false);
             go.name = "Toggle";
 
@@ -482,6 +518,20 @@ namespace DataSaveManager.Editor
         }
 
         // ---- Small helpers ----
+
+        private static Sprite? BuiltinSprite(string name) => AssetDatabase.GetBuiltinExtraResource<Sprite>($"UI/Skin/{name}.psd");
+
+        private static DefaultControls.Resources UiResources() => new()
+        {
+            standard = BuiltinSprite("UISprite"), background = BuiltinSprite("Background"), inputField = BuiltinSprite("InputFieldBackground"),
+            checkmark = BuiltinSprite("Checkmark"), knob = BuiltinSprite("Knob"), dropdown = BuiltinSprite("DropdownArrow"), mask = BuiltinSprite("UIMask"),
+        };
+
+        private static TMP_DefaultControls.Resources TmpUiResources() => new()
+        {
+            standard = BuiltinSprite("UISprite"), background = BuiltinSprite("Background"), inputField = BuiltinSprite("InputFieldBackground"),
+            checkmark = BuiltinSprite("Checkmark"), knob = BuiltinSprite("Knob"), dropdown = BuiltinSprite("DropdownArrow"), mask = BuiltinSprite("UIMask"),
+        };
 
         private static GameObject SaveAndDestroy(GameObject go, string path)
         {
