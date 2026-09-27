@@ -6,41 +6,36 @@ using UnityEngine;
 
 namespace DataSaveManager
 {
-    public sealed class Vector3Widget : MonoBehaviour, IDSMWidget
+    public sealed class Vector3Widget : DSMWidget<Vector3>
     {
-        [SerializeField] private TextMeshProUGUI? _label;
         [SerializeField] private TMP_InputField? _xInput;
         [SerializeField] private TMP_InputField? _yInput;
         [SerializeField] private TMP_InputField? _zInput;
 
-        private string _key = string.Empty;
-
-        public void Setup(DSMEntryDefinition entry)
+        private void Awake()
         {
-            if (_label == null || _xInput == null || _yInput == null || _zInput == null)
-            {
-                Debug.LogError($"Vector3Widget on '{gameObject.name}': _label, _xInput, _yInput, or _zInput is not assigned.", this);
-                return;
-            }
-            _key = entry.Key;
-            _label.text = entry.DisplayLabel;
-
-            var value = DSM.Get(_key, Vector3.zero);
-            _xInput.text = value.x.ToString("G", CultureInfo.InvariantCulture);
-            _yInput.text = value.y.ToString("G", CultureInfo.InvariantCulture);
-            _zInput.text = value.z.ToString("G", CultureInfo.InvariantCulture);
-
-            _xInput.onEndEdit.AddListener(_ => ApplyValue());
-            _yInput.onEndEdit.AddListener(_ => ApplyValue());
-            _zInput.onEndEdit.AddListener(_ => ApplyValue());
+            if (_xInput != null) _xInput.onEndEdit.AddListener(_ => Apply());
+            if (_yInput != null) _yInput.onEndEdit.AddListener(_ => Apply());
+            if (_zInput != null) _zInput.onEndEdit.AddListener(_ => Apply());
         }
 
-        private void ApplyValue()
+        protected override void Show(Vector3 value)
         {
-            float.TryParse(_xInput?.text, NumberStyles.Any, CultureInfo.InvariantCulture, out var x);
-            float.TryParse(_yInput?.text, NumberStyles.Any, CultureInfo.InvariantCulture, out var y);
-            float.TryParse(_zInput?.text, NumberStyles.Any, CultureInfo.InvariantCulture, out var z);
-            DSM.Set(_key, new Vector3(x, y, z));
+            _xInput?.SetTextWithoutNotify(value.x.ToString(CultureInfo.InvariantCulture));
+            _yInput?.SetTextWithoutNotify(value.y.ToString(CultureInfo.InvariantCulture));
+            _zInput?.SetTextWithoutNotify(value.z.ToString(CultureInfo.InvariantCulture));
         }
+
+        private void Apply()
+        {
+            var xOk = TryParse(_xInput, out var x);
+            var yOk = TryParse(_yInput, out var y);
+            var zOk = TryParse(_zInput, out var z);
+            if (xOk && yOk && zOk) Commit(new Vector3(x, y, z));
+            else Show(DSM.Get(Key, Vector3.zero));
+        }
+
+        private static bool TryParse(TMP_InputField? input, out float value) =>
+            float.TryParse(input?.text, NumberStyles.Any, CultureInfo.InvariantCulture, out value);
     }
 }

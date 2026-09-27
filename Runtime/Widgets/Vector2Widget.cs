@@ -6,37 +6,32 @@ using UnityEngine;
 
 namespace DataSaveManager
 {
-    public sealed class Vector2Widget : MonoBehaviour, IDSMWidget
+    public sealed class Vector2Widget : DSMWidget<Vector2>
     {
-        [SerializeField] private TextMeshProUGUI? _label;
         [SerializeField] private TMP_InputField? _xInput;
         [SerializeField] private TMP_InputField? _yInput;
 
-        private string _key = string.Empty;
-
-        public void Setup(DSMEntryDefinition entry)
+        private void Awake()
         {
-            if (_label == null || _xInput == null || _yInput == null)
-            {
-                Debug.LogError($"Vector2Widget on '{gameObject.name}': _label, _xInput, or _yInput is not assigned.", this);
-                return;
-            }
-            _key = entry.Key;
-            _label.text = entry.DisplayLabel;
-
-            var value = DSM.Get(_key, Vector2.zero);
-            _xInput.text = value.x.ToString("G", CultureInfo.InvariantCulture);
-            _yInput.text = value.y.ToString("G", CultureInfo.InvariantCulture);
-
-            _xInput.onEndEdit.AddListener(_ => ApplyValue());
-            _yInput.onEndEdit.AddListener(_ => ApplyValue());
+            if (_xInput != null) _xInput.onEndEdit.AddListener(_ => Apply());
+            if (_yInput != null) _yInput.onEndEdit.AddListener(_ => Apply());
         }
 
-        private void ApplyValue()
+        protected override void Show(Vector2 value)
         {
-            float.TryParse(_xInput?.text, NumberStyles.Any, CultureInfo.InvariantCulture, out var x);
-            float.TryParse(_yInput?.text, NumberStyles.Any, CultureInfo.InvariantCulture, out var y);
-            DSM.Set(_key, new Vector2(x, y));
+            _xInput?.SetTextWithoutNotify(value.x.ToString(CultureInfo.InvariantCulture));
+            _yInput?.SetTextWithoutNotify(value.y.ToString(CultureInfo.InvariantCulture));
         }
+
+        private void Apply()
+        {
+            var xOk = TryParse(_xInput, out var x);
+            var yOk = TryParse(_yInput, out var y);
+            if (xOk && yOk) Commit(new Vector2(x, y));
+            else Show(DSM.Get(Key, Vector2.zero));
+        }
+
+        private static bool TryParse(TMP_InputField? input, out float value) =>
+            float.TryParse(input?.text, NumberStyles.Any, CultureInfo.InvariantCulture, out value);
     }
 }

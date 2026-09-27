@@ -1,34 +1,28 @@
 #nullable enable
 
+using System.Globalization;
 using TMPro;
 using UnityEngine;
 
 namespace DataSaveManager
 {
-    public sealed class IntWidget : MonoBehaviour, IDSMWidget
+    public sealed class IntWidget : DSMWidget<int>
     {
-        [SerializeField] private TextMeshProUGUI? _label;
         [SerializeField] private TMP_InputField? _input;
 
-        private string _key = string.Empty;
-
-        public void Setup(DSMEntryDefinition entry)
+        private void Awake()
         {
-            if (_label == null || _input == null)
-            {
-                Debug.LogError($"IntWidget on '{gameObject.name}': _label or _input is not assigned.", this);
-                return;
-            }
-            _key = entry.Key;
-            _label.text = entry.DisplayLabel;
-            _input.text = DSM.Get(_key, 0).ToString();
-            _input.onEndEdit.AddListener(_ => Apply());
+            if (_input != null) _input.onEndEdit.AddListener(OnEndEdit);
         }
 
-        private void Apply()
+        protected override void Show(int value) => _input?.SetTextWithoutNotify(value.ToString(CultureInfo.InvariantCulture));
+
+        private void OnEndEdit(string text)
         {
-            if (int.TryParse(_input?.text, out var v))
-                DSM.Set(_key, v);
+            if (int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value))
+                Commit(value);
+            else
+                Show(DSM.Get(Key, 0));
         }
     }
 }
