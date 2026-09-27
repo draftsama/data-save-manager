@@ -3,25 +3,17 @@
 using TMPro;
 using UnityEngine;
 
-public sealed class StringWidget : MonoBehaviour, IDSMWidget
+namespace DataSaveManager
 {
-    [SerializeField] private TextMeshProUGUI? _label;
-    [SerializeField] private TMP_InputField? _input;
-
-    private string _key = string.Empty;
-    private DSMSlot? _slot;
-
-    public void Setup(string key, DSMDataType type, string label, DSMSlot slot)
+    public sealed class StringWidget : DSMWidget<string>
     {
-        if (_label == null || _input == null)
+        [SerializeField] private TMP_InputField? _input;
+
+        private void Awake()
         {
-            Debug.LogError($"StringWidget on '{gameObject.name}': _label or _input is not assigned.", this);
-            return;
+            if (_input != null) _input.onEndEdit.AddListener(Commit);
         }
-        _key = key;
-        _slot = slot;
-        _label.text = label;
-        _input.text = slot.Get(key, string.Empty);
-        _input.onEndEdit.AddListener(value => _slot?.Set(_key, value));
+
+        protected override void Show(string value) => _input?.SetTextWithoutNotify(value);
     }
 }

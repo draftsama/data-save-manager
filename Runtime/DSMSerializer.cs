@@ -1,45 +1,19 @@
 #nullable enable
 
-using System.Collections.Generic;
-using System.Linq;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 
-public sealed class DSMSerializer
+namespace DataSaveManager
 {
-    public JsonSerializer JsonSerializer { get; }
-
-    public DSMSerializer()
+    internal sealed class DSMSerializer
     {
-        JsonSerializer = new JsonSerializer();
-        JsonSerializer.Converters.Add(new Vector2Converter());
-        JsonSerializer.Converters.Add(new Vector3Converter());
-        JsonSerializer.Converters.Add(new Vector4Converter());
-        JsonSerializer.Converters.Add(new QuaternionConverter());
-        JsonSerializer.Converters.Add(new ColorConverter());
-        JsonSerializer.Converters.Add(new Color32Converter());
-    }
+        public JsonSerializer JsonSerializer { get; }
 
-    public string Serialize(Dictionary<string, JToken> data, bool prettyPrint)
-    {
-        var root = new JObject();
-        foreach (var (key, token) in data)
-            root[key] = token;
-        return root.ToString(prettyPrint ? Formatting.Indented : Formatting.None);
-    }
-
-    public string SerializeEnvelope(Dictionary<string, JToken> data, int version, bool prettyPrint)
-    {
-        var payload = new JObject();
-        foreach (var (key, token) in data)
-            payload[key] = token;
-        var envelope = DSMSaveEnvelope.Wrap(payload, version);
-        return envelope.ToString(prettyPrint ? Formatting.Indented : Formatting.None);
-    }
-
-    public Dictionary<string, JToken> Deserialize(string json)
-    {
-        var root = JObject.Parse(json);
-        return root.Properties().ToDictionary(p => p.Name, p => p.Value);
+        public DSMSerializer()
+        {
+            JsonSerializer = new JsonSerializer();
+            JsonSerializer.Converters.Add(new Vector2Converter());
+            JsonSerializer.Converters.Add(new Vector3Converter());
+            JsonSerializer.Converters.Add(new ColorConverter());
+        }
     }
 }

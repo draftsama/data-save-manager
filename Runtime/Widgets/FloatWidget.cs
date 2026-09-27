@@ -4,31 +4,25 @@ using System.Globalization;
 using TMPro;
 using UnityEngine;
 
-public sealed class FloatWidget : MonoBehaviour, IDSMWidget
+namespace DataSaveManager
 {
-    [SerializeField] private TextMeshProUGUI? _label;
-    [SerializeField] private TMP_InputField? _input;
-
-    private string _key = string.Empty;
-    private DSMSlot? _slot;
-
-    public void Setup(string key, DSMDataType type, string label, DSMSlot slot)
+    public sealed class FloatWidget : DSMWidget<float>
     {
-        if (_label == null || _input == null)
+        [SerializeField] private TMP_InputField? _input;
+
+        private void Awake()
         {
-            Debug.LogError($"FloatWidget on '{gameObject.name}': _label or _input is not assigned.", this);
-            return;
+            if (_input != null) _input.onEndEdit.AddListener(OnEndEdit);
         }
-        _key = key;
-        _slot = slot;
-        _label.text = label;
-        _input.text = slot.Get(key, 0f).ToString("G", CultureInfo.InvariantCulture);
-        _input.onEndEdit.AddListener(_ => Apply());
-    }
 
-    private void Apply()
-    {
-        if (float.TryParse(_input?.text, NumberStyles.Any, CultureInfo.InvariantCulture, out var v))
-            _slot?.Set(_key, v);
+        protected override void Show(float value) => _input?.SetTextWithoutNotify(value.ToString(CultureInfo.InvariantCulture));
+
+        private void OnEndEdit(string text)
+        {
+            if (float.TryParse(text, NumberStyles.Any, CultureInfo.InvariantCulture, out var value))
+                Commit(value);
+            else
+                Show(DSM.Get(Key, 0f));
+        }
     }
 }

@@ -1,9 +1,10 @@
 {
     "name": "DSM.Editor",
-    "rootNamespace": "",
+    "rootNamespace": "DataSaveManager.Editor",
     "references": [
         "GUID:5c67e4f53d76c46cbabd0a518ee024c0",
-        "GUID:f51ebe6a0ceec4240a699833d6309b23"
+        "GUID:f51ebe6a0ceec4240a699833d6309b23",
+        "GUID:6055be8ebefd69e48b49212b09b47b2f"
     ],
     "includePlatforms": [
         "Editor"

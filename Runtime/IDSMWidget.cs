@@ -1,6 +1,9 @@
 #nullable enable
 
-public interface IDSMWidget
+namespace DataSaveManager
 {
-    void Setup(string key, DSMDataType type, string label, DSMSlot slot);
+    public interface IDSMWidget
+    {
+        void Setup(DSMEntryDefinition entry);
+    }
 }

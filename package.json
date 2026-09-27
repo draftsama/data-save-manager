@@ -1,8 +1,8 @@
 {
   "name": "com.draftsama.datasavemanager",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "displayName": "DataSaveManager",
-  "description": "A lightweight, slot-based save system for Unity with JSON serialization, optional AES-256 encryption (random per-file salt), reactive change watching via UniTask, and an Editor Manager window for defining typed data constants.",
+  "description": "A small settings store for Unity: Entries with typed defaults in a Config asset, a single hand-editable JSON save file holding only overrides, live change watching via UniTask, an Editor manager window, and an in-game settings panel.",
   "unity": "6000.0",
   "author": {
     "name": "draftsama"
@@ -15,7 +15,7 @@
     "save",
     "data",
     "persistence",
-    "slot",
-    "encryption"
+    "settings",
+    "config"
   ]
 }

@@ -4,38 +4,34 @@ using System.Globalization;
 using TMPro;
 using UnityEngine;
 
-public sealed class Vector2Widget : MonoBehaviour, IDSMWidget
+namespace DataSaveManager
 {
-    [SerializeField] private TextMeshProUGUI? _label;
-    [SerializeField] private TMP_InputField? _xInput;
-    [SerializeField] private TMP_InputField? _yInput;
-
-    private string _key = string.Empty;
-    private DSMSlot? _slot;
-
-    public void Setup(string key, DSMDataType type, string label, DSMSlot slot)
+    public sealed class Vector2Widget : DSMWidget<Vector2>
     {
-        if (_label == null || _xInput == null || _yInput == null)
+        [SerializeField] private TMP_InputField? _xInput;
+        [SerializeField] private TMP_InputField? _yInput;
+
+        private void Awake()
         {
-            Debug.LogError($"Vector2Widget on '{gameObject.name}': _label, _xInput, or _yInput is not assigned.", this);
-            return;
+            if (_xInput != null) _xInput.onEndEdit.AddListener(_ => Apply());
+            if (_yInput != null) _yInput.onEndEdit.AddListener(_ => Apply());
         }
-        _key = key;
-        _slot = slot;
-        _label.text = label;
 
-        var value = slot.Get(key, Vector2.zero);
-        _xInput.text = value.x.ToString("G", CultureInfo.InvariantCulture);
-        _yInput.text = value.y.ToString("G", CultureInfo.InvariantCulture);
+        protected override void Show(Vector2 value)
+        {
+            _xInput?.SetTextWithoutNotify(value.x.ToString(CultureInfo.InvariantCulture));
+            _yInput?.SetTextWithoutNotify(value.y.ToString(CultureInfo.InvariantCulture));
+        }
 
-        _xInput.onEndEdit.AddListener(_ => ApplyValue());
-        _yInput.onEndEdit.AddListener(_ => ApplyValue());
-    }
+        private void Apply()
+        {
+            var xOk = TryParse(_xInput, out var x);
+            var yOk = TryParse(_yInput, out var y);
+            if (xOk && yOk) Commit(new Vector2(x, y));
+            else Show(DSM.Get(Key, Vector2.zero));
+        }
 
-    private void ApplyValue()
-    {
-        float.TryParse(_xInput?.text, NumberStyles.Any, CultureInfo.InvariantCulture, out var x);
-        float.TryParse(_yInput?.text, NumberStyles.Any, CultureInfo.InvariantCulture, out var y);
-        _slot?.Set(_key, new Vector2(x, y));
+        private static bool TryParse(TMP_InputField? input, out float value) =>
+            float.TryParse(input?.text, NumberStyles.Any, CultureInfo.InvariantCulture, out value);
     }
 }

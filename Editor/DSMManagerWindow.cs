@@ -1,575 +1,330 @@
 #nullable enable
-#if UNITY_EDITOR
 
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
 using System.Linq;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEngine;
 
-public sealed class DSMManagerWindow : EditorWindow
+namespace DataSaveManager.Editor
 {
-    // ── State ────────────────────────────────────────────────────────────────
-
-    private readonly DSMManagerSlotOps _slotOps = new();
-    private readonly DSMSlotVersionPanel _versionPanel = new();
-    private DSMKeyRotationPanel? _rotationPanel;
-    private DSMConfig? _config;
-    private UnityEditor.SerializedObject? _configSO;
-    private string _searchText = string.Empty;
-    private Vector2 _listScroll;
-    private bool _configExpanded = true;
-    private bool _showAddPanel;
-    private bool _showNewSlotInput;
-    private string _newSlotName = string.Empty;
-
-    // Add-panel transient fields
-    private string _newKey = string.Empty;
-    private DSMDataType _newType = DSMDataType.String;
-    private string _newSerializedDefault = string.Empty;
-    private bool _newBool;
-    private float _newFloat;
-    private int _newInt;
-    private long _newLong;
-    private double _newDouble;
-    private Vector2 _newVec2;
-    private Vector3 _newVec3;
-    private Vector4 _newVec4;
-    private Color _newColor = Color.white;
-
-    // ── Styles ───────────────────────────────────────────────────────────────
-
-    private static GUIStyle? s_headerLabel;
-    private static GUIStyle? s_sectionBox;
-    private static GUIStyle? s_rowBox;
-    private static GUIStyle? s_deleteBtn;
-    private static GUIStyle? s_keyLabel;
-
-    private void EnsureStyles()
+    /// <summary>Edits a DSMConfig's entry definitions and, through <see cref="DSM"/>, the live store's values.</summary>
+    internal sealed class DSMManagerWindow : EditorWindow
     {
-        s_headerLabel ??= new GUIStyle(EditorStyles.boldLabel) { fontSize = 13, alignment = TextAnchor.MiddleLeft };
-        s_sectionBox ??= new GUIStyle(EditorStyles.helpBox) { padding = new RectOffset(10, 10, 8, 8), margin = new RectOffset(4, 4, 2, 2) };
-        s_rowBox ??= new GUIStyle(EditorStyles.helpBox) { padding = new RectOffset(6, 6, 4, 4), margin = new RectOffset(0, 0, 1, 1) };
-        s_deleteBtn ??= new GUIStyle(EditorStyles.miniButton) { normal = { textColor = new Color(0.9f, 0.3f, 0.3f) }, fontStyle = FontStyle.Bold };
-        s_keyLabel ??= new GUIStyle(EditorStyles.label) { fontStyle = FontStyle.Bold, normal = { textColor = Color.white } };
-    }
+        private static readonly Color DuplicateKeyColor = new(0.65f, 0.28f, 0.28f);
 
-    // ── Lifecycle ─────────────────────────────────────────────────────────────
+        private DSMConfig? _config;
+        private SerializedObject? _configSo;
+        private string _search = string.Empty;
+        private Vector2 _entriesScroll;
+        private bool _settingsFoldout = true;
+        private string _newKey = string.Empty;
+        private DSMDataType _newType = DSMDataType.String;
 
-    [MenuItem("DSM/Open Manager")]
-    public static void Open()
-    {
-        var win = GetWindow<DSMManagerWindow>("DSM Manager");
-        win.minSize = new Vector2(600, 520);
-        win.Show();
-    }
-
-    private void OnEnable() => Reload();
-
-    public void Reload()
-    {
-        _config = Resources.Load<DSMConfig>("DSMConfig");
-        _configSO = _config != null ? new UnityEditor.SerializedObject(_config) : null;
-        _slotOps.BindConfig(_config, _configSO);
-        _slotOps.ResetDefaults(DSMConstantReflectionCache.GetDefaults());
-        _slotOps.DiscoverSlots();
-        if (!_slotOps.AvailableSlots.Any(s => s == _slotOps.ActiveSlot))
-            _slotOps.ActiveSlot = _slotOps.GetSlotName();
-        _slotOps.DefaultsDirty = false;
-        _slotOps.LoadSlotData(_slotOps.ActiveSlot);
-        RefreshVersionPanel();
-        Repaint();
-    }
-
-    private void RefreshVersionPanel() =>
-        _versionPanel.Refresh(_config, _slotOps.AvailableSlots, _slotOps.ResolveSlotPath);
-
-    // ── Main GUI ──────────────────────────────────────────────────────────────
-
-    private void OnGUI()
-    {
-        EnsureStyles();
-        DrawToolbar();
-        DrawError();
-        DrawConfigSection();
-        DrawSlotBar();
-        DrawNewSlotInput();
-        _versionPanel.Draw();
-        (_rotationPanel ??= new DSMKeyRotationPanel(Repaint)).Draw();
-        DrawSearchBar();
-        DrawEntryList();
-        DrawAddPanel();
-        DrawFooter();
-    }
-
-    private void DrawError()
-    {
-        if (string.IsNullOrEmpty(_slotOps.LastError)) return;
-        EditorGUILayout.HelpBox(_slotOps.LastError + " See the Console for details.", MessageType.Error);
-    }
-
-    // ── Toolbar ───────────────────────────────────────────────────────────────
-
-    private void DrawToolbar()
-    {
-        using var h = new EditorGUILayout.HorizontalScope(EditorStyles.toolbar);
-        GUILayout.Label("DSM Manager", s_headerLabel!, GUILayout.ExpandWidth(true));
-        if (GUILayout.Button("Refresh", EditorStyles.toolbarButton, GUILayout.Width(60)))
-            Reload();
-    }
-
-    // ── Config section ────────────────────────────────────────────────────────
-
-    private void DrawConfigSection()
-    {
-        _configExpanded = EditorGUILayout.BeginFoldoutHeaderGroup(_configExpanded, "Configuration");
-        if (_configExpanded)
+        [MenuItem("Draft/DSM/Open Manager")]
+        internal static void Open()
         {
-            using var box = new EditorGUILayout.VerticalScope(s_sectionBox!);
-            var picked = (DSMConfig?)EditorGUILayout.ObjectField("DSM Config", _config, typeof(DSMConfig), false);
-            if (picked != _config) { _config = picked; Reload(); }
+            var window = GetWindow<DSMManagerWindow>("DSM Manager");
+            window.minSize = new Vector2(640, 480);
+            window.Show();
+        }
 
-            if (_config == null)
+        private void OnEnable()
+        {
+            EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
+            Reload(fromDisk: false);
+        }
+
+        private void OnDisable() => EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
+
+        private void OnPlayModeStateChanged(PlayModeStateChange _) => Repaint();
+
+        // Values live on DSM.Store, which changes outside this window's own GUI events (Play mode, other code) —
+        // the default ~10 Hz OnInspectorUpdate tick keeps the window in sync without a bespoke poller.
+        private void OnInspectorUpdate() => Repaint();
+
+        // Opening the window must not discard unsaved in-memory values (e.g. mid Play mode); only the
+        // explicit Reload button re-reads the Save File.
+        private void Reload(bool fromDisk)
+        {
+            _config = Resources.Load<DSMConfig>("DSMConfig");
+            _configSo = _config != null ? new SerializedObject(_config) : null;
+            if (_config != null && fromDisk) DSM.Load();
+        }
+
+        private void OnGUI()
+        {
+            DrawToolbar();
+
+            if (_config == null || _configSo == null)
             {
-                EditorGUILayout.HelpBox("No DSMConfig found. Create one via DSM > Create Config Asset.", MessageType.Warning);
-                if (GUILayout.Button("Create Config Asset", GUILayout.Height(26))) CreateConfigAsset();
+                DrawNoConfig();
+                return;
             }
-            else
+
+            _configSo.Update();
+
+            var duplicates = DSMEntryRules.DuplicateKeys(_config);
+            var valuesEditable = DSM.Store.Config == _config;
+
+            using (new EditorGUI.DisabledScope(true))
+                EditorGUILayout.ObjectField("Config", _config, typeof(DSMConfig), false);
+
+            if (!valuesEditable)
+                EditorGUILayout.HelpBox(
+                    "DSM.Store is configured with a different DSMConfig asset. This window only edits the Resources config's values, so the Value column is disabled.",
+                    MessageType.Warning);
+
+            if (duplicates.Count > 0)
+                EditorGUILayout.HelpBox($"Duplicate keys: {string.Join(", ", duplicates)}", MessageType.Error);
+
+            EditorGUILayout.Space();
+            DrawSettings();
+
+            EditorGUILayout.Space();
+            DrawEntries(duplicates, valuesEditable);
+
+            EditorGUILayout.Space();
+            DrawAddEntry();
+
+            EditorGUILayout.Space();
+            DrawFooter();
+
+            _configSo.ApplyModifiedProperties();
+        }
+
+        private void DrawToolbar()
+        {
+            using (new EditorGUILayout.HorizontalScope(EditorStyles.toolbar))
             {
-                _configSO!.Update();
+                if (GUILayout.Button("Reload", EditorStyles.toolbarButton, GUILayout.Width(60)))
+                    Reload(fromDisk: true);
+
+                GUILayout.FlexibleSpace();
+                _search = EditorGUILayout.TextField(_search, EditorStyles.toolbarSearchField, GUILayout.Width(180));
+            }
+        }
+
+        private void DrawNoConfig()
+        {
+            EditorGUILayout.HelpBox("No DSMConfig found in Resources. Create one to begin.", MessageType.Warning);
+            if (GUILayout.Button("Create Config Asset", GUILayout.Height(26)))
+            {
+                DSMMenu.CreateConfigAsset();
+                Reload(fromDisk: false);
+            }
+        }
+
+        private void DrawSettings()
+        {
+            _settingsFoldout = EditorGUILayout.Foldout(_settingsFoldout, "Settings", true);
+            if (!_settingsFoldout) return;
+
+            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
+            {
+                EditorGUILayout.PropertyField(_configSo!.FindProperty("_autoSave"), new GUIContent("AutoSave"));
+                EditorGUILayout.PropertyField(_configSo.FindProperty("_autoSaveDebounce"), new GUIContent("AutoSave Debounce"));
+                EditorGUILayout.PropertyField(_configSo.FindProperty("_saveDirectory"), new GUIContent("Save Directory"));
+                EditorGUILayout.PropertyField(_configSo.FindProperty("_fileName"), new GUIContent("File Name"));
+
                 EditorGUILayout.Space(4);
-                DrawConfigToggles();
-                EditorGUILayout.Space(3);
-                DrawConfigSlotRow();
-                _configSO.ApplyModifiedProperties();
-            }
-        }
-        EditorGUILayout.EndFoldoutHeaderGroup();
-        DrawSeparator();
-    }
+                var path = DSMPaths.ResolveSaveFilePath(_config!);
+                EditorGUILayout.SelectableLabel(path, EditorStyles.textField, GUILayout.Height(18));
 
-    private void DrawConfigToggles()
-    {
-        using (new EditorGUILayout.HorizontalScope())
-        {
-            GUILayout.Label("Auto Save", EditorStyles.miniLabel, GUILayout.Width(62));
-            ConfigProp("_autoSave").boolValue =
-                EditorGUILayout.Toggle(ConfigProp("_autoSave").boolValue, GUILayout.Width(16));
-            GUILayout.Space(14);
-            GUILayout.Label("Debounce", EditorStyles.miniLabel, GUILayout.Width(58));
-            ConfigProp("_autoSaveDebounce").floatValue =
-                EditorGUILayout.FloatField(ConfigProp("_autoSaveDebounce").floatValue, GUILayout.Width(38));
-            GUILayout.Label("s", EditorStyles.miniLabel, GUILayout.Width(10));
-            GUILayout.Space(14);
-            GUILayout.Label("Encrypt", EditorStyles.miniLabel, GUILayout.Width(48));
-            ConfigProp("_encrypt").boolValue =
-                EditorGUILayout.Toggle(ConfigProp("_encrypt").boolValue, GUILayout.Width(16));
-            GUILayout.Space(14);
-            GUILayout.Label("Pretty", EditorStyles.miniLabel, GUILayout.Width(38));
-            ConfigProp("_prettyPrint").boolValue =
-                EditorGUILayout.Toggle(ConfigProp("_prettyPrint").boolValue, GUILayout.Width(16));
-            GUILayout.FlexibleSpace();
-        }
-    }
-
-    private void DrawConfigSlotRow()
-    {
-        using (new EditorGUILayout.HorizontalScope())
-        {
-            GUILayout.Label("Default Slot", EditorStyles.miniLabel, GUILayout.Width(70));
-            GUILayout.Label(_config!.DefaultSlot, EditorStyles.miniLabel);
-            GUILayout.FlexibleSpace();
-            if (GUILayout.Button("Edit Config →", GUILayout.Width(100)))
-                Selection.activeObject = _config;
-        }
-    }
-
-    // ── Slot bar ──────────────────────────────────────────────────────────────
-
-    private void DrawSlotBar()
-    {
-        using var h = new EditorGUILayout.HorizontalScope();
-        GUILayout.Label("Slot", EditorStyles.miniLabel, GUILayout.Width(28));
-
-        var idx = Array.IndexOf(_slotOps.AvailableSlots, _slotOps.ActiveSlot);
-        if (idx < 0) idx = 0;
-        var newIdx = EditorGUILayout.Popup(idx, _slotOps.AvailableSlots, GUILayout.Width(120));
-        if (newIdx != idx)
-            _slotOps.SelectSlot(_slotOps.AvailableSlots[newIdx]);
-
-        var isDefault = _config != null && _slotOps.ActiveSlot == _config.DefaultSlot;
-        using (new EditorGUI.DisabledScope(isDefault))
-        {
-            if (GUILayout.Button(isDefault ? "✓ Default" : "Set Default", EditorStyles.miniButton, GUILayout.Width(76)))
-            {
-                _slotOps.SetDefaultSlot(_slotOps.ActiveSlot);
-                Repaint();
-            }
-        }
-
-        GUILayout.Space(4);
-        var addLabel = _showNewSlotInput ? "Cancel" : "+ New";
-        if (GUILayout.Button(addLabel, EditorStyles.miniButton, GUILayout.Width(50)))
-        {
-            _showNewSlotInput = !_showNewSlotInput;
-            _newSlotName = string.Empty;
-        }
-
-        using (new EditorGUI.DisabledScope(_slotOps.AvailableSlots.Length <= 1))
-        {
-            if (GUILayout.Button("Delete", EditorStyles.miniButton, GUILayout.Width(46)))
-                DeleteActiveSlot();
-        }
-        GUILayout.FlexibleSpace();
-    }
-
-    private void DrawNewSlotInput()
-    {
-        if (!_showNewSlotInput) return;
-        using var h = new EditorGUILayout.HorizontalScope();
-        GUILayout.Label("Name", EditorStyles.miniLabel, GUILayout.Width(38));
-        _newSlotName = EditorGUILayout.TextField(_newSlotName);
-        var trimmed = _newSlotName.Trim();
-        var valid = !string.IsNullOrWhiteSpace(trimmed) &&
-                    !_slotOps.AvailableSlots.Any(s => string.Equals(s, trimmed, StringComparison.OrdinalIgnoreCase));
-        using (new EditorGUI.DisabledScope(!valid))
-        {
-            if (GUILayout.Button("Create", EditorStyles.miniButton, GUILayout.Width(50)))
-            {
-                _slotOps.CreateSlot(trimmed);
-                RefreshVersionPanel();
-                _showNewSlotInput = false;
-            }
-        }
-    }
-
-    private void DeleteActiveSlot()
-    {
-        if (!EditorUtility.DisplayDialog("Delete Slot",
-            $"Delete slot '{_slotOps.ActiveSlot}'? This cannot be undone.", "Delete", "Cancel")) return;
-        _slotOps.DeleteActiveSlot();
-        RefreshVersionPanel();
-    }
-
-    // ── Search bar ────────────────────────────────────────────────────────────
-
-    private void DrawSearchBar()
-    {
-        DrawSeparator();
-        using var h = new EditorGUILayout.HorizontalScope();
-        GUILayout.Label("🔍", GUILayout.Width(18));
-        _searchText = EditorGUILayout.TextField(_searchText, EditorStyles.toolbarSearchField, GUILayout.ExpandWidth(true));
-        var label = _showAddPanel ? "▲ Cancel" : "+ New Entry";
-        if (GUILayout.Button(label, EditorStyles.miniButton, GUILayout.Width(88)))
-        {
-            _showAddPanel = !_showAddPanel;
-            if (_showAddPanel) ResetAddPanel();
-        }
-    }
-
-    // ── Entry list ────────────────────────────────────────────────────────────
-
-    private void DrawEntryList()
-    {
-        // Union: defaults keys first, then any extra keys only in slot
-        var allKeys = new List<string>();
-        var seen = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var d in _slotOps.Defaults)      { if (seen.Add(d.Key)) allKeys.Add(d.Key); }
-        foreach (var k in _slotOps.SlotData.Keys) { if (seen.Add(k))     allKeys.Add(k); }
-
-        if (allKeys.Count == 0)
-        {
-            EditorGUILayout.Space(8);
-            EditorGUILayout.HelpBox(
-                "No data. Add entries with '+ New Entry' or run the game with DSM.Set().",
-                MessageType.Info);
-            return;
-        }
-
-        var filter = _searchText.Trim().ToLower(CultureInfo.InvariantCulture);
-        string? toRemoveKey = null;
-
-        using var scroll = new EditorGUILayout.ScrollViewScope(_listScroll, GUILayout.ExpandHeight(true));
-        _listScroll = scroll.scrollPosition;
-
-        foreach (var key in allKeys)
-        {
-            if (!string.IsNullOrEmpty(filter) && !key.ToLower(CultureInfo.InvariantCulture).Contains(filter))
-                continue;
-
-            var defEntry = _slotOps.Defaults.Find(e => e.Key == key);
-            _slotOps.SlotData.TryGetValue(key, out var currentToken);
-            var displayType = defEntry?.Type ?? (currentToken != null ? DSMManagerSlotOps.InferFromToken(currentToken).Item1 : DSMDataType.String);
-            var currentStr  = currentToken != null ? DSMManagerSlotOps.InferFromToken(currentToken).Item2 : (defEntry?.SerializedDefault ?? string.Empty);
-
-            using var row = new EditorGUILayout.VerticalScope(s_rowBox!);
-            EditorGUI.DrawRect(row.rect, TypeColor(displayType));
-
-            // ── Header row: key + type + expose + delete ─────────────────────
-            var isExposed = _config?.FindExposed(key) != null;
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                GUILayout.BeginHorizontal();
-                GUILayout.Label("key:", GUILayout.Width(36));
-                GUILayout.TextField(key, GUILayout.Width(120));
-                                GUILayout.EndHorizontal();
-
-
-                if (defEntry != null)
-                {
-                    var newType = (DSMDataType)EditorGUILayout.EnumPopup(defEntry.Type, GUILayout.Width(80));
-                    if (newType != defEntry.Type) { defEntry.Type = newType; _slotOps.DefaultsDirty = true; }
-
-                    GUILayout.FlexibleSpace();
-                    GUILayout.Label("Expose", EditorStyles.miniLabel, GUILayout.Width(42));
-                    var newExposed = EditorGUILayout.Toggle(isExposed, GUILayout.Width(16));
-                    if (newExposed != isExposed)
-                    {
-                        if (newExposed) _config?.SetExposed(key, string.Empty, defEntry.Type);
-                        else _config?.RemoveExposed(key);
-                        SaveConfig();
-                    }
-                }
-                else
-                {
-                    using (new EditorGUI.DisabledScope(true))
-                        EditorGUILayout.EnumPopup(displayType, GUILayout.Width(80));
-                    GUILayout.FlexibleSpace();
-                }
-
-                if (GUILayout.Button("✕", s_deleteBtn!, GUILayout.Width(26)))
-                    toRemoveKey = key;
-            }
-
-            // ── Expose description row (shown when exposed) ───────────────────
-            if (isExposed && defEntry != null)
-            {
                 using (new EditorGUILayout.HorizontalScope())
                 {
-                    GUILayout.Label("Description", EditorStyles.miniLabel, GUILayout.Width(68));
-                    var currentLabel = _config?.FindExposed(key)?.Label ?? string.Empty;
-                    var newLabel = EditorGUILayout.TextField(currentLabel, GUILayout.ExpandWidth(true));
-                    if (newLabel != currentLabel)
+                    if (GUILayout.Button("Open Folder", GUILayout.Width(100)))
                     {
-                        _config?.SetExposed(key, newLabel, defEntry.Type);
-                        SaveConfig();
+                        var dir = Path.GetDirectoryName(path);
+                        if (!string.IsNullOrEmpty(dir))
+                        {
+                            Directory.CreateDirectory(dir);
+                            EditorUtility.RevealInFinder(dir);
+                        }
+                    }
+
+                    if (GUILayout.Button("Delete Save File", GUILayout.Width(120)))
+                    {
+                        if (EditorUtility.DisplayDialog("Delete Save File", $"Delete '{path}'? This cannot be undone.", "Delete", "Cancel"))
+                        {
+                            if (File.Exists(path)) File.Delete(path);
+                            DSM.Load();
+                        }
+                    }
+                }
+            }
+        }
+
+        private void DrawEntries(IReadOnlyCollection<string> duplicates, bool valuesEditable)
+        {
+            EditorGUILayout.LabelField("Entries", EditorStyles.boldLabel);
+
+            var entriesProp = _configSo!.FindProperty("_entries");
+            var filter = _search.Trim();
+            var pendingRemoveIndex = -1;
+
+            using (var scroll = new EditorGUILayout.ScrollViewScope(_entriesScroll, GUILayout.ExpandHeight(true)))
+            {
+                _entriesScroll = scroll.scrollPosition;
+
+                for (var i = 0; i < entriesProp.arraySize; i++)
+                {
+                    var elementProp = entriesProp.GetArrayElementAtIndex(i);
+                    var keyProp = elementProp.FindPropertyRelative("_key");
+                    var typeProp = elementProp.FindPropertyRelative("_type");
+                    var labelProp = elementProp.FindPropertyRelative("_label");
+                    var exposedProp = elementProp.FindPropertyRelative("_exposed");
+                    var defaultJsonProp = elementProp.FindPropertyRelative("_defaultJson");
+
+                    var key = keyProp.stringValue;
+                    if (filter.Length > 0 &&
+                        key.IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0 &&
+                        labelProp.stringValue.IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0)
+                        continue;
+
+                    var isDuplicate = duplicates.Contains(key);
+
+                    using (new EditorGUILayout.HorizontalScope(EditorStyles.helpBox))
+                    {
+                        var priorColor = GUI.backgroundColor;
+                        if (isDuplicate) GUI.backgroundColor = DuplicateKeyColor;
+                        keyProp.stringValue = EditorGUILayout.TextField(keyProp.stringValue, GUILayout.Width(110));
+                        GUI.backgroundColor = priorColor;
+
+                        var currentType = (DSMDataType)typeProp.enumValueIndex;
+                        var newType = (DSMDataType)EditorGUILayout.EnumPopup(currentType, GUILayout.Width(80));
+                        if (newType != currentType)
+                        {
+                            typeProp.enumValueIndex = (int)newType;
+                            defaultJsonProp.stringValue = DSMEntryDefinition.DefaultJsonFor(newType);
+                        }
+
+                        labelProp.stringValue = EditorGUILayout.TextField(labelProp.stringValue, GUILayout.Width(100));
+                        exposedProp.boolValue = EditorGUILayout.Toggle(exposedProp.boolValue, GUILayout.Width(18));
+
+                        DrawDefaultField(defaultJsonProp, newType);
+                        DrawValueField(key, newType, valuesEditable);
+
+                        using (new EditorGUI.DisabledScope(!valuesEditable || !DSM.Store.HasOverride(key)))
+                        {
+                            if (GUILayout.Button("Reset", GUILayout.Width(50)))
+                            {
+                                DSM.Reset(key);
+                                if (!EditorApplication.isPlaying) DSM.Save();
+                            }
+                        }
+
+                        if (GUILayout.Button("✕", GUILayout.Width(24)))
+                            pendingRemoveIndex = TryRemoveEntry(key, i);
                     }
                 }
             }
 
-            // ── Default value row ─────────────────────────────────────────────
+            if (pendingRemoveIndex >= 0)
+                entriesProp.DeleteArrayElementAtIndex(pendingRemoveIndex);
+        }
+
+        private static void DrawDefaultField(SerializedProperty defaultJsonProp, DSMDataType type)
+        {
+            JToken? defaultToken;
+            try { defaultToken = JToken.Parse(defaultJsonProp.stringValue); }
+            catch { defaultToken = null; }
+
+            var newDefaultToken = DSMValueField.DrawField(GUIContent.none, type, defaultToken, out var changed);
+            if (changed)
+                defaultJsonProp.stringValue = newDefaultToken.ToString(Formatting.None);
+        }
+
+        private static void DrawValueField(string key, DSMDataType type, bool valuesEditable)
+        {
+            var hasOverride = valuesEditable && DSM.Store.HasOverride(key);
+            GUILayout.Label(hasOverride ? "●" : " ", hasOverride ? EditorStyles.boldLabel : EditorStyles.label, GUILayout.Width(12));
+
+            using (new EditorGUI.DisabledScope(!valuesEditable))
+            {
+                var valueToken = valuesEditable ? DSM.Store.GetEffectiveToken(key) : null;
+                var newValueToken = DSMValueField.DrawField(GUIContent.none, type, valueToken, out var changed);
+                if (valuesEditable && changed)
+                {
+                    DSM.Store.SetToken(key, newValueToken);
+                    if (!EditorApplication.isPlaying) DSM.Save();
+                }
+            }
+        }
+
+        // Returns the index to remove after the dialog(s), or -1 if the user cancelled.
+        private static int TryRemoveEntry(string key, int index)
+        {
+            if (!EditorUtility.DisplayDialog("Remove Entry", $"Remove entry '{key}' from the config?", "Remove", "Cancel"))
+                return -1;
+
+            if (EditorUtility.DisplayDialog("Reset Value", $"Also reset the current value for '{key}'?", "Reset", "Keep"))
+            {
+                DSM.Reset(key);
+                if (!EditorApplication.isPlaying) DSM.Save();
+            }
+
+            return index;
+        }
+
+        private void DrawAddEntry()
+        {
+            EditorGUILayout.LabelField("Add Entry", EditorStyles.boldLabel);
+
+            var error = DSMEntryRules.ValidateNewKey(_config!, _newKey);
+
             using (new EditorGUILayout.HorizontalScope())
             {
-                GUILayout.Label("Default", EditorStyles.miniLabel, GUILayout.Width(52));
-                if (defEntry != null)
+                _newKey = EditorGUILayout.TextField(_newKey, GUILayout.Width(150));
+                _newType = (DSMDataType)EditorGUILayout.EnumPopup(_newType, GUILayout.Width(90));
+
+                using (new EditorGUI.DisabledScope(error != null))
                 {
-                    EditorGUI.BeginChangeCheck();
-                    var newDef = DrawValueField(defEntry.Type, defEntry.SerializedDefault, GUILayout.ExpandWidth(true));
-                    if (EditorGUI.EndChangeCheck() && newDef != defEntry.SerializedDefault)
+                    if (GUILayout.Button("Add", GUILayout.Width(60)))
                     {
-                        defEntry.SerializedDefault = newDef;
-                        _slotOps.DefaultsDirty = true;
+                        AddEntry(_newKey.Trim(), _newType);
+                        _newKey = string.Empty;
                     }
                 }
-                else
-                {
-                    GUILayout.Label("—", EditorStyles.centeredGreyMiniLabel, GUILayout.ExpandWidth(true));
-                }
             }
 
-            // ── Current value row ─────────────────────────────────────────────
+            if (_newKey.Length > 0 && error != null)
+                EditorGUILayout.HelpBox(error, MessageType.Error);
+        }
+
+        private void AddEntry(string key, DSMDataType type)
+        {
+            var entriesProp = _configSo!.FindProperty("_entries");
+            var index = entriesProp.arraySize;
+            entriesProp.InsertArrayElementAtIndex(index);
+
+            var element = entriesProp.GetArrayElementAtIndex(index);
+            element.FindPropertyRelative("_key").stringValue = key;
+            element.FindPropertyRelative("_type").enumValueIndex = (int)type;
+            element.FindPropertyRelative("_label").stringValue = string.Empty;
+            element.FindPropertyRelative("_exposed").boolValue = false;
+            element.FindPropertyRelative("_defaultJson").stringValue = DSMEntryDefinition.DefaultJsonFor(type);
+        }
+
+        private void DrawFooter()
+        {
             using (new EditorGUILayout.HorizontalScope())
             {
-                GUILayout.Label("Current", EditorStyles.miniLabel, GUILayout.Width(52));
-                EditorGUI.BeginChangeCheck();
-                var newCurrent = DrawValueField(displayType, currentStr, GUILayout.ExpandWidth(true));
-                if (EditorGUI.EndChangeCheck() && newCurrent != currentStr)
+                if (GUILayout.Button("Reset All Values", GUILayout.Width(140)))
                 {
-                    var jObj = _slotOps.ReadSlotJObject(_slotOps.ActiveSlot) ?? new JObject();
-                    jObj[key] = DSMManagerSlotOps.EntryToJToken(new DSMDataEntry { Key = key, Type = displayType, SerializedDefault = newCurrent });
-                    _slotOps.WriteSlotJObject(_slotOps.ActiveSlot, jObj);
-                    _slotOps.SlotData[key] = jObj[key]!;
+                    if (EditorUtility.DisplayDialog("Reset All Values", "Reset all overrides to their defaults?", "Reset", "Cancel"))
+                    {
+                        DSM.ResetAll();
+                        if (!EditorApplication.isPlaying) DSM.Save();
+                    }
                 }
-            }
-        }
 
-        if (toRemoveKey != null)
-        {
-            if (EditorUtility.DisplayDialog("Remove Entry",
-                $"Remove '{toRemoveKey}' from DSMConstant and '{_slotOps.ActiveSlot}' slot?", "Remove", "Cancel"))
-            {
-                _slotOps.Defaults.RemoveAll(e => e.Key == toRemoveKey);
-                _slotOps.DefaultsDirty = true;
-                _slotOps.PropagateToAllSlots(jObj => jObj.Remove(toRemoveKey));
+                GUILayout.FlexibleSpace();
+                GUILayout.Label($"Overrides: {DSM.Store.OverrideKeys.Count}", EditorStyles.miniLabel);
             }
         }
     }
-
-    private static string DrawValueField(DSMDataType type, string current, params GUILayoutOption[] opts)
-    {
-        return type switch
-        {
-            DSMDataType.Bool   => EditorGUILayout.Toggle(bool.TryParse(current, out var bv) && bv, opts).ToString(),
-            DSMDataType.Int    => EditorGUILayout.IntField(int.TryParse(current, out var iv) ? iv : 0, opts).ToString(),
-            DSMDataType.Float  => EditorGUILayout.FloatField(
-                float.TryParse(current, NumberStyles.Any, CultureInfo.InvariantCulture, out var fv) ? fv : 0f, opts)
-                .ToString("G", CultureInfo.InvariantCulture),
-            DSMDataType.Double => EditorGUILayout.DoubleField(
-                double.TryParse(current, NumberStyles.Any, CultureInfo.InvariantCulture, out var dv) ? dv : 0.0, opts)
-                .ToString("G", CultureInfo.InvariantCulture),
-            DSMDataType.Long   => EditorGUILayout.LongField(long.TryParse(current, out var lv) ? lv : 0L, opts).ToString(),
-            DSMDataType.String => EditorGUILayout.TextField(current, opts),
-            DSMDataType.Vector2 => Vec2ToStr(EditorGUILayout.Vector2Field(GUIContent.none, StrToVec2(current), opts)),
-            DSMDataType.Vector3 => Vec3ToStr(EditorGUILayout.Vector3Field(GUIContent.none, StrToVec3(current), opts)),
-            DSMDataType.Vector4 => Vec4ToStr(EditorGUILayout.Vector4Field(GUIContent.none, StrToVec4(current), opts)),
-            DSMDataType.Color   => ColorToStr(EditorGUILayout.ColorField(StrToColor(current), opts)),
-            _ => EditorGUILayout.TextField(current, opts)
-        };
-    }
-
-    // ── Add panel ─────────────────────────────────────────────────────────────
-
-    private void DrawAddPanel()
-    {
-        if (!_showAddPanel) return;
-        DrawSeparator();
-        using var box = new EditorGUILayout.VerticalScope(s_sectionBox!);
-        GUILayout.Label("New Entry", EditorStyles.boldLabel);
-
-        _newKey = EditorGUILayout.TextField("Key", _newKey);
-        var prevType = _newType;
-        _newType = (DSMDataType)EditorGUILayout.EnumPopup("Type", _newType);
-        if (_newType != prevType) ResetAddPanelValues();
-        GUILayout.Label("Default Value", EditorStyles.label);
-        DrawAddDefaultField();
-
-        var keyExists = _slotOps.Defaults.Exists(e => e.Key == _newKey.Trim());
-        if (!string.IsNullOrWhiteSpace(_newKey) && keyExists)
-            EditorGUILayout.HelpBox($"Key '{_newKey.Trim()}' already exists in DSMConstant.", MessageType.Warning);
-
-        EditorGUILayout.Space(4);
-        using var btnRow = new EditorGUILayout.HorizontalScope();
-        GUILayout.FlexibleSpace();
-        if (GUILayout.Button("Cancel", GUILayout.Width(70))) _showAddPanel = false;
-        using (new EditorGUI.DisabledScope(string.IsNullOrWhiteSpace(_newKey) || keyExists))
-        {
-            if (GUILayout.Button("✚ Create", GUILayout.Width(80)))
-            {
-                _slotOps.CommitNewEntry(_newKey.Trim(), _newType, _newSerializedDefault);
-                _showAddPanel = false;
-            }
-        }
-    }
-
-    private void DrawAddDefaultField()
-    {
-        switch (_newType)
-        {
-            case DSMDataType.Bool:   _newBool   = EditorGUILayout.Toggle(_newBool);                    _newSerializedDefault = _newBool.ToString();                                          break;
-            case DSMDataType.Int:    _newInt    = EditorGUILayout.IntField(_newInt);                   _newSerializedDefault = _newInt.ToString();                                            break;
-            case DSMDataType.Float:  _newFloat  = EditorGUILayout.FloatField(_newFloat);              _newSerializedDefault = _newFloat.ToString("G", CultureInfo.InvariantCulture);        break;
-            case DSMDataType.Double: _newDouble = EditorGUILayout.DoubleField(_newDouble);            _newSerializedDefault = _newDouble.ToString("G", CultureInfo.InvariantCulture);       break;
-            case DSMDataType.Long:   _newLong   = EditorGUILayout.LongField(_newLong);                _newSerializedDefault = _newLong.ToString();                                           break;
-            case DSMDataType.String: _newSerializedDefault = EditorGUILayout.TextField(_newSerializedDefault);                                                                               break;
-            case DSMDataType.Vector2: _newVec2  = EditorGUILayout.Vector2Field(GUIContent.none, _newVec2); _newSerializedDefault = Vec2ToStr(_newVec2);                                     break;
-            case DSMDataType.Vector3: _newVec3  = EditorGUILayout.Vector3Field(GUIContent.none, _newVec3); _newSerializedDefault = Vec3ToStr(_newVec3);                                     break;
-            case DSMDataType.Vector4: _newVec4  = EditorGUILayout.Vector4Field(GUIContent.none, _newVec4); _newSerializedDefault = Vec4ToStr(_newVec4);                                     break;
-            case DSMDataType.Color:   _newColor = EditorGUILayout.ColorField(_newColor);              _newSerializedDefault = ColorToStr(_newColor);                                         break;
-        }
-    }
-
-    // ── Footer ────────────────────────────────────────────────────────────────
-
-    private void DrawFooter()
-    {
-        DrawSeparator();
-        using var h = new EditorGUILayout.HorizontalScope();
-        var statusLabel = _slotOps.DefaultsDirty
-            ? $"{_slotOps.Defaults.Count} defaults  ·  {_slotOps.SlotData.Count} in [{_slotOps.ActiveSlot}]  ·  ● unsaved changes"
-            : $"{_slotOps.Defaults.Count} defaults  ·  {_slotOps.SlotData.Count} in [{_slotOps.ActiveSlot}]";
-        GUILayout.Label(statusLabel, EditorStyles.miniLabel);
-        GUILayout.FlexibleSpace();
-        using (new EditorGUI.DisabledScope(_slotOps.Defaults.Count == 0 || !_slotOps.DefaultsDirty))
-        {
-            if (GUILayout.Button("Save DSMConstant.cs", GUILayout.Height(26), GUILayout.Width(170)))
-            {
-                DSMCodeGenerator.Generate(_slotOps.Defaults);
-                _slotOps.DefaultsDirty = false;
-            }
-        }
-    }
-
-    // ── Config helpers ────────────────────────────────────────────────────────
-
-    private UnityEditor.SerializedProperty ConfigProp(string backingField) =>
-        _configSO!.FindProperty(backingField);
-
-    private void SaveConfig()
-    {
-        if (_config == null) return;
-        EditorUtility.SetDirty(_config);
-        AssetDatabase.SaveAssets();
-    }
-
-    // ── Helpers ───────────────────────────────────────────────────────────────
-
-    private void DrawSeparator()
-    {
-        var rect = GUILayoutUtility.GetRect(1, 1, GUILayout.ExpandWidth(true));
-        EditorGUI.DrawRect(rect, new Color(0.3f, 0.3f, 0.3f, 0.5f));
-        EditorGUILayout.Space(2);
-    }
-
-    private void ResetAddPanel() { _newKey = string.Empty; _newType = DSMDataType.String; ResetAddPanelValues(); }
-    private void ResetAddPanelValues()
-    {
-        _newBool = false; _newInt = 0; _newFloat = 0f; _newDouble = 0.0; _newLong = 0L;
-        _newVec2 = Vector2.zero; _newVec3 = Vector3.zero; _newVec4 = Vector4.zero; _newColor = Color.white;
-        _newSerializedDefault = DSMConstantReflectionCache.GetTypeDefault(_newType);
-    }
-
-    private static void CreateConfigAsset()
-    {
-        Directory.CreateDirectory("Assets/Resources");
-        var asset = CreateInstance<DSMConfig>();
-        AssetDatabase.CreateAsset(asset, "Assets/Resources/DSMConfig.asset");
-        AssetDatabase.SaveAssets();
-        Selection.activeObject = asset;
-    }
-
-    // ── Type colors ──────────────────────────────────────────────────────────
-
-    private static Color TypeColor(DSMDataType type) => type switch
-    {
-        DSMDataType.Int     => new Color(0.15f, 0.28f, 0.50f, 0.30f),
-        DSMDataType.Float   => new Color(0.15f, 0.38f, 0.38f, 0.30f),
-        DSMDataType.Double  => new Color(0.10f, 0.32f, 0.45f, 0.30f),
-        DSMDataType.Long    => new Color(0.22f, 0.18f, 0.48f, 0.30f),
-        DSMDataType.Bool    => new Color(0.48f, 0.30f, 0.08f, 0.30f),
-        DSMDataType.String  => new Color(0.42f, 0.38f, 0.08f, 0.30f),
-        DSMDataType.Vector2 => new Color(0.48f, 0.15f, 0.15f, 0.30f),
-        DSMDataType.Vector3 => new Color(0.50f, 0.12f, 0.22f, 0.30f),
-        DSMDataType.Vector4 => new Color(0.42f, 0.10f, 0.38f, 0.30f),
-        DSMDataType.Color   => new Color(0.35f, 0.22f, 0.40f, 0.30f),
-        _                   => Color.clear
-    };
-
-    // ── Vector / Color helpers ────────────────────────────────────────────────
-
-    private static Vector2 StrToVec2(string s) { var p = s.Split(','); return new Vector2(Pf(p,0), Pf(p,1)); }
-    private static Vector3 StrToVec3(string s) { var p = s.Split(','); return new Vector3(Pf(p,0), Pf(p,1), Pf(p,2)); }
-    private static Vector4 StrToVec4(string s) { var p = s.Split(','); return new Vector4(Pf(p,0), Pf(p,1), Pf(p,2), Pf(p,3)); }
-    private static Color StrToColor(string s) { var p = s.Split(','); return new Color(Pf(p,0), Pf(p,1), Pf(p,2), p.Length >= 4 ? Pf(p,3) : 1f); }
-    private static float Pf(string[] parts, int i) =>
-        i < parts.Length && float.TryParse(parts[i].Trim(), NumberStyles.Any, CultureInfo.InvariantCulture, out var v) ? v : 0f;
-    private static string Fs(float v) => v.ToString("G", CultureInfo.InvariantCulture);
-    private static string Vec2ToStr(Vector2 v) => $"{Fs(v.x)},{Fs(v.y)}";
-    private static string Vec3ToStr(Vector3 v) => $"{Fs(v.x)},{Fs(v.y)},{Fs(v.z)}";
-    private static string Vec4ToStr(Vector4 v) => $"{Fs(v.x)},{Fs(v.y)},{Fs(v.z)},{Fs(v.w)}";
-    private static string ColorToStr(Color c) => $"{Fs(c.r)},{Fs(c.g)},{Fs(c.b)},{Fs(c.a)}";
 }
-
-#endif

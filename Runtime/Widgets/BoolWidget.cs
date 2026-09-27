@@ -1,28 +1,19 @@
 #nullable enable
 
-using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
-public sealed class BoolWidget : MonoBehaviour, IDSMWidget
+namespace DataSaveManager
 {
-    [SerializeField] private TextMeshProUGUI? _label;
-    [SerializeField] private Toggle? _toggle;
-
-    private string _key = string.Empty;
-    private DSMSlot? _slot;
-
-    public void Setup(string key, DSMDataType type, string label, DSMSlot slot)
+    public sealed class BoolWidget : DSMWidget<bool>
     {
-        if (_label == null || _toggle == null)
+        [SerializeField] private Toggle? _toggle;
+
+        private void Awake()
         {
-            Debug.LogError($"BoolWidget on '{gameObject.name}': _label or _toggle is not assigned.", this);
-            return;
+            if (_toggle != null) _toggle.onValueChanged.AddListener(Commit);
         }
-        _key = key;
-        _slot = slot;
-        _label.text = label;
-        _toggle.SetIsOnWithoutNotify(slot.Get(key, false));
-        _toggle.onValueChanged.AddListener(value => _slot?.Set(_key, value));
+
+        protected override void Show(bool value) => _toggle?.SetIsOnWithoutNotify(value);
     }
 }

@@ -1,0 +1,21 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ce422bebd914d4ac5ae92487176bb488, type: 3}
+  m_Name: DSMWidgetConfig
+  m_EditorClassIdentifier: DSM.Runtime::DataSaveManager.DSMWidgetConfig
+  _boolWidget: {fileID: 7890141599977216349, guid: 80cfe0ae701c442ba9b3ba8f0af0bf2e, type: 3}
+  _intWidget: {fileID: 7812506164682307847, guid: 558592f0b795d4fb38a0287c1df5caf5, type: 3}
+  _floatWidget: {fileID: 4368631857695742026, guid: 125f49dba7a1b4685839b0dbfae54b56, type: 3}
+  _stringWidget: {fileID: 2048072212402941188, guid: bc5ffc9854cfd4f689919f57b1d2af8b, type: 3}
+  _vector2Widget: {fileID: 2851001508508536948, guid: 91acc51f503094ae6a3ad0582404e7da, type: 3}
+  _vector3Widget: {fileID: 5801381488035225483, guid: 09316350194a446d5b3eb61ff4dffc52, type: 3}
+  _colorWidget: {fileID: 6503202232970945136, guid: 67afc37f9a8244de19b56c4afe117041, type: 3}
