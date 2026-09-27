@@ -1,438 +1,209 @@
 # DataSaveManager (DSM)
 
-A lightweight, slot-based save system for Unity with JSON serialization, optional AES encryption, reactive change watching, and an Editor Manager window for defining typed data constants.
+A small settings store for Unity: tweakable settings of an installed app (values an on-site
+technician adjusts), not player progress. Every Entry has a typed Default defined in a Config
+asset; only the Overrides an operator sets are persisted, in a single hand-editable JSON Save
+File.
 
----
+## Install
 
-## Features
+Add via Package Manager → Add package from git URL:
 
-- **Simple static API** — `DSM.Set` / `DSM.Get` from anywhere
-- **Multi-slot saves** — independent named save slots per player/profile
-- **Shared defaults** — all slots use `DSMConstant` as default values; new slots are seeded automatically
-- **Optional AES encryption** — `.enc` files with PBKDF2 key derivation; random per-file salt prevents rainbow-table attacks
-- **Async I/O** — `SaveAsync` / `LoadAsync` via UniTask
-- **Reactive watching** — `WatchAsync<T>` streams value changes as `IUniTaskAsyncEnumerable`
-- **Unity type support** — Vector2/3/4, Quaternion, Color, Color32
-- **Transform snapshot helpers** — `DSMTransformData`, `DSMRectData`
-- **Editor Manager window** — define typed entries, manage slots, edit values, generate `DSMConstant.cs` on demand
-- **Runtime Config Canvas** — expose selected entries to an in-game UI canvas; auto-generates typed input widgets per value
-
----
-
-### How to add submodule by command line
-```bash
-git submodule add  <url> <relative_path>
 ```
-Example
-```bash
-git submodule add git@github.com:draftsama/data-save-manager.git Assets/data-save-manager
+https://github.com/draftsama/data-save-manager.git
 ```
 
----
+Dependencies (installed automatically, see `package.json`):
 
-## Quick Start
+- [UniTask](https://github.com/Cysharp/UniTask) — async/await and `IUniTaskAsyncEnumerable`
+- [Newtonsoft Json for Unity](https://docs.unity3d.com/Packages/com.unity.nuget.newtonsoft-json@3.0/manual/index.html) (`com.unity.nuget.newtonsoft-json`)
 
-### 1. Create a Config
+The Runtime Panel needs TextMeshPro and uGUI (`com.unity.ugui`) in the project. The Input System
+package is optional — DSM falls back to the legacy Input Manager, or to no hotkey at all, if it
+isn't installed.
 
-In the Unity menu bar: **DSM › Create Config Asset**
+## Quick start
 
-This creates `Assets/Resources/DSMConfig.asset`. Adjust settings in the Inspector.
-
-| Field | Description |
-|-------|-------------|
-| Auto Save | Save automatically after every `Set()` |
-| Auto Save Debounce | Delay (seconds) before auto-save fires |
-| Encrypt | Store save files as encrypted `.enc` |
-| Save Path | Override default `persistentDataPath/DSM` |
-| Default Slot | Name of the default save slot |
-| Pretty Print | Indent JSON for readability |
-
-> **Note:** The encryption key is **not** stored in the config asset. Set it at runtime via `DSM.Configure(config)` followed by `config.SetEncryptionKey("your-key")`. See [Configuration via Code](#configuration-via-code).
-
-### 2. Use the API
+1. **DSM › Create Config Asset** — creates `Assets/Resources/DSMConfig.asset`.
+2. **DSM › Open Manager** — add Entries (key, type, default, label, exposed flag).
+3. Read and write values from code:
 
 ```csharp
-// Write
-DSM.Set("playerName", "Alice");
-DSM.Set("hp", 100);
-DSM.Set("spawnPos", new Vector3(0, 1, 0));
+using DataSaveManager;
 
-// Read
-var name = DSM.Get("playerName", "Hero");   // returns "Hero" if key missing
-var hp   = DSM.Get("hp", 100);
+// Read: Override if one was set, else the Entry's Default, else default(T)
+var speed = DSM.Get<float>("speed");
 
-// Check / Delete
-if (DSM.Has("playerName")) { }
-DSM.Delete("playerName");
-DSM.Clear(); // remove all keys in active slot
+// Read with an explicit fallback, used only when there's neither an Override nor a Default
+var gravity = DSM.Get("gravity", -9.81f);
 
-// Save / Load
+// Write an Override
+DSM.Set("speed", 7f);
+
+// Persist Overrides to the Save File
 DSM.Save();
-DSM.Load();
-await DSM.SaveAsync();
-await DSM.LoadAsync();
 ```
 
-### 3. Use typed constants (recommended)
-
-Open **DSM › Open Manager**, create entries, and click **Save DSMConstant.cs**.
-
-> **Convention:** Entry keys must start with an uppercase letter (PascalCase). The code generator emits a warning for any key that begins with a lowercase letter.
+Watch a value for every change (initial value, then every subsequent Set/Load/Reset):
 
 ```csharp
-// Generated: DSMConstant.cs
-public static partial class DSMConstant
+using Cysharp.Threading.Tasks;
+using Cysharp.Threading.Tasks.Linq;
+using DataSaveManager;
+
+DSM.WatchAsync<float>("speed")
+    .ForEachAsync(v => moveSpeed = v, destroyCancellationToken)
+    .Forget();
+```
+
+## Concepts
+
+- **Value** — the current value of an Entry: its **Override** if one exists, otherwise its
+  **Default**, otherwise `default(T)`.
+- **Override** — a Value explicitly set for an Entry. Only Overrides are persisted; an Entry
+  that was never set keeps following its Default, even if the Default later changes.
+- `Get(key, fallback)` — resolution is still Override → Default; `fallback` is only used when
+  there is neither an Override nor a Default (i.e. no Entry Definition, or the Entry Definition's
+  default JSON is empty/unparsable).
+- **Ad-hoc key** — a key used in code with no matching Entry Definition in the Config. It works
+  and persists like any Override, but DSM logs one warning the first time it's touched and never
+  adds it to the Config automatically.
+
+## API reference
+
+All members are synchronous and must be called from the main thread.
+
+| Member | Description |
+|---|---|
+| `DSM.Store` | The active `DSMStore`, created lazily from `Resources/DSMConfig.asset` on first access. |
+| `DSM.Configure(DSMConfig config)` | Saves and disposes the current store (if dirty), then creates and loads a new store for `config`. |
+| `DSM.Get<T>(string key)` | Returns the Value for `key`, or `default(T)` if there is neither an Override nor a usable Default. |
+| `DSM.Get<T>(string key, T fallback)` | Returns the Value for `key`, or `fallback` if there is neither an Override nor a usable Default. |
+| `DSM.Set<T>(string key, T value)` | Sets an Override for `key`. Triggers the AutoSave debounce if AutoSave is enabled. |
+| `DSM.HasOverride(string key)` | Returns true if `key` has an explicit Override. |
+| `DSM.Reset(string key)` | Removes the Override for `key`, falling back to its Default. |
+| `DSM.ResetAll()` | Removes every Override, falling back to Defaults. |
+| `DSM.Save()` | Synchronously writes all Overrides to the Save File. |
+| `DSM.Load()` | Synchronously reads Overrides from the Save File, replacing the in-memory set. |
+| `DSM.WatchAsync<T>(string key)` | Returns an `IUniTaskAsyncEnumerable<T>` that emits the current Value immediately, then again on every subsequent change. |
+| `DSM.Config` | The active `DSMConfig`. |
+| `DSM.SaveFilePath` | The resolved absolute path of the Save File. |
+
+## Supported types
+
+| Type | JSON shape |
+|---|---|
+| Int | `0` |
+| Float | `0.0` |
+| Bool | `false` |
+| String | `""` |
+| Vector2 | `{"x":0.0,"y":0.0}` |
+| Vector3 | `{"x":0.0,"y":0.0,"z":0.0}` |
+| Color | `{"r":1.0,"g":1.0,"b":1.0,"a":1.0}` |
+
+## Config settings
+
+Set on the `DSMConfig` asset (`Assets/Resources/DSMConfig.asset`), either in the Inspector or via
+**DSM › Open Manager**:
+
+| Field | Default | Description |
+|---|---|---|
+| Auto Save | `true` | Automatically saves shortly after any Override changes. |
+| Auto Save Debounce | `1` second | Delay after the last change before AutoSave writes the Save File. |
+| Save Directory | empty | See path resolution below. |
+| File Name | `save.json` | Name of the Save File. |
+
+Saving also happens once on `Application.quitting` if there are unsaved changes, regardless of
+AutoSave.
+
+### Save path resolution
+
+- **Save Directory empty** → `Application.persistentDataPath/DSM/`.
+- **Save Directory relative** → resolved from the folder containing `Application.dataPath` (next
+  to the executable in a build, the project root in the Editor).
+- **Save Directory absolute** → used as-is.
+
+The full Save File path is `<resolved directory>/<File Name>`.
+
+If the Save File is missing, DSM starts with no Overrides (every Entry reads its Default). If the
+Save File exists but fails to parse, DSM logs a warning and falls back to no Overrides rather than
+throwing.
+
+Example Save File — a flat JSON object of only the Overrides that have been set:
+
+```json
 {
-    public const int    hp       = 100;
-    public const float  speed    = 3.5f;
-    public const string saveName = "Hero";
-}
-
-// Usage — no magic strings
-var hp    = DSM.Get<int>(nameof(DSMConstant.hp), DSMConstant.hp);
-var speed = DSM.Get<float>(nameof(DSMConstant.speed), DSMConstant.speed);
-```
-
----
-
-## Multi-Slot Saves
-
-```csharp
-// Switch to a named slot (loads it automatically)
-DSM.UseSlot("slot2");
-
-// Read another slot without switching
-var slot = DSM.GetSlot("slot1");
-
-// List all existing slots
-string[] slots = DSM.GetAllSlots();
-
-// Delete a slot
-DSM.DeleteSlot("slot2");
-```
-
-Save files are stored as:
-```
-{persistentDataPath}/DSM/{slotName}.json   (unencrypted)
-{persistentDataPath}/DSM/{slotName}.enc    (encrypted)
-```
-
-### Shared defaults across slots
-
-All slots share `DSMConstant` as their default source. When a slot has no save file yet (first load), it is automatically seeded with every key and its default value from `DSMConstant`. Each slot's JSON is independent after that — changing a value in one slot never affects another.
-
-```csharp
-// Slot "001" — first load, no file on disk yet
-DSM.UseSlot("001");
-DSM.Get<int>("hp", 0);      // returns 100 (from DSMConstant.hp)
-DSM.Get<float>("speed", 0); // returns 3.5 (from DSMConstant.speed)
-
-// After Set, this slot has its own value
-DSM.Set("hp", 75);
-
-// Slot "002" still reads from defaults
-DSM.UseSlot("002");
-DSM.Get<int>("hp", 0);      // returns 100 again
-```
-
----
-
-## Reactive Watching
-
-`WatchAsync<T>` emits the current value immediately, then emits again on every `Set()` for that key.
-
-```csharp
-private CancellationTokenSource _cts = new();
-
-async void Start()
-{
-    await foreach (var hp in DSM.WatchAsync<int>("hp").WithCancellation(_cts.Token))
-    {
-        hpBar.value = hp;
-    }
-}
-
-void OnDestroy() => _cts.Cancel();
-```
-
----
-
-## Transform Helpers
-
-```csharp
-// Capture
-var snap = transform.Capture();         // DSMTransformData
-DSM.Set("playerTransform", snap);
-
-// Restore
-var saved = DSM.Get("playerTransform", default(DSMTransformData));
-saved.Restore(transform);
-
-// RectTransform variant
-var rectSnap = rectTransform.Capture(); // DSMRectData
-```
-
----
-
-## Supported Types
-
-| C# Type | JSON storage |
-|---------|-------------|
-| `int`, `long` | number |
-| `float`, `double` | number |
-| `bool` | boolean |
-| `string` | string |
-| `Vector2` | `{"x":0,"y":0}` |
-| `Vector3` | `{"x":0,"y":0,"z":0}` |
-| `Vector4` | `{"x":0,"y":0,"z":0,"w":0}` |
-| `Quaternion` | `{"x":0,"y":0,"z":0,"w":1}` |
-| `Color` | `{"r":1,"g":1,"b":1,"a":1}` |
-| `Color32` | `{"r":255,"g":255,"b":255,"a":255}` |
-| `DSMTransformData` | object |
-| `DSMRectData` | object |
-
-Any `[Serializable]` class is supported via Newtonsoft.Json.
-
----
-
-## Editor Manager Window
-
-Open via **DSM › Open Manager**.
-
-```
-┌────────────────────────────────────────────────────────────┐
-│ DSM Manager                                     Refresh    │
-├────────────────────────────────────────────────────────────┤
-│ ▼ Configuration                                            │
-│   Auto Save ☑  Debounce 2s  Encrypt ☐                     │
-│   Default Slot  [default]              [Edit Config →]     │
-├────────────────────────────────────────────────────────────┤
-│ Slot: [ 001 ▼ ]  [+ New]  [Delete]                        │
-├────────────────────────────────────────────────────────────┤
-│ 🔍 Search...                             [+ New Entry]     │
-│ ┌──────────────────────────────────────────────────────┐   │
-│ │ hp          Int ▼                               [✕]  │   │
-│ │ Default  [  100           ]                         │   │
-│ │ Current  [  87            ]                         │   │
-│ ├──────────────────────────────────────────────────────┤   │
-│ │ speed       Float ▼                             [✕]  │   │
-│ │ Default  [  3.5           ]                         │   │
-│ │ Current  [  5.2           ]                         │   │
-│ └──────────────────────────────────────────────────────┘   │
-├────────────────────────────────────────────────────────────┤
-│ 2 defaults · 2 in [001] · ● unsaved changes                │
-│                              [Save DSMConstant.cs]         │
-└────────────────────────────────────────────────────────────┘
-```
-
-### Entry layout (per row)
-
-Each entry displays three lines:
-
-| Line | Content |
-|------|---------|
-| Top | Key name · Type dropdown · Delete button |
-| Default | Type-appropriate input — edits `DSMConstant.cs` (requires Save) |
-| Current | Type-appropriate input — writes to the selected slot's JSON immediately |
-
-### Columns
-
-| Field | Source | Editable |
-|-------|--------|---------|
-| **Key** | DSMConstant (reflection) | Read-only |
-| **Type** | DSMConstant | Yes — marks unsaved changes |
-| **Default** | DSMConstant | Yes — marks unsaved changes; use **Save DSMConstant.cs** to write |
-| **Current** | Selected slot's save file | Yes — writes to that slot's JSON immediately |
-
-Default inputs are type-aware: Int/Float/Long show number fields, Bool shows a toggle, Vector2/3/4 show multi-axis fields, Color shows a color picker.
-
-**Expose to Runtime Canvas:**
-- Each entry has an **Expose** toggle in the header row
-- When checked, a **Description** text field appears — this becomes the widget label at runtime
-- Expose state and description are persisted in `DSMConfig.asset` immediately on change
-
-### Workflows
-
-**Add a new entry:**
-1. Click **+ New Entry**
-2. Enter Key, Type, and Default Value
-3. Click **✚ Create** — adds the key with its default value to **all existing slot JSON files**, and marks DSMConstant as unsaved
-4. Click **Save DSMConstant.cs** to write the constant and trigger recompile
-
-**Remove an entry:**
-- Click **✕** on any row → confirmation dialog → removes the key from **all slot JSON files** and marks DSMConstant as unsaved
-- Click **Save DSMConstant.cs** to apply
-
-**Edit a default value:**
-- Change the Default field of any entry → status bar shows `● unsaved changes`
-- Click **Save DSMConstant.cs** → file is written → Unity recompiles → window reloads automatically
-- Existing slot values are not overwritten; only slots missing the key receive the new default
-
-**Edit a current value:**
-- Change the Current field → written to the selected slot's JSON immediately (no save button needed)
-
-**Manage slots:**
-- Dropdown to switch between existing slots
-- **+ New** — creates a new slot pre-filled with all DSMConstant default values
-- **Delete** — removes the active slot's save file (unavailable when only one slot exists)
-
-**Add a constant manually in code:**
-```csharp
-// MyConstants.cs — your own partial file
-public static partial class DSMConstant
-{
-    public const int bonusPoints = 500;
-}
-```
-After compile, the window picks up `bonusPoints` automatically via reflection.
-
----
-
-## Runtime Config Canvas
-
-Expose selected DSM entries to an in-game UI canvas for live editing at runtime.
-
-### Setup
-
-**1. Create a Widget Config asset**
-
-Right-click in Project → **DSM › Widget Config**. Assign a prefab for each type you want to support. Fields are typed — drag the prefab that has the matching widget component on it.
-
-**2. Add DSMRuntimePanel to your Canvas**
-
-Add the `DSMRuntimePanel` component to a GameObject inside your Canvas. Assign:
-
-| Field | Value |
-|-------|-------|
-| `_config` | Your `DSMConfig.asset` |
-| `_widgetConfig` | Your `DSMWidgetConfig.asset` |
-| `_container` | A child `Transform` (e.g. a Vertical Layout Group) |
-| `_slot` | Slot name to read/write (default: `"default"`) |
-
-**3. Mark entries as Exposed**
-
-In **DSM › Open Manager**, check the **Expose** toggle on any entry. Optionally fill in a **Description** — this becomes the label shown in the widget.
-
-On `Start`, `DSMRuntimePanel` instantiates one widget per exposed entry into `_container`. Call `Rebuild()` at any time to re-generate widgets.
-
-### Widget Contract
-
-Each prefab must have a component implementing `IDSMWidget`:
-
-```csharp
-public interface IDSMWidget
-{
-    void Setup(string key, DSMDataType type, string label, DSMSlot slot);
+  "speed": 7.0,
+  "playerName": "Alice",
+  "spawnPoint": { "x": 0.0, "y": 1.0, "z": 0.0 }
 }
 ```
 
-`Setup` is called once per widget. Read the initial value with `slot.Get(key, defaultValue)` and write changes with `slot.Set(key, value)`.
+## Editor
 
-### Built-in Widget Classes
+### DSM Manager window (**DSM › Open Manager**)
 
-Ready-to-use components in `Runtime/Widgets/` — attach to your prefabs:
+- **Settings** — edits AutoSave, AutoSave Debounce, Save Directory, and File Name on the Config
+  asset; shows the resolved Save File path with buttons to open its folder or delete the file.
+- **Entries** — one row per Entry Definition: key, type, label, exposed toggle, default value,
+  current value, Reset, and remove. Duplicate keys are highlighted and reported.
+- **Add Entry** — key and type for a new Entry Definition.
+- **Footer** — Reset All Values, and a live count of current Overrides.
 
-| Class | UI Components needed | Type |
-|-------|---------------------|------|
-| `BoolWidget` | `TextMeshProUGUI` label + `Toggle` | Bool |
-| `IntWidget` | `TextMeshProUGUI` label + `TMP_InputField` | Int |
-| `FloatWidget` | `TextMeshProUGUI` label + `TMP_InputField` | Float |
-| `DoubleWidget` | `TextMeshProUGUI` label + `TMP_InputField` | Double |
-| `LongWidget` | `TextMeshProUGUI` label + `TMP_InputField` | Long |
-| `StringWidget` | `TextMeshProUGUI` label + `TMP_InputField` | String |
-| `Vector2Widget` | `TextMeshProUGUI` label + 2× `TMP_InputField` (X, Y) | Vector2 |
-| `Vector3Widget` | `TextMeshProUGUI` label + 3× `TMP_InputField` (X, Y, Z) | Vector3 |
-| `Vector4Widget` | `TextMeshProUGUI` label + 4× `TMP_InputField` (X, Y, Z, W) | Vector4 |
-| `ColorWidget` | `TextMeshProUGUI` label + 4× `TMP_InputField` (R, G, B, A) | Color |
+In Edit mode, changing an Entry's current value saves the Save File immediately. In Play mode,
+value edits are live on the running `DSM.Store` and persisted whenever AutoSave next fires (or on
+quit).
 
-### Slot Behaviour
+### Other menu items
 
-`DSMRuntimePanel` calls `DSM.GetSlot(_slot)` then `slot.Load()` on build:
+- **DSM › Create Config Asset** — creates `Assets/Resources/DSMConfig.asset` if it doesn't exist
+  yet, otherwise selects the existing one.
+- **DSM › Open Save Folder** — reveals the resolved Save File's directory in Finder/Explorer.
 
-| Condition | Result |
-|-----------|--------|
-| Slot exists with a save file | Loads data from disk — widgets show saved values |
-| Slot name valid but no save file yet | Seeds from `DSMConstant` defaults |
-| Slot name wrong/typo | Creates empty slot, seeds defaults — no crash, but widgets show defaults |
+## Runtime Panel
 
----
+An in-game UI for an operator to view and edit Exposed Entries while the app runs.
 
-## Configuration via Code
+1. Drag `Prefab/DSMRuntimePanel.prefab` into a scene.
+2. Make sure the scene has an `EventSystem` (not included in the prefab).
+3. Mark the Entries you want visible as **Exposed** in the DSM Manager window.
+4. Press the toggle key (default `F1`, via the Input System if installed, otherwise the legacy
+   Input Manager) to show/hide the panel. It also exposes Save and Reset All buttons, and Close.
 
-DSM initializes automatically on first use — no setup call required. It loads `DSMConfig` from `Resources/DSMConfig.asset` and creates a default config if the asset doesn't exist.
+Regenerate or restyle the default widget prefabs with **DSM › Build Runtime Panel Prefabs** — this
+overwrites the existing prefabs and the `DSMWidgetConfig` asset under `Prefab/`.
 
-`DSM.Configure()` is optional and only needed when you want to supply a config instance at runtime (e.g. loaded from a different path, or constructed in code):
+### Custom widgets
 
-```csharp
-void Awake()
-{
-    DSM.Configure(myDSMConfig); // optional — overrides the auto-loaded config
-}
-```
+- Subclass `DSMWidget<T>`: implement `Show(T value)` to render, and call `Commit(value)` when the
+  user edits the control.
+- Or implement `IDSMWidget` directly for full control over `Setup(DSMEntryDefinition entry)`.
 
-Calling `Configure()` after DSM has already been used is safe; it replaces the manager cleanly.
+Either way, assign your widget's prefab to the matching type slot on a `DSMWidgetConfig` asset,
+and assign that asset to the `DSMRuntimePanel`'s Widget Config field.
 
-### Setting the Encryption Key
+## Not a secure store
 
-The encryption key is intentionally **not** serialized in `DSMConfig.asset` to prevent secrets being committed to source control. Set it in code before DSM first accesses encrypted files:
+The Save File is plain, readable, hand-editable JSON — anyone with file access can read or change
+it. Do not store secrets or player progression you need to protect from tampering; see
+[ADR 0001](docs/adr/0001-scope-to-on-site-settings.md) for the reasoning behind this scope.
 
-```csharp
-void Awake()
-{
-    var config = Resources.Load<DSMConfig>("DSMConfig");
-    config.SetEncryptionKey("your-secret-key"); // call before any Save/Load
-    DSM.Configure(config);
-}
-```
+## Migrating from 1.x
 
-> **Breaking change (v1.0):** Encrypted save files now use a random per-file salt prepended to the ciphertext (`[16-byte IV][32-byte salt][ciphertext]`). Files encrypted with the previous format (fixed salt) cannot be decrypted with this version.
+v2 is a from-scratch rewrite around a single settings store. Removed, with no migration path:
 
----
+- Save slots (`DSM.UseSlot`, `GetSlot`, `GetAllSlots`, `DeleteSlot`) — there is one Save File.
+- AES encryption and the encryption key API.
+- Save versioning/migration and the envelope/schema format.
+- The `DSMConstant` code generator — Entry keys are plain strings, defaults live in the Config.
+- `Double`, `Long`, `Vector4` data types.
+- Transform/RectTransform snapshot helpers (`DSMTransformData`, `DSMRectData`).
+- `SaveAsync` / `LoadAsync` — the API is synchronous now.
 
-## File Structure
+Old save files (slots, `.enc`, `DSMConstant`-based) are not read by v2. Existing Overrides for a
+renamed or removed key become ad-hoc keys and must be cleaned up by hand.
 
-```
-Assets/DataSaveManager/
-├── Runtime/
-│   ├── DSM.cs                  Static API facade
-│   ├── DSMConfig.cs            ScriptableObject configuration
-│   ├── DSMSlot.cs              Single save slot (get/set/save/load/watch/seed-defaults)
-│   ├── DSMSlotManager.cs       Multi-slot manager
-│   ├── DSMSerializer.cs        JSON serialization with custom converters
-│   ├── DSMEncryptor.cs         AES-256 encryption
-│   ├── DSMWatcher.cs           Reactive change notifications
-│   ├── DSMConstant.cs          Auto-generated typed constants (shared defaults)
-│   ├── DSMDataEntry.cs         Entry model (key / type / default)
-│   ├── DSMDataType.cs          Enum of supported types
-│   ├── DSMPaths.cs             Centralized save-directory path helper
-│   ├── IDSMWidget.cs           Interface for runtime widget prefabs
-│   ├── DSMWidgetConfig.cs      ScriptableObject — maps DSMDataType to widget prefab
-│   ├── DSMRuntimePanel.cs      MonoBehaviour — spawns widgets on Canvas at runtime
-│   ├── Types/
-│   │   ├── DSMTransformData.cs
-│   │   ├── DSMRectData.cs
-│   │   └── Converters/         Newtonsoft.Json converters for Unity types
-│   └── Widgets/
-│       ├── BoolWidget.cs
-│       ├── IntWidget.cs
-│       ├── FloatWidget.cs
-│       ├── DoubleWidget.cs
-│       ├── LongWidget.cs
-│       ├── StringWidget.cs
-│       ├── Vector2Widget.cs
-│       ├── Vector3Widget.cs
-│       ├── Vector4Widget.cs
-│       └── ColorWidget.cs
-└── Editor/
-    ├── DSMManagerWindow.cs     Editor window (includes Expose toggle per entry)
-    ├── DSMCodeGenerator.cs     DSMConstant.cs code generation
-    ├── DSMConstantSyncer.cs    Post-compile window refresh
-    └── DSMConfigEditor.cs      DSMConfig inspector tools
-```
+## Tests
 
----
-
-## Dependencies
-
-- [UniTask](https://github.com/Cysharp/UniTask) — async/await + `IUniTaskAsyncEnumerable`
-- [Newtonsoft.Json for Unity](https://docs.unity3d.com/Packages/com.unity.nuget.newtonsoft-json@3.0/manual/index.html) (`com.unity.nuget.newtonsoft-json`)
+EditMode tests live in the `DSM.Tests.Editor` assembly (`Tests/Editor/`). Run them from
+**Window › General › Test Runner** (EditMode tab).
