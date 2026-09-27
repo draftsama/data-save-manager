@@ -185,6 +185,36 @@ overwrites the existing prefabs and the `DSMWidgetConfig` asset under `Prefab/`.
 Either way, assign your widget's prefab to the matching type slot on a `DSMWidgetConfig` asset,
 and assign that asset to the `DSMRuntimePanel`'s Widget Config field.
 
+## Binding
+
+A no-code, one-way link from an Entry's Value to a member of a component on the same GameObject —
+no widget or hand-written code needed.
+
+1. Add a `DSM Binding` component to the GameObject (multiple are allowed — one per member you want
+   to drive).
+2. Pick **Key** (an Entry from the Config), **Component** (any component on the same GameObject),
+   then **Member** (a public property, field, or single-argument method on that component whose
+   type exactly matches the Entry's type).
+3. The member updates live whenever the Entry's Value changes, and once immediately when the
+   binding is enabled.
+
+Binding is one-way (DSM → component) and requires an exact type match — no implicit conversions — except for formatted `string` members, below.
+
+A `string` member (for example `TMP_Text.text`) can be bound to an Entry of any type: pick a member listed as
+`DSM_Set…` (e.g. `DSM_SetText (format → text)`), then set **Format**, a .NET composite format where `{0}` is the value (invariant culture; empty
+means `{0}`). The Inspector previews the result with the current Value. Examples:
+
+- `Speed: {0:0.0} m/s` for a Float
+- `{0:N0} pts` for an Int
+- `{0:F2}` for a Vector3, giving `(1.00, 2.00, 3.00)`
+
+An invalid format logs one error at runtime and falls back to the plain value.
+
+IL2CPP builds strip members referenced only by name through reflection, so DSM generates a `link.xml` at
+build time that preserves every bound member found in the built scenes and in the project's prefabs. A
+binding created from code, or on a prefab outside `Assets/`, isn't covered — add `[Preserve]` to that
+member yourself.
+
 ## Not a secure store
 
 The Save File is plain, readable, hand-editable JSON — anyone with file access can read or change
