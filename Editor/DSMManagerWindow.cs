@@ -200,6 +200,16 @@ namespace DataSaveManager.Editor
 
             list.elementHeightCallback = index => Matches(index) ? CardHeight : 0f;
 
+            list.drawElementBackgroundCallback = (rect, index, isActive, isFocused) =>
+            {
+                ReorderableList.defaultBehaviours.DrawElementBackground(rect, index, isActive, isFocused, true);
+                if (index < 0 || index >= entriesProp.arraySize || !Matches(index)) return;
+
+                var type = (DSMDataType)entriesProp.GetArrayElementAtIndex(index)
+                    .FindPropertyRelative("_type").enumValueIndex;
+                DrawTypeTint(rect, type);
+            };
+
             list.drawElementCallback = (rect, index, isActive, isFocused) =>
             {
                 if (!Matches(index)) return;
@@ -240,6 +250,28 @@ namespace DataSaveManager.Editor
                 EditorGUI.LabelField(rect, "Entries — drag ≡ to reorder (this is the Runtime Panel order)");
 
             return _entriesList;
+        }
+
+        private const float TypeStripeWidth = 4f;
+        private const float TypeTintAlpha = 0.12f;
+
+        private static Color TypeColor(DSMDataType type) => type switch
+        {
+            DSMDataType.Int => new Color(0.30f, 0.60f, 1.00f),
+            DSMDataType.Float => new Color(0.25f, 0.80f, 0.85f),
+            DSMDataType.Bool => new Color(1.00f, 0.60f, 0.20f),
+            DSMDataType.String => new Color(0.45f, 0.85f, 0.35f),
+            DSMDataType.Vector2 => new Color(0.75f, 0.45f, 1.00f),
+            DSMDataType.Vector3 => new Color(1.00f, 0.40f, 0.75f),
+            DSMDataType.Color => new Color(1.00f, 0.85f, 0.25f),
+            _ => Color.gray
+        };
+
+        private static void DrawTypeTint(Rect rect, DSMDataType type)
+        {
+            var color = TypeColor(type);
+            EditorGUI.DrawRect(rect, new Color(color.r, color.g, color.b, TypeTintAlpha));
+            EditorGUI.DrawRect(new Rect(rect.x, rect.y, TypeStripeWidth, rect.height), color);
         }
 
         private static float CardHeight =>
