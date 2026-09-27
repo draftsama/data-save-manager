@@ -1,70 +1,57 @@
 #nullable enable
 
-using System;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.Serialization;
 
-[CreateAssetMenu(menuName = "DSM/Config")]
-public sealed class DSMConfig : ScriptableObject
+namespace DataSaveManager
 {
-    [SerializeField, FormerlySerializedAs("<AutoSave>k__BackingField")]
-    private bool _autoSave = true;
-    public bool AutoSave => _autoSave;
-
-    [SerializeField, FormerlySerializedAs("<AutoSaveDebounce>k__BackingField")]
-    private float _autoSaveDebounce = 2f;
-    public float AutoSaveDebounce => _autoSaveDebounce;
-
-    [SerializeField, FormerlySerializedAs("<Encrypt>k__BackingField")]
-    private bool _encrypt;
-    public bool Encrypt => _encrypt;
-
-    [SerializeField]
-    private bool _strictSchema;
-    public bool StrictSchema => _strictSchema;
-
-    // NOT serialized — set programmatically to keep secrets out of asset files
-    [field: NonSerialized]
-    public string EncryptionKey { get; private set; } = string.Empty;
-
-    public void SetEncryptionKey(string key)
+    /// <summary>The single asset holding every Entry Definition plus save behaviour.</summary>
+    [CreateAssetMenu(menuName = "DSM/Config")]
+    public sealed class DSMConfig : ScriptableObject
     {
-        DSMEncryptionKey.Validate(key);
-        EncryptionKey = key;
+        [SerializeField] private bool _autoSave = true;
+        [SerializeField, Min(0f)] private float _autoSaveDebounce = 1f;
+        [SerializeField] private string _saveDirectory = string.Empty;
+        [SerializeField] private string _fileName = "save.json";
+        [SerializeField] private List<DSMEntryDefinition> _entries = new();
+
+        public bool AutoSave => _autoSave;
+        public float AutoSaveDebounce => _autoSaveDebounce;
+        public string SaveDirectory => _saveDirectory;
+        public string FileName => _fileName;
+        public IReadOnlyList<DSMEntryDefinition> Entries => _entries;
+
+        public bool TryGetEntry(string key, out DSMEntryDefinition entry)
+        {
+            foreach (var e in _entries)
+            {
+                if (e.Key != key) continue;
+                entry = e;
+                return true;
+            }
+            entry = null!;
+            return false;
+        }
+
+        public void SetEntry(DSMEntryDefinition entry)
+        {
+            for (var i = 0; i < _entries.Count; i++)
+            {
+                if (_entries[i].Key != entry.Key) continue;
+                _entries[i] = entry;
+                return;
+            }
+            _entries.Add(entry);
+        }
+
+        public bool RemoveEntry(string key) => _entries.RemoveAll(e => e.Key == key) > 0;
+
+        internal void SetForTests(bool autoSave, float debounce, string saveDirectory, string fileName)
+        {
+            _autoSave = autoSave;
+            _autoSaveDebounce = debounce;
+            _saveDirectory = saveDirectory;
+            _fileName = fileName;
+        }
     }
-
-    [SerializeField, FormerlySerializedAs("<SavePath>k__BackingField")]
-    private string _savePath = string.Empty;
-    public string SavePath => _savePath;
-
-    [SerializeField, FormerlySerializedAs("<DefaultSlot>k__BackingField")]
-    private string _defaultSlot = "default";
-    public string DefaultSlot => _defaultSlot;
-
-    [SerializeField, FormerlySerializedAs("<PrettyPrint>k__BackingField")]
-    private bool _prettyPrint;
-    public bool PrettyPrint => _prettyPrint;
-
-    [Serializable]
-    public sealed class ExposedEntry
-    {
-        public string Key = string.Empty;
-        public string Label = string.Empty;
-        public DSMDataType Type = DSMDataType.String;
-    }
-
-    [SerializeField] private List<ExposedEntry> _exposedEntries = new();
-    public IReadOnlyList<ExposedEntry> ExposedEntries => _exposedEntries;
-
-    public ExposedEntry? FindExposed(string key) => _exposedEntries.Find(e => e.Key == key);
-
-    public void SetExposed(string key, string label, DSMDataType type)
-    {
-        var existing = FindExposed(key);
-        if (existing != null) { existing.Label = label; existing.Type = type; }
-        else _exposedEntries.Add(new ExposedEntry { Key = key, Label = label, Type = type });
-    }
-
-    public void RemoveExposed(string key) => _exposedEntries.RemoveAll(e => e.Key == key);
 }

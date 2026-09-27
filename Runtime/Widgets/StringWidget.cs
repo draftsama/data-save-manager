@@ -3,25 +3,26 @@
 using TMPro;
 using UnityEngine;
 
-public sealed class StringWidget : MonoBehaviour, IDSMWidget
+namespace DataSaveManager
 {
-    [SerializeField] private TextMeshProUGUI? _label;
-    [SerializeField] private TMP_InputField? _input;
-
-    private string _key = string.Empty;
-    private DSMSlot? _slot;
-
-    public void Setup(string key, DSMDataType type, string label, DSMSlot slot)
+    public sealed class StringWidget : MonoBehaviour, IDSMWidget
     {
-        if (_label == null || _input == null)
+        [SerializeField] private TextMeshProUGUI? _label;
+        [SerializeField] private TMP_InputField? _input;
+
+        private string _key = string.Empty;
+
+        public void Setup(DSMEntryDefinition entry)
         {
-            Debug.LogError($"StringWidget on '{gameObject.name}': _label or _input is not assigned.", this);
-            return;
+            if (_label == null || _input == null)
+            {
+                Debug.LogError($"StringWidget on '{gameObject.name}': _label or _input is not assigned.", this);
+                return;
+            }
+            _key = entry.Key;
+            _label.text = entry.DisplayLabel;
+            _input.text = DSM.Get(_key, string.Empty);
+            _input.onEndEdit.AddListener(value => DSM.Set(_key, value));
         }
-        _key = key;
-        _slot = slot;
-        _label.text = label;
-        _input.text = slot.Get(key, string.Empty);
-        _input.onEndEdit.AddListener(value => _slot?.Set(_key, value));
     }
 }

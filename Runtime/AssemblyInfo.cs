@@ -1,5 +1,5 @@
 using System.Runtime.CompilerServices;
 
-// DMS.Tests.Editor is a separate assembly, so deterministic test-only hooks such as
-// DSMSlot.FlushWatchers() are unreachable without this grant.
-[assembly: InternalsVisibleTo("DMS.Tests.Editor")]
+// DSM.Tests.Editor is a separate assembly, so internal test-only hooks such as
+// DSMStore's internal ctor and ChangedForTests event are unreachable without this grant.
+[assembly: InternalsVisibleTo("DSM.Tests.Editor")]
