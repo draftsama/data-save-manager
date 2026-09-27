@@ -2,7 +2,8 @@
     "name": "DSM.Editor",
     "rootNamespace": "",
     "references": [
-        "GUID:5c67e4f53d76c46cbabd0a518ee024c0"
+        "GUID:5c67e4f53d76c46cbabd0a518ee024c0",
+        "GUID:f51ebe6a0ceec4240a699833d6309b23"
     ],
     "includePlatforms": [
         "Editor"
