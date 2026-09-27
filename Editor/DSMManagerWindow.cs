@@ -16,6 +16,24 @@ namespace DataSaveManager.Editor
     {
         private static readonly Color DuplicateKeyColor = new(0.65f, 0.28f, 0.28f);
 
+        private const float KeyWidth = 110f;
+        private const float TypeWidth = 80f;
+        private const float LabelWidth = 100f;
+        private const float ExposedWidth = 30f;
+        private const float OverrideMarkWidth = 12f;
+        private const float ResetWidth = 50f;
+        private const float RemoveWidth = 24f;
+
+        private static readonly GUIContent KeyHeader = new("Key", "Identifier used in code: DSM.Get<T>(key).");
+        private static readonly GUIContent TypeHeader = new("Type");
+        private static readonly GUIContent LabelHeader = new("Label", "Display name in the Runtime Panel. Falls back to the key when empty.");
+        private static readonly GUIContent ExposedHeader = new("Exp", "Exposed: shown in the Runtime Panel.");
+        private static readonly GUIContent DefaultHeader = new("Default", "Value used when there is no Override. Stored in the Config.");
+        private static readonly GUIContent ValueHeader = new("Value", "Current value. \u25cf marks an Override stored in the Save File.");
+        private static readonly GUIContent OverrideMark = new("\u25cf", "Overridden: this value is stored in the Save File. Reset returns it to the Default.");
+
+        private GUIStyle? _headerRowStyle;
+
         private DSMConfig? _config;
         private SerializedObject? _configSo;
         private string _search = string.Empty;
@@ -166,7 +184,10 @@ namespace DataSaveManager.Editor
             var filter = _search.Trim();
             var pendingRemoveIndex = -1;
 
-            using (var scroll = new EditorGUILayout.ScrollViewScope(_entriesScroll, GUILayout.ExpandHeight(true)))
+            DrawEntriesHeader();
+
+            // The vertical scrollbar is always shown so the header above stays aligned with the rows.
+            using (var scroll = new EditorGUILayout.ScrollViewScope(_entriesScroll, false, true, GUILayout.ExpandHeight(true)))
             {
                 _entriesScroll = scroll.scrollPosition;
 
@@ -191,33 +212,33 @@ namespace DataSaveManager.Editor
                     {
                         var priorColor = GUI.backgroundColor;
                         if (isDuplicate) GUI.backgroundColor = DuplicateKeyColor;
-                        keyProp.stringValue = EditorGUILayout.TextField(keyProp.stringValue, GUILayout.Width(110));
+                        keyProp.stringValue = EditorGUILayout.TextField(keyProp.stringValue, GUILayout.Width(KeyWidth));
                         GUI.backgroundColor = priorColor;
 
                         var currentType = (DSMDataType)typeProp.enumValueIndex;
-                        var newType = (DSMDataType)EditorGUILayout.EnumPopup(currentType, GUILayout.Width(80));
+                        var newType = (DSMDataType)EditorGUILayout.EnumPopup(currentType, GUILayout.Width(TypeWidth));
                         if (newType != currentType)
                         {
                             typeProp.enumValueIndex = (int)newType;
                             defaultJsonProp.stringValue = DSMEntryDefinition.DefaultJsonFor(newType);
                         }
 
-                        labelProp.stringValue = EditorGUILayout.TextField(labelProp.stringValue, GUILayout.Width(100));
-                        exposedProp.boolValue = EditorGUILayout.Toggle(exposedProp.boolValue, GUILayout.Width(18));
+                        labelProp.stringValue = EditorGUILayout.TextField(labelProp.stringValue, GUILayout.Width(LabelWidth));
+                        exposedProp.boolValue = EditorGUILayout.Toggle(exposedProp.boolValue, GUILayout.Width(ExposedWidth));
 
                         DrawDefaultField(defaultJsonProp, newType);
                         DrawValueField(key, newType, valuesEditable);
 
                         using (new EditorGUI.DisabledScope(!valuesEditable || !DSM.Store.HasOverride(key)))
                         {
-                            if (GUILayout.Button("Reset", GUILayout.Width(50)))
+                            if (GUILayout.Button("Reset", GUILayout.Width(ResetWidth)))
                             {
                                 DSM.Reset(key);
                                 if (!EditorApplication.isPlaying) DSM.Save();
                             }
                         }
 
-                        if (GUILayout.Button("✕", GUILayout.Width(24)))
+                        if (GUILayout.Button("✕", GUILayout.Width(RemoveWidth)))
                             pendingRemoveIndex = TryRemoveEntry(key, i);
                     }
                 }
@@ -225,6 +246,26 @@ namespace DataSaveManager.Editor
 
             if (pendingRemoveIndex >= 0)
                 entriesProp.DeleteArrayElementAtIndex(pendingRemoveIndex);
+        }
+
+        private void DrawEntriesHeader()
+        {
+            // Same padding as the helpBox rows, without the box, so columns line up.
+            _headerRowStyle ??= new GUIStyle(EditorStyles.helpBox) { normal = { background = null } };
+
+            using (new EditorGUILayout.HorizontalScope(_headerRowStyle))
+            {
+                var style = EditorStyles.miniBoldLabel;
+                GUILayout.Label(KeyHeader, style, GUILayout.Width(KeyWidth));
+                GUILayout.Label(TypeHeader, style, GUILayout.Width(TypeWidth));
+                GUILayout.Label(LabelHeader, style, GUILayout.Width(LabelWidth));
+                GUILayout.Label(ExposedHeader, style, GUILayout.Width(ExposedWidth));
+                GUILayout.Label(DefaultHeader, style, GUILayout.ExpandWidth(true));
+                GUILayout.Space(OverrideMarkWidth);
+                GUILayout.Label(ValueHeader, style, GUILayout.ExpandWidth(true));
+                GUILayout.Space(ResetWidth + RemoveWidth + GUI.skin.button.margin.horizontal);
+                GUILayout.Space(GUI.skin.verticalScrollbar.fixedWidth);
+            }
         }
 
         private static void DrawDefaultField(SerializedProperty defaultJsonProp, DSMDataType type)
@@ -241,7 +282,7 @@ namespace DataSaveManager.Editor
         private static void DrawValueField(string key, DSMDataType type, bool valuesEditable)
         {
             var hasOverride = valuesEditable && DSM.Store.HasOverride(key);
-            GUILayout.Label(hasOverride ? "●" : " ", hasOverride ? EditorStyles.boldLabel : EditorStyles.label, GUILayout.Width(12));
+            GUILayout.Label(hasOverride ? OverrideMark : GUIContent.none, hasOverride ? EditorStyles.boldLabel : EditorStyles.label, GUILayout.Width(OverrideMarkWidth));
 
             using (new EditorGUI.DisabledScope(!valuesEditable))
             {
