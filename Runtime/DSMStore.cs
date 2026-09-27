@@ -71,6 +71,20 @@ namespace DataSaveManager
 
         public bool HasOverride(string key) => _overrides.ContainsKey(key);
 
+        /// <summary>Sets an Override from a pre-built <see cref="JToken"/>, for editor code that already has one on hand. Behaves exactly like <see cref="Set{T}"/>.</summary>
+        internal void SetToken(string key, JToken token)
+        {
+            if (!_config.TryGetEntry(key, out _)) WarnUndefinedOnce(key);
+
+            if (_overrides.TryGetValue(key, out var existingOverride) && JToken.DeepEquals(existingOverride, token))
+                return;
+
+            var before = GetEffectiveToken(key);
+            _overrides[key] = token;
+            RaiseIfChanged(key, before);
+            MarkDirty();
+        }
+
         public void Reset(string key)
         {
             if (!_overrides.ContainsKey(key)) return;

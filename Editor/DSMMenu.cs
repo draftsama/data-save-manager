@@ -11,14 +11,17 @@ namespace DataSaveManager.Editor
         private const string ConfigPath = "Assets/Resources/DSMConfig.asset";
 
         [MenuItem("DSM/Create Config Asset")]
-        private static void CreateConfigAsset()
+        private static void CreateConfigAssetMenuItem() => CreateConfigAsset();
+
+        /// <summary>Loads the Resources config asset, creating it (and its folder) first if it doesn't exist yet. Pings/selects it either way.</summary>
+        internal static DSMConfig CreateConfigAsset()
         {
             var existing = AssetDatabase.LoadAssetAtPath<DSMConfig>(ConfigPath);
             if (existing != null)
             {
                 EditorGUIUtility.PingObject(existing);
                 Selection.activeObject = existing;
-                return;
+                return existing;
             }
 
             var dir = Path.GetDirectoryName(ConfigPath)!;
@@ -33,6 +36,7 @@ namespace DataSaveManager.Editor
             AssetDatabase.SaveAssets();
             EditorGUIUtility.PingObject(config);
             Selection.activeObject = config;
+            return config;
         }
 
         [MenuItem("DSM/Open Save Folder")]

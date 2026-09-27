@@ -71,5 +71,18 @@ namespace DataSaveManager
             t = default;
             return false;
         }
+
+        /// <summary>The zero-value JSON for <paramref name="type"/>, matching what the type's converter writes.</summary>
+        public static string DefaultJsonFor(DSMDataType type) => type switch
+        {
+            DSMDataType.Int => "0",
+            DSMDataType.Float => "0.0",
+            DSMDataType.Bool => "false",
+            DSMDataType.String => "\"\"",
+            DSMDataType.Vector2 => "{\"x\":0.0,\"y\":0.0}",
+            DSMDataType.Vector3 => "{\"x\":0.0,\"y\":0.0,\"z\":0.0}",
+            DSMDataType.Color => "{\"r\":1.0,\"g\":1.0,\"b\":1.0,\"a\":1.0}",
+            _ => throw new ArgumentOutOfRangeException(nameof(type), type, null)
+        };
     }
 }
