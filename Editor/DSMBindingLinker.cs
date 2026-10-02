@@ -51,9 +51,10 @@ namespace DataSaveManager.Editor
         private static void Collect(IEnumerable<DSMBinding> bindings)
         {
             foreach (var binding in bindings)
+            foreach (var link in binding.Links)
             {
-                var target = binding.Target;
-                var member = binding.Member;
+                var target = link.Target;
+                var member = link.Member;
                 if (target == null || member.Length < 3) continue;
 
                 var type = target.GetType();

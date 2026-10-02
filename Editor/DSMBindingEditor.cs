@@ -21,15 +21,49 @@ namespace DataSaveManager.Editor
             var config = Resources.Load<DSMConfig>(ConfigResourcePath);
 
             var keyProp = serializedObject.FindProperty("_key");
-            var targetProp = serializedObject.FindProperty("_target");
-            var memberProp = serializedObject.FindProperty("_member");
-            var formatProp = serializedObject.FindProperty("_format");
+            var linksProp = serializedObject.FindProperty("_links");
 
             var entry = DrawKeyField(config, keyProp);
-            var selectedTarget = DrawComponentField(gameObject, binding, targetProp);
-            DrawMemberField(selectedTarget, memberProp, formatProp, entry, keyProp.stringValue);
+            DrawLinks(gameObject, binding, linksProp, entry, keyProp.stringValue);
 
             serializedObject.ApplyModifiedProperties();
+        }
+
+        private void DrawLinks(GameObject gameObject, DSMBinding binding, SerializedProperty linksProp,
+            DSMEntryDefinition? entry, string key)
+        {
+            var removeIndex = -1;
+            for (var i = 0; i < linksProp.arraySize; i++)
+            {
+                var linkProp = linksProp.GetArrayElementAtIndex(i);
+                var targetProp = linkProp.FindPropertyRelative("_target");
+                var memberProp = linkProp.FindPropertyRelative("_member");
+                var formatProp = linkProp.FindPropertyRelative("_format");
+
+                using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
+                {
+                    using (new EditorGUILayout.HorizontalScope())
+                    {
+                        EditorGUILayout.LabelField($"Link {i + 1}", EditorStyles.boldLabel);
+                        if (GUILayout.Button("-", GUILayout.Width(24))) removeIndex = i;
+                    }
+
+                    var selectedTarget = DrawComponentField(gameObject, binding, targetProp, memberProp);
+                    DrawMemberField(selectedTarget, memberProp, formatProp, entry, key);
+                }
+            }
+
+            if (removeIndex >= 0) linksProp.DeleteArrayElementAtIndex(removeIndex);
+
+            if (GUILayout.Button("Add Link"))
+            {
+                linksProp.arraySize++;
+                // A new element copies the previous one, so reset it to an empty link.
+                var added = linksProp.GetArrayElementAtIndex(linksProp.arraySize - 1);
+                added.FindPropertyRelative("_target").objectReferenceValue = null;
+                added.FindPropertyRelative("_member").stringValue = string.Empty;
+                added.FindPropertyRelative("_format").stringValue = "{0}";
+            }
         }
 
         private static DSMEntryDefinition? DrawKeyField(DSMConfig? config, SerializedProperty keyProp)
@@ -72,7 +106,8 @@ namespace DataSaveManager.Editor
             return config.TryGetEntry(keyProp.stringValue, out var entry) ? entry : null;
         }
 
-        private Component? DrawComponentField(GameObject gameObject, DSMBinding binding, SerializedProperty targetProp)
+        private Component? DrawComponentField(GameObject gameObject, DSMBinding binding, SerializedProperty targetProp,
+            SerializedProperty memberProp)
         {
             var components = gameObject.GetComponents<Component>()
                 .Where(c => c != null && c != binding)
@@ -102,7 +137,7 @@ namespace DataSaveManager.Editor
                     targetProp.objectReferenceValue = newTarget;
                     // A member id from the old component is unlikely to be valid on the new one; clear it here so
                     // DrawMemberField doesn't offer a stale selection while the two edits are applied together.
-                    serializedObject.FindProperty("_member").stringValue = string.Empty;
+                    memberProp.stringValue = string.Empty;
                 }
                 return newTarget;
             }

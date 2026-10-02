@@ -187,15 +187,15 @@ and assign that asset to the `DSMRuntimePanel`'s Widget Config field.
 
 ## Binding
 
-A no-code, one-way link from an Entry's Value to a member of a component on the same GameObject —
+A no-code, one-way link from an Entry's Value to one or more members of components on the same GameObject —
 no widget or hand-written code needed.
 
-1. Add a `DSM Binding` component to the GameObject (multiple are allowed — one per member you want
-   to drive).
-2. Pick **Key** (an Entry from the Config), **Component** (any component on the same GameObject),
-   then **Member** (a public property, field, or single-argument method on that component whose
-   type exactly matches the Entry's type).
-3. The member updates live whenever the Entry's Value changes, and once immediately when the
+1. Add a `DSM Binding` component to the GameObject.
+2. Pick **Key** (an Entry from the Config), then add a **Link** per member to drive. Each Link has a
+   **Component** (any component on the same GameObject), a **Member** (a public property, field, or
+   single-argument method on that component whose type exactly matches the Entry's type), and its own **Format**
+   for string members.
+3. Every member updates live whenever the Entry's Value changes, and once immediately when the
    binding is enabled.
 
 Binding is one-way (DSM → component) and requires an exact type match — no implicit conversions — except for formatted `string` members, below.
