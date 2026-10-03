@@ -27,6 +27,9 @@ namespace DataSaveManager
         private bool _hasInputSystemToggleKey;
 #endif
 
+        public static bool IsOpen { get; private set; }
+        public static event Action<bool>? OpenChanged;
+
         public bool IsVisible => _root != null && _root.activeSelf;
 
         private void Awake()
@@ -61,11 +64,22 @@ namespace DataSaveManager
         {
             Rebuild();
             if (_root != null) _root.SetActive(true);
+            SetOpen(true);
         }
 
         public void Hide()
         {
             if (_root != null) _root.SetActive(false);
+            SetOpen(false);
+        }
+
+        private void OnDestroy() => SetOpen(false);
+
+        private static void SetOpen(bool open)
+        {
+            if (IsOpen == open) return;
+            IsOpen = open;
+            OpenChanged?.Invoke(open);
         }
 
         public void Toggle()
