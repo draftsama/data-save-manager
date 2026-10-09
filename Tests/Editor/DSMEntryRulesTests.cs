@@ -94,6 +94,88 @@ namespace DataSaveManager.Tests
             Assert.AreEqual(0, DSMEntryRules.DuplicateKeys(config).Count);
         }
 
+        // ── InitialRange ─────────────────────────────────────────────────────
+
+        [Test]
+        public void InitialRange_Float_DefaultInsideUnitRange_UsesZeroToOne()
+        {
+            var (min, max) = DSMEntryRules.InitialRange(DSMDataType.Float, "0.5");
+
+            Assert.AreEqual(0f, min);
+            Assert.AreEqual(1f, max);
+        }
+
+        [Test]
+        public void InitialRange_Float_DefaultAboveMax_ExtendsMax()
+        {
+            var (min, max) = DSMEntryRules.InitialRange(DSMDataType.Float, "5.0");
+
+            Assert.AreEqual(0f, min);
+            Assert.GreaterOrEqual(max, 5f);
+        }
+
+        [Test]
+        public void InitialRange_Int_DefaultInsideRange_UsesZeroToHundred()
+        {
+            var (min, max) = DSMEntryRules.InitialRange(DSMDataType.Int, "42");
+
+            Assert.AreEqual(0f, min);
+            Assert.AreEqual(100f, max);
+        }
+
+        [Test]
+        public void InitialRange_Int_DefaultBelowMin_ExtendsMin()
+        {
+            var (min, max) = DSMEntryRules.InitialRange(DSMDataType.Int, "-10");
+
+            Assert.LessOrEqual(min, -10f);
+            Assert.AreEqual(100f, max);
+        }
+
+        [Test]
+        public void InitialRange_UnparsableJson_UsesPlainDefaults()
+        {
+            Assert.AreEqual((0f, 1f), DSMEntryRules.InitialRange(DSMDataType.Float, "not json"));
+            Assert.AreEqual((0f, 100f), DSMEntryRules.InitialRange(DSMDataType.Int, string.Empty));
+        }
+
+        // ── HasValidRange ────────────────────────────────────────────────────
+
+        [Test]
+        public void HasValidRange_TrueForIntAndFloatWithMinBelowMax()
+        {
+            Assert.IsTrue(new DSMEntryDefinition { Type = DSMDataType.Int, HasRange = true, RangeMin = 0f, RangeMax = 10f }.HasValidRange);
+            Assert.IsTrue(new DSMEntryDefinition { Type = DSMDataType.Float, HasRange = true, RangeMin = -1f, RangeMax = 1f }.HasValidRange);
+        }
+
+        [Test]
+        public void HasValidRange_FalseWhenMinEqualsMax()
+        {
+            var entry = new DSMEntryDefinition { Type = DSMDataType.Float, HasRange = true, RangeMin = 3f, RangeMax = 3f };
+            Assert.IsFalse(entry.HasValidRange);
+        }
+
+        [Test]
+        public void HasValidRange_FalseWhenMinAboveMax()
+        {
+            var entry = new DSMEntryDefinition { Type = DSMDataType.Int, HasRange = true, RangeMin = 10f, RangeMax = 0f };
+            Assert.IsFalse(entry.HasValidRange);
+        }
+
+        [Test]
+        public void HasValidRange_FalseForStringType()
+        {
+            var entry = new DSMEntryDefinition { Type = DSMDataType.String, HasRange = true, RangeMin = 0f, RangeMax = 10f };
+            Assert.IsFalse(entry.HasValidRange);
+        }
+
+        [Test]
+        public void HasValidRange_FalseWhenRangeNotEnabled()
+        {
+            var entry = new DSMEntryDefinition { Type = DSMDataType.Float, HasRange = false, RangeMin = 0f, RangeMax = 10f };
+            Assert.IsFalse(entry.HasValidRange);
+        }
+
         // ── DefaultJsonFor round-trip ────────────────────────────────────────
 
         [Test]

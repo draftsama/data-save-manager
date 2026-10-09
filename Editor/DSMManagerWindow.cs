@@ -32,6 +32,9 @@ namespace DataSaveManager.Editor
         private static readonly GUIContent LabelHeader = new("Label", "Display name in the Runtime Panel. Falls back to the key when empty.");
         private static readonly GUIContent ExposedHeader = new("Exposed", "Exposed: shown in the Runtime Panel.");
         private static readonly GUIContent DefaultHeader = new("Default", "Value used when there is no Override. Stored in the Config.");
+        private static readonly GUIContent RangeHeader = new("Range", "Show this Entry as a slider in the Runtime Panel. A presentation hint only: the Value is never clamped.");
+        private static readonly GUIContent RangeMinHeader = new("Min");
+        private static readonly GUIContent RangeMaxHeader = new("Max");
         private static readonly GUIContent ValueHeader = new("Value", "Current value. \u25cf marks an Override stored in the Save File.");
         private static readonly GUIContent OverrideMark = new("\u25cf", "Overridden: this value is stored in the Save File. Reset returns it to the Default.");
 
@@ -198,7 +201,12 @@ namespace DataSaveManager.Editor
                        label.IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0;
             }
 
-            list.elementHeightCallback = index => Matches(index) ? CardHeight : 0f;
+            list.elementHeightCallback = index =>
+            {
+                if (!Matches(index)) return 0f;
+                var element = entriesProp.GetArrayElementAtIndex(index);
+                return CardHeight(ShowsRangeLine(element));
+            };
 
             list.drawElementBackgroundCallback = (rect, index, isActive, isFocused) =>
             {
@@ -274,10 +282,19 @@ namespace DataSaveManager.Editor
             EditorGUI.DrawRect(new Rect(rect.x, rect.y, TypeStripeWidth, rect.height), color);
         }
 
-        private static float CardHeight =>
-            CardPadding * 2f +
-            EditorGUIUtility.singleLineHeight * 4f +
-            EditorGUIUtility.standardVerticalSpacing * 3f;
+        private static float CardHeight(bool withRangeLine)
+        {
+            var lines = withRangeLine ? 5 : 4;
+            return CardPadding * 2f +
+                   EditorGUIUtility.singleLineHeight * lines +
+                   EditorGUIUtility.standardVerticalSpacing * (lines - 1);
+        }
+
+        private static bool IsRangeType(DSMDataType type) => type is DSMDataType.Int or DSMDataType.Float;
+
+        private static bool ShowsRangeLine(SerializedProperty elementProp) =>
+            elementProp.FindPropertyRelative("_exposed").boolValue &&
+            IsRangeType((DSMDataType)elementProp.FindPropertyRelative("_type").enumValueIndex);
 
         // Every line shares one prefix column (label + override-mark slot) so all fields start at the same x.
         private static float FieldStart(Rect line) => line.x + PrefixWidth + OverrideMarkWidth;
@@ -291,8 +308,13 @@ namespace DataSaveManager.Editor
             var labelProp = elementProp.FindPropertyRelative("_label");
             var exposedProp = elementProp.FindPropertyRelative("_exposed");
             var defaultJsonProp = elementProp.FindPropertyRelative("_defaultJson");
+            var hasRangeProp = elementProp.FindPropertyRelative("_hasRange");
+            var rangeMinProp = elementProp.FindPropertyRelative("_rangeMin");
+            var rangeMaxProp = elementProp.FindPropertyRelative("_rangeMax");
             var key = keyProp.stringValue;
             var type = (DSMDataType)typeProp.enumValueIndex;
+            // Decided before drawing so it matches the height the list already reserved for this card.
+            var showRange = ShowsRangeLine(elementProp);
 
             var lineH = EditorGUIUtility.singleLineHeight;
             var vSpace = EditorGUIUtility.standardVerticalSpacing;
@@ -300,14 +322,17 @@ namespace DataSaveManager.Editor
             var line2 = new Rect(rect.x, line1.yMax + vSpace, rect.width, lineH);
             var line3 = new Rect(rect.x, line2.yMax + vSpace, rect.width, lineH);
             var line4 = new Rect(rect.x, line3.yMax + vSpace, rect.width, lineH);
+            var line5 = new Rect(rect.x, line4.yMax + vSpace, rect.width, lineH);
 
             var priorLabelWidth = EditorGUIUtility.labelWidth;
             EditorGUIUtility.labelWidth = InlineLabelWidth;
 
-            var removeClicked = DrawKeyLine(line1, keyProp, typeProp, defaultJsonProp, isDuplicate, ref type);
+            var removeClicked = DrawKeyLine(line1, keyProp, typeProp, defaultJsonProp, hasRangeProp, isDuplicate, ref type);
             DrawExposedLine(line2, exposedProp, labelProp);
             DrawDefaultField(line3, defaultJsonProp, type);
             DrawValueLine(line4, key, type, valuesEditable);
+            if (showRange && IsRangeType(type))
+                DrawRangeLine(line5, hasRangeProp, rangeMinProp, rangeMaxProp, defaultJsonProp, type);
 
             EditorGUIUtility.labelWidth = priorLabelWidth;
             return removeClicked && TryRemoveEntry(key);
@@ -318,6 +343,7 @@ namespace DataSaveManager.Editor
             SerializedProperty keyProp,
             SerializedProperty typeProp,
             SerializedProperty defaultJsonProp,
+            SerializedProperty hasRangeProp,
             bool isDuplicate,
             ref DSMDataType type)
         {
@@ -337,6 +363,7 @@ namespace DataSaveManager.Editor
             {
                 typeProp.enumValueIndex = (int)newType;
                 defaultJsonProp.stringValue = DSMEntryDefinition.DefaultJsonFor(newType);
+                if (!IsRangeType(newType)) hasRangeProp.boolValue = false;
                 type = newType;
             }
 
@@ -355,6 +382,53 @@ namespace DataSaveManager.Editor
             var labelX = toggleRect.xMax + FieldSpacing;
             var labelRect = new Rect(labelX, rect.y, rect.xMax - RemoveWidth - FieldSpacing - labelX, rect.height);
             labelProp.stringValue = EditorGUI.TextField(labelRect, LabelHeader, labelProp.stringValue);
+        }
+
+        private static void DrawRangeLine(
+            Rect rect,
+            SerializedProperty hasRangeProp,
+            SerializedProperty minProp,
+            SerializedProperty maxProp,
+            SerializedProperty defaultJsonProp,
+            DSMDataType type)
+        {
+            var fieldX = FieldStart(rect);
+            EditorGUI.LabelField(new Rect(rect.x, rect.y, PrefixWidth, rect.height), RangeHeader);
+
+            var toggleRect = new Rect(fieldX, rect.y, ToggleWidth, rect.height);
+            var wasOn = hasRangeProp.boolValue;
+            var isOn = EditorGUI.Toggle(toggleRect, wasOn);
+            hasRangeProp.boolValue = isOn;
+
+            if (isOn && !wasOn && minProp.floatValue == 0f && maxProp.floatValue == 0f)
+            {
+                var (initialMin, initialMax) = DSMEntryRules.InitialRange(type, defaultJsonProp.stringValue);
+                minProp.floatValue = initialMin;
+                maxProp.floatValue = initialMax;
+            }
+
+            if (!isOn) return;
+
+            var startX = toggleRect.xMax + FieldSpacing;
+            var fieldWidth = (rect.xMax - RemoveWidth - FieldSpacing - startX - FieldSpacing) * 0.5f;
+            var minRect = new Rect(startX, rect.y, fieldWidth, rect.height);
+            var maxRect = new Rect(minRect.xMax + FieldSpacing, rect.y, fieldWidth, rect.height);
+
+            var priorColor = GUI.backgroundColor;
+            if (minProp.floatValue >= maxProp.floatValue) GUI.backgroundColor = DuplicateKeyColor;
+
+            if (type == DSMDataType.Int)
+            {
+                minProp.floatValue = EditorGUI.IntField(minRect, RangeMinHeader, Mathf.RoundToInt(minProp.floatValue));
+                maxProp.floatValue = EditorGUI.IntField(maxRect, RangeMaxHeader, Mathf.RoundToInt(maxProp.floatValue));
+            }
+            else
+            {
+                minProp.floatValue = EditorGUI.FloatField(minRect, RangeMinHeader, minProp.floatValue);
+                maxProp.floatValue = EditorGUI.FloatField(maxRect, RangeMaxHeader, maxProp.floatValue);
+            }
+
+            GUI.backgroundColor = priorColor;
         }
 
         private static void DrawDefaultField(Rect rect, SerializedProperty defaultJsonProp, DSMDataType type)
@@ -459,6 +533,9 @@ namespace DataSaveManager.Editor
             element.FindPropertyRelative("_label").stringValue = string.Empty;
             element.FindPropertyRelative("_exposed").boolValue = false;
             element.FindPropertyRelative("_defaultJson").stringValue = DSMEntryDefinition.DefaultJsonFor(type);
+            element.FindPropertyRelative("_hasRange").boolValue = false;
+            element.FindPropertyRelative("_rangeMin").floatValue = 0f;
+            element.FindPropertyRelative("_rangeMax").floatValue = 0f;
         }
 
         private void DrawFooter()

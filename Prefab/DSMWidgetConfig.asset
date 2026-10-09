@@ -19,3 +19,5 @@ MonoBehaviour:
   _vector2Widget: {fileID: 2851001508508536948, guid: 91acc51f503094ae6a3ad0582404e7da, type: 3}
   _vector3Widget: {fileID: 5801381488035225483, guid: 09316350194a446d5b3eb61ff4dffc52, type: 3}
   _colorWidget: {fileID: 6503202232970945136, guid: 67afc37f9a8244de19b56c4afe117041, type: 3}
+  _intSliderWidget: {fileID: 745638659979968722, guid: e5d6f7901c5544a64a532d26c862313f, type: 3}
+  _floatSliderWidget: {fileID: 7336136325953545120, guid: 1504f6f4ac9304807b6634e3c67e210d, type: 3}

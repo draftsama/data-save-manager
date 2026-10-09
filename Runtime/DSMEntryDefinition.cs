@@ -14,6 +14,9 @@ namespace DataSaveManager
         [SerializeField] private string _label = string.Empty;
         [SerializeField] private bool _exposed;
         [SerializeField] private string _defaultJson = string.Empty;
+        [SerializeField] private bool _hasRange;
+        [SerializeField] private float _rangeMin;
+        [SerializeField] private float _rangeMax;
 
         public string Key
         {
@@ -44,6 +47,26 @@ namespace DataSaveManager
             get => _defaultJson;
             set => _defaultJson = value;
         }
+
+        public bool HasRange
+        {
+            get => _hasRange;
+            set => _hasRange = value;
+        }
+
+        public float RangeMin
+        {
+            get => _rangeMin;
+            set => _rangeMin = value;
+        }
+
+        public float RangeMax
+        {
+            get => _rangeMax;
+            set => _rangeMax = value;
+        }
+
+        public bool HasValidRange => _hasRange && _rangeMin < _rangeMax && (_type is DSMDataType.Int or DSMDataType.Float);
 
         public string DisplayLabel => string.IsNullOrEmpty(_label) ? _key : _label;
 

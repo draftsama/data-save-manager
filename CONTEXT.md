@@ -29,6 +29,10 @@ _Avoid_: slot, save slot, envelope
 **Exposed Entry**:
 An **Entry** flagged to appear on the **Runtime Panel** for on-site adjustment.
 
+**Range**:
+An optional min/max on an **Exposed Entry** of type Int or Float. A **Range** tells the **Runtime Panel** to present the **Entry** as a slider; it is a presentation hint only and never clamps the **Value**.
+_Avoid_: limit, bounds, constraint
+
 **Runtime Panel**:
 The in-game UI where an operator views and edits **Exposed Entries** while the app runs.
 _Avoid_: config canvas
@@ -44,6 +48,7 @@ Removing **Overrides** so **Values** fall back to their **Defaults**.
 - The **Config** holds zero or more **Entry Definitions**; each defines exactly one **Entry**.
 - The **Save File** stores **Values** by **Key**; a **Key** in the **Save File** with no **Entry Definition** is an _orphan_.
 - An **Exposed Entry** is an **Entry** — not a separate kind of data.
+- An **Exposed Entry** has at most one **Range**; with a **Range** it shows as a slider, without one as a plain input. A **Value** outside its **Range** is kept as-is.
 - A **Key** used in code without an **Entry Definition** is an _ad-hoc key_: it works and persists like any **Override**, but is never added to the **Config** automatically.
 
 ## Flagged ambiguities

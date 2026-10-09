@@ -20,6 +20,7 @@ namespace DataSaveManager.Editor
         private const float LabelWidth = 220f;
         private const float RowSpacerWidth = 1000f;
         private const float FontSize = 20f;
+        private const float SliderInputWidth = 100f;
 
         [MenuItem("Draft/DSM/Build Runtime Panel Prefabs")]
         internal static void Build()
@@ -46,9 +47,11 @@ namespace DataSaveManager.Editor
             var vector2Widget = BuildVector2WidgetPrefab(Path.Combine(prefabDir, "Vector2Widget.prefab").Replace('\\', '/'), font);
             var vector3Widget = BuildVector3WidgetPrefab(Path.Combine(prefabDir, "Vector3Widget.prefab").Replace('\\', '/'), font);
             var colorWidget = BuildColorWidgetPrefab(Path.Combine(prefabDir, "ColorWidget.prefab").Replace('\\', '/'), font);
+            var intSliderWidget = BuildIntSliderWidgetPrefab(Path.Combine(prefabDir, "IntSliderWidget.prefab").Replace('\\', '/'), font);
+            var floatSliderWidget = BuildFloatSliderWidgetPrefab(Path.Combine(prefabDir, "FloatSliderWidget.prefab").Replace('\\', '/'), font);
 
             var configPath = Path.Combine(prefabDir, "DSMWidgetConfig.asset").Replace('\\', '/');
-            BuildWidgetConfig(configPath, boolWidget, intWidget, floatWidget, stringWidget, vector2Widget, vector3Widget, colorWidget);
+            BuildWidgetConfig(configPath, boolWidget, intWidget, floatWidget, stringWidget, vector2Widget, vector3Widget, colorWidget, intSliderWidget, floatSliderWidget);
             var widgetConfig = AssetDatabase.LoadAssetAtPath<DSMWidgetConfig>(configPath);
 
             var panelPath = Path.Combine(prefabDir, "DSMRuntimePanel.prefab").Replace('\\', '/');
@@ -65,6 +68,8 @@ namespace DataSaveManager.Editor
                        $"  {Path.Combine(prefabDir, "Vector2Widget.prefab")}\n" +
                        $"  {Path.Combine(prefabDir, "Vector3Widget.prefab")}\n" +
                        $"  {Path.Combine(prefabDir, "ColorWidget.prefab")}\n" +
+                       $"  {Path.Combine(prefabDir, "IntSliderWidget.prefab")}\n" +
+                       $"  {Path.Combine(prefabDir, "FloatSliderWidget.prefab")}\n" +
                        $"  {configPath}\n" +
                        $"  {panelPath}");
         }
@@ -201,10 +206,43 @@ namespace DataSaveManager.Editor
             return saved.GetComponent<ColorWidget>();
         }
 
+        private static IntSliderWidget BuildIntSliderWidgetPrefab(string path, TMP_FontAsset font)
+        {
+            var row = CreateRowRoot("IntSliderWidget");
+            var label = CreateRowLabel(row, font);
+            var slider = CreateRowSlider(row);
+            var input = CreateSliderValueInput(row, font, TMP_InputField.ContentType.IntegerNumber);
+
+            var widget = row.AddComponent<IntSliderWidget>();
+            SetField(widget, "_label", label);
+            SetField(widget, "_slider", slider);
+            SetField(widget, "_input", input);
+
+            var saved = SaveAndDestroy(row, path);
+            return saved.GetComponent<IntSliderWidget>();
+        }
+
+        private static FloatSliderWidget BuildFloatSliderWidgetPrefab(string path, TMP_FontAsset font)
+        {
+            var row = CreateRowRoot("FloatSliderWidget");
+            var label = CreateRowLabel(row, font);
+            var slider = CreateRowSlider(row);
+            var input = CreateSliderValueInput(row, font, TMP_InputField.ContentType.DecimalNumber);
+
+            var widget = row.AddComponent<FloatSliderWidget>();
+            SetField(widget, "_label", label);
+            SetField(widget, "_slider", slider);
+            SetField(widget, "_input", input);
+
+            var saved = SaveAndDestroy(row, path);
+            return saved.GetComponent<FloatSliderWidget>();
+        }
+
         private static void BuildWidgetConfig(
             string path,
             BoolWidget boolWidget, IntWidget intWidget, FloatWidget floatWidget, StringWidget stringWidget,
-            Vector2Widget vector2Widget, Vector3Widget vector3Widget, ColorWidget colorWidget)
+            Vector2Widget vector2Widget, Vector3Widget vector3Widget, ColorWidget colorWidget,
+            IntSliderWidget intSliderWidget, FloatSliderWidget floatSliderWidget)
         {
             var config = AssetDatabase.LoadAssetAtPath<DSMWidgetConfig>(path);
             if (config == null)
@@ -220,6 +258,8 @@ namespace DataSaveManager.Editor
             SetField(config, "_vector2Widget", vector2Widget);
             SetField(config, "_vector3Widget", vector3Widget);
             SetField(config, "_colorWidget", colorWidget);
+            SetField(config, "_intSliderWidget", intSliderWidget);
+            SetField(config, "_floatSliderWidget", floatSliderWidget);
 
             EditorUtility.SetDirty(config);
         }
@@ -390,7 +430,7 @@ namespace DataSaveManager.Editor
             return button;
         }
 
-        // ---- Row building blocks shared by the 7 widget prefabs ----
+        // ---- Row building blocks shared by the widget prefabs ----
 
         private static GameObject CreateRowRoot(string name)
         {
@@ -479,6 +519,29 @@ namespace DataSaveManager.Editor
 
             var layout = go.AddComponent<LayoutElement>();
             layout.flexibleWidth = 1f;
+
+            return input;
+        }
+
+        private static Slider CreateRowSlider(GameObject row)
+        {
+            var go = DefaultControls.CreateSlider(UiResources());
+            go.transform.SetParent(row.transform, false);
+            go.name = "Slider";
+
+            var layout = go.AddComponent<LayoutElement>();
+            layout.flexibleWidth = 1f;
+
+            return go.GetComponent<Slider>();
+        }
+
+        private static TMP_InputField CreateSliderValueInput(GameObject row, TMP_FontAsset font, TMP_InputField.ContentType contentType)
+        {
+            var input = CreateRowInput(row, font, contentType);
+
+            var layout = input.GetComponent<LayoutElement>();
+            layout.preferredWidth = SliderInputWidth;
+            layout.flexibleWidth = 0f;
 
             return input;
         }

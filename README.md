@@ -146,7 +146,7 @@ Example Save File — a flat JSON object of only the Overrides that have been se
 - **Settings** — edits AutoSave, AutoSave Debounce, Save Directory, and File Name on the Config
   asset; shows the resolved Save File path with buttons to open its folder or delete the file.
 - **Entries** — one card per Entry Definition: key, type, label, exposed toggle, default value,
-  current value, Reset, and remove. Duplicate keys are highlighted and reported. Drag a card by
+  current value, Reset, and remove. Exposed Int/Float Entries add a Range line. Duplicate keys are highlighted and reported. Drag a card by
   its handle to reorder it — that order is the Runtime Panel order.
 - **Add Entry** — key and type for a new Entry Definition.
 - **Footer** — Reset All Values, and a live count of current Overrides.
@@ -176,14 +176,45 @@ The Color widget takes a hex code (`#RGB`, `#RRGGBB`, or `#RRGGBBAA`; the leadin
 Regenerate or restyle the default widget prefabs with **DSM › Build Runtime Panel Prefabs** — this
 overwrites the existing prefabs and the `DSMWidgetConfig` asset under `Prefab/`.
 
+### Layout
+
+The `DSMRuntimePanel` component has a **Layout** group. Changes made in the Inspector during Play mode
+apply to the open panel immediately.
+
+- **Label Width**, **Row Height**, **Row Spacing**, **Font Size** — row metrics; the font size applies to
+  every text in a row.
+- **Panel Size**, **Anchor** (Center, Left, Right, Top, Bottom, or a corner), **Offset** — where the panel
+  sits on screen. Anchor sets both the anchor and the pivot; Offset is relative to it.
+- **Background Color** — the panel's background.
+- **Label Overflow** — `Ellipsis` keeps each label on one line at Row Height; `Wrap` lets a row grow
+  taller than Row Height to fit its wrapped label (Row Height becomes the minimum).
+- **Float Decimals** (0-6) — decimals shown by float sliders and used to round slider commits.
+
+### Range sliders
+
+In the DSM Manager, an Exposed Entry of type Int or Float gets a **Range** line: a toggle plus Min and
+Max. With a Range the Runtime Panel shows the Entry as `Label | Slider | InputField`; without one it
+shows the plain input. Min must be less than Max — otherwise the fields are tinted red and the panel
+logs a warning and falls back to the plain input.
+
+A Range is a presentation hint only and never clamps the Value: the slider handle sits at the clamped
+position, while the input box shows the real Value and accepts anything typed. Int sliders step in whole
+numbers; float sliders round committed values to **Float Decimals**.
+
 ### Custom widgets
 
 - Subclass `DSMWidget<T>`: implement `Show(T value)` to render, and call `Commit(value)` when the
   user edits the control.
 - Or implement `IDSMWidget` directly for full control over `Setup(DSMEntryDefinition entry)`.
 
+- `DSMWidget<T>` also implements `IDSMLayoutAware`; override `ApplyLayout(DSMPanelLayout)` to pick up
+  extra Layout settings, and `OnSetup(DSMEntryDefinition)` to read the Entry (for example its Range)
+  before the first `Show`. A widget that implements only `IDSMWidget` can add `IDSMLayoutAware` itself.
+
 Either way, assign your widget's prefab to the matching type slot on a `DSMWidgetConfig` asset,
-and assign that asset to the `DSMRuntimePanel`'s Widget Config field.
+and assign that asset to the `DSMRuntimePanel`'s Widget Config field. The Int Slider Widget and
+Float Slider Widget slots are used for Int and Float Entries that have a valid Range; if a slider slot
+is empty, those Entries fall back to the plain Int or Float widget.
 
 ## Binding
 

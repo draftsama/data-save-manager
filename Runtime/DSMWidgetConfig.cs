@@ -14,6 +14,8 @@ namespace DataSaveManager
         [SerializeField] private Vector2Widget? _vector2Widget;
         [SerializeField] private Vector3Widget? _vector3Widget;
         [SerializeField] private ColorWidget? _colorWidget;
+        [SerializeField] private IntSliderWidget? _intSliderWidget;
+        [SerializeField] private FloatSliderWidget? _floatSliderWidget;
 
         public MonoBehaviour? GetWidgetPrefab(DSMDataType type) => type switch
         {
@@ -26,5 +28,22 @@ namespace DataSaveManager
             DSMDataType.Color   => _colorWidget,
             _                   => null
         };
+
+        /// <summary>The slider prefab for an Entry with a valid Range (falling back to the plain prefab if that slot is empty), otherwise the plain prefab for its type.</summary>
+        public MonoBehaviour? GetWidgetPrefab(DSMEntryDefinition entry)
+        {
+            if (entry.HasValidRange)
+            {
+                MonoBehaviour? slider = entry.Type switch
+                {
+                    DSMDataType.Int   => _intSliderWidget,
+                    DSMDataType.Float => _floatSliderWidget,
+                    _                 => null
+                };
+                if (slider != null) return slider;
+            }
+
+            return GetWidgetPrefab(entry.Type);
+        }
     }
 }
