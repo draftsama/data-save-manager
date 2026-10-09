@@ -50,8 +50,10 @@ namespace DataSaveManager.Editor
             var intSliderWidget = BuildIntSliderWidgetPrefab(Path.Combine(prefabDir, "IntSliderWidget.prefab").Replace('\\', '/'), font);
             var floatSliderWidget = BuildFloatSliderWidgetPrefab(Path.Combine(prefabDir, "FloatSliderWidget.prefab").Replace('\\', '/'), font);
 
+            var headerRow = BuildHeaderRowPrefab(Path.Combine(prefabDir, "HeaderRow.prefab").Replace('\\', '/'), font);
+
             var configPath = Path.Combine(prefabDir, "DSMWidgetConfig.asset").Replace('\\', '/');
-            BuildWidgetConfig(configPath, boolWidget, intWidget, floatWidget, stringWidget, vector2Widget, vector3Widget, colorWidget, intSliderWidget, floatSliderWidget);
+            BuildWidgetConfig(configPath, boolWidget, intWidget, floatWidget, stringWidget, vector2Widget, vector3Widget, colorWidget, intSliderWidget, floatSliderWidget, headerRow);
             var widgetConfig = AssetDatabase.LoadAssetAtPath<DSMWidgetConfig>(configPath);
 
             var panelPath = Path.Combine(prefabDir, "DSMRuntimePanel.prefab").Replace('\\', '/');
@@ -70,6 +72,7 @@ namespace DataSaveManager.Editor
                        $"  {Path.Combine(prefabDir, "ColorWidget.prefab")}\n" +
                        $"  {Path.Combine(prefabDir, "IntSliderWidget.prefab")}\n" +
                        $"  {Path.Combine(prefabDir, "FloatSliderWidget.prefab")}\n" +
+                       $"  {Path.Combine(prefabDir, "HeaderRow.prefab")}\n" +
                        $"  {configPath}\n" +
                        $"  {panelPath}");
         }
@@ -238,11 +241,44 @@ namespace DataSaveManager.Editor
             return saved.GetComponent<FloatSliderWidget>();
         }
 
+        private static DSMHeaderRow BuildHeaderRowPrefab(string path, TMP_FontAsset font)
+        {
+            var row = new GameObject("HeaderRow", typeof(RectTransform));
+
+            var group = row.AddComponent<VerticalLayoutGroup>();
+            group.padding = new RectOffset(4, 4, 12, 0);
+            group.childControlWidth = true;
+            group.childControlHeight = true;
+            group.childForceExpandWidth = true;
+            group.childForceExpandHeight = false;
+
+            var textGo = new GameObject("Text", typeof(RectTransform));
+            textGo.transform.SetParent(row.transform, false);
+
+            var text = textGo.AddComponent<TextMeshProUGUI>();
+            text.text = "Header";
+            text.font = font;
+            text.fontSize = 24f;
+            text.fontStyle = FontStyles.Bold;
+            text.alignment = TextAlignmentOptions.Left;
+            text.textWrappingMode = TextWrappingModes.NoWrap;
+            text.overflowMode = TextOverflowModes.Ellipsis;
+            text.color = new Color(0.75f, 0.85f, 1f, 1f);
+            text.raycastTarget = false;
+
+            var widget = row.AddComponent<DSMHeaderRow>();
+            SetField(widget, "_text", text);
+
+            var saved = SaveAndDestroy(row, path);
+            return saved.GetComponent<DSMHeaderRow>();
+        }
+
         private static void BuildWidgetConfig(
             string path,
             BoolWidget boolWidget, IntWidget intWidget, FloatWidget floatWidget, StringWidget stringWidget,
             Vector2Widget vector2Widget, Vector3Widget vector3Widget, ColorWidget colorWidget,
-            IntSliderWidget intSliderWidget, FloatSliderWidget floatSliderWidget)
+            IntSliderWidget intSliderWidget, FloatSliderWidget floatSliderWidget,
+            DSMHeaderRow headerRow)
         {
             var config = AssetDatabase.LoadAssetAtPath<DSMWidgetConfig>(path);
             if (config == null)
@@ -260,6 +296,7 @@ namespace DataSaveManager.Editor
             SetField(config, "_colorWidget", colorWidget);
             SetField(config, "_intSliderWidget", intSliderWidget);
             SetField(config, "_floatSliderWidget", floatSliderWidget);
+            SetField(config, "_headerRow", headerRow);
 
             EditorUtility.SetDirty(config);
         }

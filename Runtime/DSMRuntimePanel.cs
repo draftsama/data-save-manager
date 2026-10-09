@@ -227,6 +227,8 @@ namespace DataSaveManager
                 return;
             }
 
+            var warnedMissingHeaderRow = false;
+
             foreach (var entry in DSM.Config.Entries.Where(e => e.Exposed))
             {
                 if (entry.HasRange && !entry.HasValidRange && (entry.Type is DSMDataType.Int or DSMDataType.Float))
@@ -237,6 +239,22 @@ namespace DataSaveManager
                 {
                     Debug.LogError($"DSMRuntimePanel on '{gameObject.name}': no widget prefab configured for '{entry.Key}' ({entry.Type}).", this);
                     continue;
+                }
+
+                if (entry.ShowsHeader)
+                {
+                    var headerPrefab = _widgetConfig.HeaderRow;
+                    if (headerPrefab != null)
+                    {
+                        var headerRow = Instantiate(headerPrefab, _container);
+                        headerRow.SetText(entry.Header);
+                        headerRow.ApplyLayout(_layout);
+                    }
+                    else if (!warnedMissingHeaderRow)
+                    {
+                        warnedMissingHeaderRow = true;
+                        Debug.LogWarning($"DSMRuntimePanel on '{gameObject.name}': headers are skipped because the Widget Config has no Header Row prefab.", this);
+                    }
                 }
 
                 var go = Instantiate(widgetPrefab.gameObject, _container);

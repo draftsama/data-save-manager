@@ -21,3 +21,4 @@ MonoBehaviour:
   _colorWidget: {fileID: 6503202232970945136, guid: 67afc37f9a8244de19b56c4afe117041, type: 3}
   _intSliderWidget: {fileID: 745638659979968722, guid: e5d6f7901c5544a64a532d26c862313f, type: 3}
   _floatSliderWidget: {fileID: 7336136325953545120, guid: 1504f6f4ac9304807b6634e3c67e210d, type: 3}
+  _headerRow: {fileID: 1642771853125953046, guid: 9a7ab80ed6e604b929575268e51d7775, type: 3}

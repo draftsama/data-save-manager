@@ -17,6 +17,8 @@ namespace DataSaveManager
         [SerializeField] private bool _hasRange;
         [SerializeField] private float _rangeMin;
         [SerializeField] private float _rangeMax;
+        [SerializeField] private bool _hasHeader;
+        [SerializeField] private string _header = string.Empty;
 
         public string Key
         {
@@ -65,6 +67,20 @@ namespace DataSaveManager
             get => _rangeMax;
             set => _rangeMax = value;
         }
+
+        public bool HasHeader
+        {
+            get => _hasHeader;
+            set => _hasHeader = value;
+        }
+
+        public string Header
+        {
+            get => _header;
+            set => _header = value;
+        }
+
+        public bool ShowsHeader => _hasHeader && !string.IsNullOrWhiteSpace(_header);
 
         public bool HasValidRange => _hasRange && _rangeMin < _rangeMax && (_type is DSMDataType.Int or DSMDataType.Float);
 

@@ -202,6 +202,15 @@ apply to the open panel immediately.
 - **Float Decimals** (0-6) — decimals shown by float sliders and used to round slider commits.
 - **Scrollbar Width**, **Scroll Sensitivity** — width of the vertical scrollbar and mouse-wheel speed.
   The scrollbar hides itself when all rows fit; the list scrolls with the wheel or by dragging.
+- **Header Font Size**, **Header Spacing** — font size of Entry headers and the extra space above each one.
+
+### Headers
+
+In the DSM Manager, an Exposed Entry of any type gets a **Header** line: a toggle plus a text field.
+When the toggle is on and the text is not blank, the Runtime Panel shows the text as a title row
+directly above that Entry's row, to start a visual group. Turning the toggle off keeps the text. A
+header is presentation only and has no effect on the Value. It needs the Widget Config's **Header Row**
+slot; if that slot is empty the panel logs one warning per rebuild and skips the headers.
 
 ### Range sliders
 
@@ -227,7 +236,9 @@ numbers; float sliders round committed values to **Float Decimals**.
 Either way, assign your widget's prefab to the matching type slot on a `DSMWidgetConfig` asset,
 and assign that asset to the `DSMRuntimePanel`'s Widget Config field. The Int Slider Widget and
 Float Slider Widget slots are used for Int and Float Entries that have a valid Range; if a slider slot
-is empty, those Entries fall back to the plain Int or Float widget.
+is empty, those Entries fall back to the plain Int or Float widget. The **Header Row** slot takes a
+prefab with a `DSMHeaderRow` component (a root with a `VerticalLayoutGroup` and a text assigned to its
+`_text` field); it is spawned above Entries that have a Header.
 
 ## Binding
 

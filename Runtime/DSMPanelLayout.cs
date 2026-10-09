@@ -64,6 +64,12 @@ namespace DataSaveManager
         [SerializeField, Tooltip("Mouse-wheel scroll speed.")]
         private float _scrollSensitivity = 30f;
 
+        [SerializeField, Tooltip("Font size of Entry headers.")]
+        private float _headerFontSize = 24f;
+
+        [SerializeField, Tooltip("Extra space above each Entry header.")]
+        private float _headerSpacing = 12f;
+
         public float LabelWidth => _labelWidth;
         public float RowHeight => _rowHeight;
         public float RowSpacing => _rowSpacing;
@@ -76,5 +82,7 @@ namespace DataSaveManager
         public int FloatDecimals => Mathf.Clamp(_floatDecimals, 0, 6);
         public float ScrollbarWidth => _scrollbarWidth;
         public float ScrollSensitivity => _scrollSensitivity;
+        public float HeaderFontSize => _headerFontSize;
+        public float HeaderSpacing => _headerSpacing;
     }
 }

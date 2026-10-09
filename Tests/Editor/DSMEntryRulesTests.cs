@@ -176,6 +176,29 @@ namespace DataSaveManager.Tests
             Assert.IsFalse(entry.HasValidRange);
         }
 
+        // ── ShowsHeader ──────────────────────────────────────────────────────
+
+        [Test]
+        public void ShowsHeader_FalseWhenToggleOffEvenWithText()
+        {
+            var entry = new DSMEntryDefinition { HasHeader = false, Header = "Audio" };
+            Assert.IsFalse(entry.ShowsHeader);
+        }
+
+        [Test]
+        public void ShowsHeader_FalseWhenOnWithBlankOrWhitespaceText()
+        {
+            Assert.IsFalse(new DSMEntryDefinition { HasHeader = true, Header = string.Empty }.ShowsHeader);
+            Assert.IsFalse(new DSMEntryDefinition { HasHeader = true, Header = "   " }.ShowsHeader);
+        }
+
+        [Test]
+        public void ShowsHeader_TrueWhenOnWithText()
+        {
+            var entry = new DSMEntryDefinition { HasHeader = true, Header = "Audio" };
+            Assert.IsTrue(entry.ShowsHeader);
+        }
+
         // ── DefaultJsonFor round-trip ────────────────────────────────────────
 
         [Test]
