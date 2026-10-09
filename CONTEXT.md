@@ -49,6 +49,7 @@ Removing **Overrides** so **Values** fall back to their **Defaults**.
 - The **Save File** stores **Values** by **Key**; a **Key** in the **Save File** with no **Entry Definition** is an _orphan_.
 - An **Exposed Entry** is an **Entry** — not a separate kind of data.
 - An **Exposed Entry** has at most one **Range**; with a **Range** it shows as a slider, without one as a plain input. A **Value** outside its **Range** is kept as-is.
+- A **Reset** from the **Runtime Panel** covers only **Exposed Entries**, and only after the operator confirms; **Overrides** of other **Entries** and of _ad-hoc keys_ survive it.
 - A **Key** used in code without an **Entry Definition** is an _ad-hoc key_: it works and persists like any **Override**, but is never added to the **Config** automatically.
 
 ## Flagged ambiguities

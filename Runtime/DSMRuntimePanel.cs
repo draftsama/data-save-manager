@@ -3,6 +3,7 @@
 using System;
 using System.Linq;
 using UnityEngine;
+using UnityEngine.Serialization;
 using UnityEngine.UI;
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
@@ -10,6 +11,13 @@ using UnityEngine.InputSystem;
 
 namespace DataSaveManager
 {
+    public enum DSMSaveButtonMode
+    {
+        Auto,
+        Always,
+        Never
+    }
+
     /// <summary>The in-game UI where an operator views and edits Exposed Entries while the app runs. Toggled with a hotkey.</summary>
     public sealed class DSMRuntimePanel : MonoBehaviour
     {
@@ -17,8 +25,13 @@ namespace DataSaveManager
         [SerializeField] private GameObject? _root;
         [SerializeField] private Transform? _container;
         [SerializeField] private Button? _saveButton;
-        [SerializeField] private Button? _resetAllButton;
+        [SerializeField, FormerlySerializedAs("_resetAllButton")] private Button? _resetButton;
         [SerializeField] private Button? _closeButton;
+        [SerializeField] private GameObject? _confirmDialog;
+        [SerializeField] private Button? _confirmCancelButton;
+        [SerializeField] private Button? _confirmResetButton;
+        [SerializeField, Tooltip("Auto shows the Save button only when AutoSave is off. Always / Never force it on / off.")]
+        private DSMSaveButtonMode _saveButtonMode = DSMSaveButtonMode.Auto;
         [SerializeField] private KeyCode _toggleKey = KeyCode.F1;
         [SerializeField] private bool _startVisible;
         [SerializeField] private DSMPanelLayout _layout = new();
@@ -38,13 +51,18 @@ namespace DataSaveManager
         private void Awake()
         {
             if (_saveButton != null) _saveButton.onClick.AddListener(DSM.Save);
-            if (_resetAllButton != null) _resetAllButton.onClick.AddListener(DSM.ResetAll);
+            if (_resetButton != null) _resetButton.onClick.AddListener(OnResetClicked);
             if (_closeButton != null) _closeButton.onClick.AddListener(Hide);
+            if (_confirmCancelButton != null) _confirmCancelButton.onClick.AddListener(CloseConfirmDialog);
+            if (_confirmResetButton != null) _confirmResetButton.onClick.AddListener(OnConfirmResetClicked);
 
 #if ENABLE_INPUT_SYSTEM
             // Parsed once here instead of every frame in Update.
             _hasInputSystemToggleKey = Enum.TryParse<Key>(_toggleKey.ToString(), out _inputSystemToggleKey);
 #endif
+
+            CloseConfirmDialog();
+            ApplySaveButtonMode();
 
             if (_startVisible) Show();
             else if (_root != null) _root.SetActive(false);
@@ -65,6 +83,8 @@ namespace DataSaveManager
 
         public void Show()
         {
+            CloseConfirmDialog();
+            ApplySaveButtonMode();
             Rebuild();
             if (_root != null) _root.SetActive(true);
             SetOpen(true);
@@ -72,8 +92,52 @@ namespace DataSaveManager
 
         public void Hide()
         {
+            CloseConfirmDialog();
+            if (DSM.Config.AutoSave && DSM.Store.IsDirty) DSM.Save();
             if (_root != null) _root.SetActive(false);
             SetOpen(false);
+        }
+
+        private void OnResetClicked()
+        {
+            if (_confirmDialog == null)
+            {
+                Debug.LogWarning($"DSMRuntimePanel on '{gameObject.name}': no confirm dialog assigned; resetting without confirmation.", this);
+                ResetExposedEntries();
+                return;
+            }
+            _confirmDialog.SetActive(true);
+        }
+
+        private void OnConfirmResetClicked()
+        {
+            CloseConfirmDialog();
+            ResetExposedEntries();
+        }
+
+        private void CloseConfirmDialog()
+        {
+            if (_confirmDialog != null) _confirmDialog.SetActive(false);
+        }
+
+        // Exposed Entries only: ResetAll would also wipe ad-hoc keys (e.g. window-layout keys).
+        private static void ResetExposedEntries()
+        {
+            foreach (var entry in DSM.Config.Entries.Where(e => e.Exposed))
+                DSM.Reset(entry.Key);
+        }
+
+        private void ApplySaveButtonMode()
+        {
+            if (_saveButton == null) return;
+
+            var active = _saveButtonMode switch
+            {
+                DSMSaveButtonMode.Always => true,
+                DSMSaveButtonMode.Never  => false,
+                _                        => !DSM.Config.AutoSave
+            };
+            _saveButton.gameObject.SetActive(active);
         }
 
         private void OnDestroy() => SetOpen(false);
@@ -96,6 +160,7 @@ namespace DataSaveManager
             if (!Application.isPlaying || _root == null || _container == null) return;
 
             ApplyPanelLayout();
+            ApplySaveButtonMode();
             foreach (var row in _container.GetComponentsInChildren<IDSMLayoutAware>(true))
                 row.ApplyLayout(_layout);
         }
@@ -119,6 +184,19 @@ namespace DataSaveManager
 
             if (_container != null && _container.TryGetComponent<VerticalLayoutGroup>(out var group))
                 group.spacing = _layout.RowSpacing;
+
+            var scrollRect = _container != null ? _container.GetComponentInParent<ScrollRect>(true) : null;
+            if (scrollRect != null)
+            {
+                scrollRect.scrollSensitivity = _layout.ScrollSensitivity;
+                if (scrollRect.verticalScrollbar != null
+                    && scrollRect.verticalScrollbar.TryGetComponent<RectTransform>(out var barRect))
+                {
+                    var size = barRect.sizeDelta;
+                    size.x = _layout.ScrollbarWidth;
+                    barRect.sizeDelta = size;
+                }
+            }
         }
 
         private static Vector2 AnchorPoint(DSMPanelAnchor anchor) => anchor switch

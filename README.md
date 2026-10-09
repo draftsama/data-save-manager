@@ -171,7 +171,18 @@ The Color widget takes a hex code (`#RGB`, `#RRGGBB`, or `#RRGGBBAA`; the leadin
 2. Make sure the scene has an `EventSystem` (not included in the prefab).
 3. Mark the Entries you want visible as **Exposed** in the DSM Manager window.
 4. Press the toggle key (default `F1`, via the Input System if installed, otherwise the legacy
-   Input Manager) to show/hide the panel. It also exposes Save and Reset All buttons, and Close.
+   Input Manager) to show/hide the panel. The footer has Save, Reset to Defaults, and Close buttons.
+
+- **Reset to Defaults** asks for confirmation in a popup, then resets only the Exposed Entries.
+  Overrides of non-exposed Entries and of ad-hoc keys (keys used in code without an Entry Definition)
+  are left alone. `DSM.ResetAll()` still clears every Override.
+- **Save Button Mode** (on the `DSMRuntimePanel` component) controls the Save button: `Auto` shows it only
+  when AutoSave is off, `Always` always shows it, `Never` hides it.
+- **Close** (and the toggle key) cancels an open reset confirmation. With AutoSave on, it also saves any
+  pending changes immediately instead of waiting for the debounce; with AutoSave off it does not save.
+
+If you use a prefab built before the confirm popup existed (no `ConfirmDialog` assigned), Reset to
+Defaults resets immediately and logs a warning. Regenerate the prefab to get the popup.
 
 Regenerate or restyle the default widget prefabs with **DSM › Build Runtime Panel Prefabs** — this
 overwrites the existing prefabs and the `DSMWidgetConfig` asset under `Prefab/`.
@@ -189,6 +200,8 @@ apply to the open panel immediately.
 - **Label Overflow** — `Ellipsis` keeps each label on one line at Row Height; `Wrap` lets a row grow
   taller than Row Height to fit its wrapped label (Row Height becomes the minimum).
 - **Float Decimals** (0-6) — decimals shown by float sliders and used to round slider commits.
+- **Scrollbar Width**, **Scroll Sensitivity** — width of the vertical scrollbar and mouse-wheel speed.
+  The scrollbar hides itself when all rows fit; the list scrolls with the wheel or by dragging.
 
 ### Range sliders
 

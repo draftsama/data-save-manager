@@ -58,6 +58,12 @@ namespace DataSaveManager
         [SerializeField, Range(0, 6), Tooltip("Decimal places shown by float sliders and used when rounding slider commits.")]
         private int _floatDecimals = 2;
 
+        [SerializeField, Tooltip("Width of the vertical scrollbar.")]
+        private float _scrollbarWidth = 20f;
+
+        [SerializeField, Tooltip("Mouse-wheel scroll speed.")]
+        private float _scrollSensitivity = 30f;
+
         public float LabelWidth => _labelWidth;
         public float RowHeight => _rowHeight;
         public float RowSpacing => _rowSpacing;
@@ -68,5 +74,7 @@ namespace DataSaveManager
         public Color BackgroundColor => _backgroundColor;
         public DSMLabelOverflow LabelOverflow => _labelOverflow;
         public int FloatDecimals => Mathf.Clamp(_floatDecimals, 0, 6);
+        public float ScrollbarWidth => _scrollbarWidth;
+        public float ScrollSensitivity => _scrollSensitivity;
     }
 }

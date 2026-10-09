@@ -301,16 +301,20 @@ namespace DataSaveManager.Editor
 
             BuildHeader(panel, font);
             var container = BuildScrollView(panel);
-            var (saveButton, resetAllButton, closeButton) = BuildFooter(panel, font);
+            var (saveButton, resetButton, closeButton) = BuildFooter(panel, font);
+            var (confirmDialog, confirmCancelButton, confirmResetButton) = BuildConfirmDialog(panel, font);
 
             var panelComponent = rootGo.AddComponent<DSMRuntimePanel>();
             SetField(panelComponent, "_widgetConfig", widgetConfig);
             SetField(panelComponent, "_root", panel);
             SetField(panelComponent, "_container", container);
             SetField(panelComponent, "_saveButton", saveButton);
-            SetField(panelComponent, "_resetAllButton", resetAllButton);
+            SetField(panelComponent, "_resetButton", resetButton);
             SetField(panelComponent, "_closeButton", closeButton);
-            // _startVisible / _toggleKey keep their C# field defaults (false / KeyCode.F1).
+            SetField(panelComponent, "_confirmDialog", confirmDialog);
+            SetField(panelComponent, "_confirmCancelButton", confirmCancelButton);
+            SetField(panelComponent, "_confirmResetButton", confirmResetButton);
+            // _startVisible / _toggleKey / _saveButtonMode keep their C# field defaults (false / KeyCode.F1 / Auto).
 
             SaveAndDestroy(rootGo, path);
         }
@@ -386,10 +390,37 @@ namespace DataSaveManager.Editor
             scrollRect.viewport = viewportRect;
             scrollRect.content = contentRect;
 
+            var scrollbar = CreateVerticalScrollbar(scrollGo);
+            scrollRect.verticalScrollbar = scrollbar;
+            scrollRect.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.AutoHideAndExpandViewport;
+            scrollRect.verticalScrollbarSpacing = 6f;
+            scrollRect.scrollSensitivity = 30f;
+
             return contentGo.transform;
         }
 
-        private static (Button save, Button resetAll, Button close) BuildFooter(GameObject panel, TMP_FontAsset font)
+        private static Scrollbar CreateVerticalScrollbar(GameObject scrollView)
+        {
+            var go = DefaultControls.CreateScrollbar(UiResources());
+            go.transform.SetParent(scrollView.transform, false);
+            go.name = "Scrollbar Vertical";
+
+            var rect = go.GetComponent<RectTransform>();
+            rect.anchorMin = new Vector2(1f, 0f);
+            rect.anchorMax = Vector2.one;
+            rect.pivot = Vector2.one;
+            rect.sizeDelta = new Vector2(20f, 0f);
+            rect.anchoredPosition = Vector2.zero;
+
+            go.GetComponent<Image>().color = new Color(1f, 1f, 1f, 0.08f);
+            go.transform.Find("Sliding Area/Handle").GetComponent<Image>().color = new Color(1f, 1f, 1f, 0.35f);
+
+            var scrollbar = go.GetComponent<Scrollbar>();
+            scrollbar.direction = Scrollbar.Direction.BottomToTop;
+            return scrollbar;
+        }
+
+        private static (Button save, Button reset, Button close) BuildFooter(GameObject panel, TMP_FontAsset font)
         {
             var footer = new GameObject("Footer", typeof(RectTransform));
             footer.transform.SetParent(panel.transform, false);
@@ -403,10 +434,80 @@ namespace DataSaveManager.Editor
             footerLayout.childAlignment = TextAnchor.MiddleRight;
 
             var save = CreateFooterButton(footer, "SaveButton", "Save", font);
-            var resetAll = CreateFooterButton(footer, "ResetAllButton", "Reset All", font);
+            var reset = CreateFooterButton(footer, "ResetButton", "Reset to Defaults", font);
             var close = CreateFooterButton(footer, "CloseButton", "Close", font);
 
-            return (save, resetAll, close);
+            return (save, reset, close);
+        }
+
+        /// <summary>Builds the modal confirm overlay as the last child of the panel; saved inactive.</summary>
+        private static (GameObject dialog, Button cancel, Button confirm) BuildConfirmDialog(GameObject panel, TMP_FontAsset font)
+        {
+            var dialog = new GameObject("ConfirmDialog", typeof(RectTransform));
+            dialog.transform.SetParent(panel.transform, false);
+
+            // Panel has a VerticalLayoutGroup; the overlay must not take part in it.
+            var ignore = dialog.AddComponent<LayoutElement>();
+            ignore.ignoreLayout = true;
+
+            var dialogRect = dialog.GetComponent<RectTransform>();
+            dialogRect.anchorMin = Vector2.zero;
+            dialogRect.anchorMax = Vector2.one;
+            dialogRect.offsetMin = Vector2.zero;
+            dialogRect.offsetMax = Vector2.zero;
+
+            var dim = dialog.AddComponent<Image>();
+            dim.color = new Color(0f, 0f, 0f, 0.6f);
+            dim.raycastTarget = true;
+
+            var box = new GameObject("Box", typeof(RectTransform));
+            box.transform.SetParent(dialog.transform, false);
+
+            var boxRect = box.GetComponent<RectTransform>();
+            boxRect.anchorMin = new Vector2(0.5f, 0.5f);
+            boxRect.anchorMax = new Vector2(0.5f, 0.5f);
+            boxRect.pivot = new Vector2(0.5f, 0.5f);
+            boxRect.sizeDelta = new Vector2(560f, 220f);
+            boxRect.anchoredPosition = Vector2.zero;
+
+            var boxImage = box.AddComponent<Image>();
+            boxImage.color = new Color(0.14f, 0.14f, 0.18f, 1f);
+
+            var boxLayout = box.AddComponent<VerticalLayoutGroup>();
+            boxLayout.padding = new RectOffset(24, 24, 24, 24);
+            boxLayout.spacing = 20f;
+            boxLayout.childControlWidth = true;
+            boxLayout.childControlHeight = true;
+            boxLayout.childForceExpandWidth = true;
+            boxLayout.childForceExpandHeight = false;
+            boxLayout.childAlignment = TextAnchor.MiddleCenter;
+
+            var messageGo = new GameObject("Message", typeof(RectTransform));
+            messageGo.transform.SetParent(box.transform, false);
+            var message = messageGo.AddComponent<TextMeshProUGUI>();
+            message.text = "Reset all settings on this panel to their defaults?\nThis cannot be undone.";
+            message.font = font;
+            message.fontSize = FontSize;
+            message.alignment = TextAlignmentOptions.Center;
+            message.textWrappingMode = TextWrappingModes.Normal;
+            var messageLayout = messageGo.AddComponent<LayoutElement>();
+            messageLayout.flexibleHeight = 1f;
+
+            var buttonRow = new GameObject("Buttons", typeof(RectTransform));
+            buttonRow.transform.SetParent(box.transform, false);
+            var rowLayout = buttonRow.AddComponent<HorizontalLayoutGroup>();
+            rowLayout.spacing = 12f;
+            rowLayout.childControlWidth = true;
+            rowLayout.childControlHeight = true;
+            rowLayout.childForceExpandWidth = false;
+            rowLayout.childForceExpandHeight = false;
+            rowLayout.childAlignment = TextAnchor.MiddleCenter;
+
+            var cancel = CreateFooterButton(buttonRow, "CancelButton", "Cancel", font);
+            var confirm = CreateFooterButton(buttonRow, "ConfirmResetButton", "Reset", font);
+
+            dialog.SetActive(false);
+            return (dialog, cancel, confirm);
         }
 
         private static Button CreateFooterButton(GameObject footer, string goName, string text, TMP_FontAsset font)
