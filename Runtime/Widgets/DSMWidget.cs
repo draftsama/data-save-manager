@@ -1,5 +1,6 @@
 #nullable enable
 
+using System;
 using Cysharp.Threading.Tasks;
 using Cysharp.Threading.Tasks.Linq;
 using TMPro;
@@ -13,16 +14,25 @@ namespace DataSaveManager
     {
         [SerializeField] private TextMeshProUGUI? _label;
 
+        private DSMStore? _store;
+
         protected string Key { get; private set; } = string.Empty;
 
-        public void Setup(DSMEntryDefinition entry)
+        /// <summary>The store passed to <see cref="Setup(DSMEntryDefinition, DSMStore)"/>, or the global store before Setup.</summary>
+        protected DSMStore Store => _store ?? DSM.Store;
+
+        [Obsolete("Pass the store: Setup(entry, store); removed in 3.0.")]
+        public void Setup(DSMEntryDefinition entry) => Setup(entry, DSM.Store);
+
+        public void Setup(DSMEntryDefinition entry, DSMStore store)
         {
+            _store = store;
             Key = entry.Key;
             if (_label != null) _label.text = entry.DisplayLabel;
 
             OnSetup(entry);
 
-            DSM.WatchAsync<T>(Key).ForEachAsync(Show, destroyCancellationToken).Forget();
+            store.WatchAsync<T>(Key).ForEachAsync(Show, destroyCancellationToken).Forget();
         }
 
         /// <summary>Called once from <see cref="Setup"/>, before the Watch subscription starts delivering values.</summary>
@@ -53,6 +63,6 @@ namespace DataSaveManager
         /// <summary>Writes <paramref name="value"/> into the UI without triggering a Commit round-trip.</summary>
         protected abstract void Show(T value);
 
-        protected void Commit(T value) => DSM.Set(Key, value);
+        protected void Commit(T value) => Store.Set(Key, value);
     }
 }

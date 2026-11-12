@@ -64,7 +64,7 @@ namespace DataSaveManager
             if (float.TryParse(text, NumberStyles.Any, CultureInfo.InvariantCulture, out var value))
                 Commit(value);
             else
-                Show(DSM.Get(Key, 0f));
+                Show(Store.Get(Key, 0f));
         }
     }
 }
