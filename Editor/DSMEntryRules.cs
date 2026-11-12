@@ -2,12 +2,11 @@
 
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 
 namespace DataSaveManager.Editor
 {
-    /// <summary>Pure validation rules for editing a <see cref="DSMConfig"/>'s entries, kept separate from the window for unit testing.</summary>
+    /// <summary>Pure validation rules for the Keys of a <see cref="DSMConfig"/>'s entries, kept separate from the window for unit testing. Presentation Hint rules live in <see cref="DSMPresentation"/>.</summary>
     internal static class DSMEntryRules
     {
         public static string? ValidateNewKey(DSMConfig config, string key)
@@ -26,50 +25,5 @@ namespace DataSaveManager.Editor
                 .Where(g => g.Count() > 1)
                 .Select(g => g.Key)
                 .ToHashSet(StringComparer.Ordinal);
-
-        public static int NextOptionValue(IEnumerable<int> existing)
-        {
-            var any = false;
-            var max = int.MinValue;
-            foreach (var value in existing)
-            {
-                any = true;
-                if (value > max) max = value;
-            }
-
-            if (!any) return 0;
-            return max == int.MaxValue ? max : max + 1;
-        }
-
-        public static HashSet<int> DuplicateOptionValues(IEnumerable<int> values) =>
-            values
-                .GroupBy(v => v)
-                .Where(g => g.Count() > 1)
-                .Select(g => g.Key)
-                .ToHashSet();
-
-        /// <summary>Non-empty labels that appear more than once (a warning, not an error).</summary>
-        public static HashSet<string> DuplicateOptionLabels(IEnumerable<string> labels) =>
-            labels
-                .Where(l => !string.IsNullOrWhiteSpace(l))
-                .GroupBy(l => l, StringComparer.Ordinal)
-                .Where(g => g.Count() > 1)
-                .Select(g => g.Key)
-                .ToHashSet(StringComparer.Ordinal);
-
-        /// <summary>The Range a freshly enabled Range toggle starts with: 0-1 for Float, 0-100 for Int, widened so the parsed Default lies inside.</summary>
-        public static (float min, float max) InitialRange(DSMDataType type, string defaultJson)
-        {
-            var isInt = type == DSMDataType.Int;
-            var min = 0f;
-            var max = isInt ? 100f : 1f;
-
-            if (!float.TryParse(defaultJson, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) || !float.IsFinite(value))
-                return (min, max);
-
-            if (value < min) min = isInt ? (float)Math.Floor(value) : value;
-            if (value > max) max = isInt ? (float)Math.Ceiling(value) : value;
-            return (min, max);
-        }
     }
 }
