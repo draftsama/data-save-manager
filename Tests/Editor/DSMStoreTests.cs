@@ -226,6 +226,55 @@ namespace DataSaveManager.Tests
             store.Dispose();
         }
 
+        [Test]
+        public void ResetExposedEntries_RemovesOnlyExposedOverrides()
+        {
+            var exposed = IntEntry("exposedKey");
+            exposed.Exposed = true;
+            var config = NewConfig(exposed, IntEntry("hiddenKey"));
+            var store = NewStore(config);
+            store.Load();
+            store.Set("exposedKey", 100);
+            store.Set("hiddenKey", 200);
+            LogAssert.Expect(LogType.Warning, new Regex("adHocKey"));
+            store.Set("adHocKey", 300);
+
+            store.ResetExposedEntries();
+
+            Assert.IsFalse(store.HasOverride("exposedKey"));
+            Assert.AreEqual(5, store.Get<int>("exposedKey"));
+            Assert.IsTrue(store.HasOverride("hiddenKey"));
+            Assert.IsTrue(store.HasOverride("adHocKey"));
+            Assert.IsTrue(store.IsDirty);
+
+            store.Dispose();
+        }
+
+        [Test]
+        public void ResetExposedEntries_NotifiesEachAffectedKeyOnce()
+        {
+            var first = IntEntry("first");
+            first.Exposed = true;
+            var second = IntEntry("second");
+            second.Exposed = true;
+            var untouched = IntEntry("untouched");
+            untouched.Exposed = true;
+            var config = NewConfig(first, second, untouched);
+            var store = NewStore(config);
+            store.Load();
+            store.Set("first", 1);
+            store.Set("second", 2);
+
+            var changed = new List<string>();
+            store.ChangedForTests += (key, _) => changed.Add(key);
+
+            store.ResetExposedEntries();
+
+            CollectionAssert.AreEquivalent(new[] { "first", "second" }, changed);
+
+            store.Dispose();
+        }
+
         // 9. Set with an equal value does not set IsDirty (after a Save cleared it).
         [Test]
         public void Set_WithEqualValue_DoesNotMarkDirty()

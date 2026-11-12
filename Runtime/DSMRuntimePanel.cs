@@ -103,7 +103,7 @@ namespace DataSaveManager
             if (_confirmDialog == null)
             {
                 Debug.LogWarning($"DSMRuntimePanel on '{gameObject.name}': no confirm dialog assigned; resetting without confirmation.", this);
-                ResetExposedEntries();
+                DSM.ResetExposedEntries();
                 return;
             }
             _confirmDialog.SetActive(true);
@@ -112,19 +112,12 @@ namespace DataSaveManager
         private void OnConfirmResetClicked()
         {
             CloseConfirmDialog();
-            ResetExposedEntries();
+            DSM.ResetExposedEntries();
         }
 
         private void CloseConfirmDialog()
         {
             if (_confirmDialog != null) _confirmDialog.SetActive(false);
-        }
-
-        // Exposed Entries only: ResetAll would also wipe ad-hoc keys (e.g. window-layout keys).
-        private static void ResetExposedEntries()
-        {
-            foreach (var entry in DSM.Config.Entries.Where(e => e.Exposed))
-                DSM.Reset(entry.Key);
         }
 
         private void ApplySaveButtonMode()
