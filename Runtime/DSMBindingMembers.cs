@@ -9,6 +9,13 @@ using UnityEngine;
 
 namespace DataSaveManager
 {
+    internal enum DSMMemberMatch
+    {
+        None,
+        Exact,
+        Formatted
+    }
+
     /// <summary>Reflection over a component's public settable members of a given value type, shared by <see cref="DSMBinding"/> and its editor.</summary>
     internal static class DSMBindingMembers
     {
@@ -104,43 +111,88 @@ namespace DataSaveManager
             }
         }
 
-        /// <summary>True if <paramref name="id"/> resolves to a public, settable <see cref="string"/> member on <paramref name="componentType"/>.</summary>
-        public static bool IsStringMember(Type componentType, string id)
+        /// <summary>How a Link's member resolves for <paramref name="valueType"/>: an exact-type member wins; otherwise a text member (not one of Unity's base members) takes the Value through the Link's Format.</summary>
+        public static DSMMemberMatch Match(Type componentType, string id, Type valueType)
         {
-            if (string.IsNullOrEmpty(id) || id.Length < 2) return false;
-            var name = id[2..];
+            if (FindSettable(componentType, id, valueType) != null) return DSMMemberMatch.Exact;
+            if (valueType == typeof(string)) return DSMMemberMatch.None;
+            var text = FindSettable(componentType, id, typeof(string));
+            return text != null && !IsUnityBaseMember(text) ? DSMMemberMatch.Formatted : DSMMemberMatch.None;
+        }
 
-            switch (id[..2])
+        /// <summary>
+        /// Builds the setter a Link drives, following <see cref="Match"/>. A formatted setter passes the Value through
+        /// <paramref name="format"/>; on a bad format it writes the Value's <c>ToString()</c> instead and calls
+        /// <paramref name="onFormatError"/> with the error, at most once per setter.
+        /// </summary>
+        public static bool TryCreateSetter<T>(Component target, string id, string format, Action<string>? onFormatError, out Action<T> setter)
+        {
+            switch (Match(target.GetType(), id, typeof(T)))
             {
-                case PropertyPrefix:
-                {
-                    var prop = componentType.GetProperty(name, BindingFlags.Public | BindingFlags.Instance);
-                    var setMethod = prop?.GetSetMethod(nonPublic: false);
-                    return setMethod != null && prop!.PropertyType == typeof(string);
-                }
-                case MethodPrefix:
-                {
-                    var method = componentType.GetMethod(name, BindingFlags.Public | BindingFlags.Instance, null, new[] { typeof(string) }, null);
-                    return method != null && method.ReturnType == typeof(void);
-                }
-                case FieldPrefix:
-                {
-                    var field = componentType.GetField(name, BindingFlags.Public | BindingFlags.Instance);
-                    return field != null && field.FieldType == typeof(string) && !field.IsInitOnly && !field.IsLiteral;
-                }
+                case DSMMemberMatch.Exact:
+                    return TryCreateExactSetter(target, id, out setter);
+
+                case DSMMemberMatch.Formatted when TryCreateExactSetter<string>(target, id, out var setText):
+                    var reported = false;
+                    setter = value =>
+                    {
+                        if (!TryFormat(format, value, out var text, out var error))
+                        {
+                            if (!reported)
+                            {
+                                reported = true;
+                                onFormatError?.Invoke(error!);
+                            }
+                            text = value?.ToString() ?? string.Empty;
+                        }
+                        setText(text);
+                    };
+                    return true;
+
                 default:
+                    setter = null!;
                     return false;
             }
         }
 
-        /// <summary>Resolves <paramref name="id"/> (as returned by <see cref="Find"/>) against <paramref name="target"/>'s actual type and builds a setter delegate for it.</summary>
-        public static bool TryCreateSetter<T>(Component target, string id, out Action<T> setter)
+        /// <summary>The member the IL2CPP linker must keep for <paramref name="id"/>: a property's setter (<c>set_X</c>), a field, or a method.</summary>
+        public static bool TryGetPreservedMember(string id, out string memberName, out bool isField)
         {
-            setter = null!;
-            if (string.IsNullOrEmpty(id) || id.Length < 2) return false;
+            memberName = string.Empty;
+            isField = false;
+            if (string.IsNullOrEmpty(id) || id.Length < 3) return false;
 
             var name = id[2..];
-            var type = target.GetType();
+            switch (id[..2])
+            {
+                case PropertyPrefix: memberName = $"set_{name}"; return true;
+                case FieldPrefix: memberName = name; isField = true; return true;
+                case MethodPrefix: memberName = name; return true;
+                default: return false;
+            }
+        }
+
+        private static bool TryCreateExactSetter<T>(Component target, string id, out Action<T> setter)
+        {
+            switch (FindSettable(target.GetType(), id, typeof(T)))
+            {
+                case MethodInfo method:
+                    setter = (Action<T>)Delegate.CreateDelegate(typeof(Action<T>), target, method);
+                    return true;
+                case FieldInfo field:
+                    setter = value => field.SetValue(target, value);
+                    return true;
+                default:
+                    setter = null!;
+                    return false;
+            }
+        }
+
+        // A property resolves to its public setter, so every result is a MethodInfo or a FieldInfo.
+        private static MemberInfo? FindSettable(Type type, string id, Type memberType)
+        {
+            if (string.IsNullOrEmpty(id) || id.Length < 2) return null;
+            var name = id[2..];
 
             switch (id[..2])
             {
@@ -148,26 +200,20 @@ namespace DataSaveManager
                 {
                     var prop = type.GetProperty(name, BindingFlags.Public | BindingFlags.Instance);
                     var setMethod = prop?.GetSetMethod(nonPublic: false);
-                    if (setMethod == null || prop!.PropertyType != typeof(T)) return false;
-                    setter = (Action<T>)Delegate.CreateDelegate(typeof(Action<T>), target, setMethod);
-                    return true;
+                    return setMethod != null && prop!.PropertyType == memberType ? setMethod : null;
                 }
                 case MethodPrefix:
                 {
-                    var method = type.GetMethod(name, BindingFlags.Public | BindingFlags.Instance, null, new[] { typeof(T) }, null);
-                    if (method == null || method.ReturnType != typeof(void)) return false;
-                    setter = (Action<T>)Delegate.CreateDelegate(typeof(Action<T>), target, method);
-                    return true;
+                    var method = type.GetMethod(name, BindingFlags.Public | BindingFlags.Instance, null, new[] { memberType }, null);
+                    return method != null && method.ReturnType == typeof(void) ? method : null;
                 }
                 case FieldPrefix:
                 {
                     var field = type.GetField(name, BindingFlags.Public | BindingFlags.Instance);
-                    if (field == null || field.FieldType != typeof(T) || field.IsInitOnly || field.IsLiteral) return false;
-                    setter = value => field.SetValue(target, value);
-                    return true;
+                    return field != null && field.FieldType == memberType && !field.IsInitOnly && !field.IsLiteral ? field : null;
                 }
                 default:
-                    return false;
+                    return null;
             }
         }
 

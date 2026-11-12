@@ -192,13 +192,14 @@ namespace DataSaveManager.Editor
                 var ids = new List<string> { string.Empty };
                 var displays = new List<GUIContent> { new("None") };
 
+                var componentType = targetComponent.GetType();
                 var currentId = memberProp.stringValue;
-                var currentValid = members.Any(m => m.id == currentId);
-                if (currentId.Length > 0 && !currentValid)
+                var match = DSMBindingMembers.Match(componentType, currentId, valueType);
+                if (currentId.Length > 0 && !members.Any(m => m.id == currentId))
                 {
                     var name = DSMBindingMembers.DisplayNameOf(currentId) ?? currentId;
                     ids.Add(currentId);
-                    displays.Add(new GUIContent($"{name} (missing)"));
+                    displays.Add(new GUIContent(match == DSMMemberMatch.None ? $"{name} (missing)" : name));
                 }
 
                 foreach (var (id, display, _) in members)
@@ -217,9 +218,10 @@ namespace DataSaveManager.Editor
                 {
                     memberProp.stringValue = ids[newIndex];
                     currentId = ids[newIndex];
+                    match = DSMBindingMembers.Match(componentType, currentId, valueType);
                 }
 
-                if (currentId.Length > 0 && !members.Any(m => m.id == currentId))
+                if (currentId.Length > 0 && match == DSMMemberMatch.None)
                 {
                     EditorGUILayout.HelpBox(
                         $"Member '{DSMBindingMembers.DisplayNameOf(currentId)}' is no longer valid: not found, or its type no longer matches '{valueType.Name}' or 'string'.",
@@ -227,10 +229,7 @@ namespace DataSaveManager.Editor
                     return;
                 }
 
-                // Runtime prefers an exact-type match, so only a member with no exact match is formatted.
-                var formatted = members.Any(m => m.id == currentId && m.formatted) &&
-                                !members.Any(m => m.id == currentId && !m.formatted);
-                if (formatted) DrawFormatField(formatProp, entry, key);
+                if (match == DSMMemberMatch.Formatted) DrawFormatField(formatProp, entry, key);
             }
         }
 
