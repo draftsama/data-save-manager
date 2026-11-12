@@ -234,6 +234,9 @@ namespace DataSaveManager
                 if (entry.HasRange && !entry.HasValidRange && (entry.Type is DSMDataType.Int or DSMDataType.Float))
                     Debug.LogWarning($"DSMRuntimePanel on '{gameObject.name}': entry '{entry.Key}' has an invalid Range (min must be less than max); using the plain input widget.", this);
 
+                if (entry.HasOptions && entry.Type == DSMDataType.Int && !entry.HasValidOptions)
+                    Debug.LogWarning($"DSMRuntimePanel on '{gameObject.name}': entry '{entry.Key}' has invalid Options (needs at least one Option, unique values, non-empty labels); using the plain input widget.", this);
+
                 var widgetPrefab = _widgetConfig.GetWidgetPrefab(entry);
                 if (widgetPrefab == null)
                 {

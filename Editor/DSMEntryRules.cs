@@ -27,6 +27,36 @@ namespace DataSaveManager.Editor
                 .Select(g => g.Key)
                 .ToHashSet(StringComparer.Ordinal);
 
+        public static int NextOptionValue(IEnumerable<int> existing)
+        {
+            var any = false;
+            var max = int.MinValue;
+            foreach (var value in existing)
+            {
+                any = true;
+                if (value > max) max = value;
+            }
+
+            if (!any) return 0;
+            return max == int.MaxValue ? max : max + 1;
+        }
+
+        public static HashSet<int> DuplicateOptionValues(IEnumerable<int> values) =>
+            values
+                .GroupBy(v => v)
+                .Where(g => g.Count() > 1)
+                .Select(g => g.Key)
+                .ToHashSet();
+
+        /// <summary>Non-empty labels that appear more than once (a warning, not an error).</summary>
+        public static HashSet<string> DuplicateOptionLabels(IEnumerable<string> labels) =>
+            labels
+                .Where(l => !string.IsNullOrWhiteSpace(l))
+                .GroupBy(l => l, StringComparer.Ordinal)
+                .Where(g => g.Count() > 1)
+                .Select(g => g.Key)
+                .ToHashSet(StringComparer.Ordinal);
+
         /// <summary>The Range a freshly enabled Range toggle starts with: 0-1 for Float, 0-100 for Int, widened so the parsed Default lies inside.</summary>
         public static (float min, float max) InitialRange(DSMDataType type, string defaultJson)
         {

@@ -199,6 +199,78 @@ namespace DataSaveManager.Tests
             Assert.IsTrue(entry.ShowsHeader);
         }
 
+        // ── Options ──────────────────────────────────────────────────────────
+
+        private static DSMEntryDefinition OptionEntry(params (string label, int value)[] options)
+        {
+            var entry = new DSMEntryDefinition { Type = DSMDataType.Int, HasOptions = true };
+            foreach (var (label, value) in options) entry.Options.Add(new DSMOption(label, value));
+            return entry;
+        }
+
+        [Test]
+        public void HasValidOptions_TrueForDistinctValuesAndLabels()
+        {
+            Assert.IsTrue(OptionEntry(("Easy", 10), ("Hard", 30)).HasValidOptions);
+        }
+
+        [Test]
+        public void HasValidOptions_FalseForDuplicateValueEmptyLabelOrNoOptions()
+        {
+            Assert.IsFalse(OptionEntry(("A", 1), ("B", 1)).HasValidOptions);
+            Assert.IsFalse(OptionEntry(("A", 1), ("  ", 2)).HasValidOptions);
+            Assert.IsFalse(OptionEntry().HasValidOptions);
+        }
+
+        [Test]
+        public void HasValidOptions_FalseWhenToggleOffOrTypeNotInt()
+        {
+            var off = OptionEntry(("A", 1));
+            off.HasOptions = false;
+            Assert.IsFalse(off.HasValidOptions);
+
+            var notInt = OptionEntry(("A", 1));
+            notInt.Type = DSMDataType.Float;
+            Assert.IsFalse(notInt.HasValidOptions);
+        }
+
+        [Test]
+        public void IndexOfOptionValue_FindsByStoredIntNotPosition()
+        {
+            var entry = OptionEntry(("Hard", 30), ("Easy", 10));
+
+            Assert.AreEqual(1, entry.IndexOfOptionValue(10));
+            Assert.AreEqual(-1, entry.IndexOfOptionValue(99));
+        }
+
+        [Test]
+        public void NextOptionValue_IsMaxPlusOneOrZeroWhenEmpty()
+        {
+            Assert.AreEqual(0, DSMEntryRules.NextOptionValue(new int[0]));
+            Assert.AreEqual(31, DSMEntryRules.NextOptionValue(new[] { 10, 30, 5 }));
+        }
+
+        [Test]
+        public void DuplicateOptionValues_AndLabels_FindRepeats()
+        {
+            CollectionAssert.AreEquivalent(new[] { 2 }, DSMEntryRules.DuplicateOptionValues(new[] { 1, 2, 2 }));
+            CollectionAssert.AreEquivalent(new[] { "A" }, DSMEntryRules.DuplicateOptionLabels(new[] { "A", "A", "B", "" , "" }));
+        }
+
+        [Test]
+        public void GetWidgetPrefab_FallsBackToPlainWhenDropdownSlotEmpty()
+        {
+            var widgetConfig = ScriptableObject.CreateInstance<DSMWidgetConfig>();
+            try
+            {
+                Assert.IsNull(widgetConfig.GetWidgetPrefab(OptionEntry(("A", 1))));
+            }
+            finally
+            {
+                Object.DestroyImmediate(widgetConfig);
+            }
+        }
+
         // ── DefaultJsonFor round-trip ────────────────────────────────────────
 
         [Test]

@@ -1,6 +1,7 @@
 #nullable enable
 
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace DataSaveManager
@@ -19,6 +20,45 @@ namespace DataSaveManager
         [SerializeField] private float _rangeMax;
         [SerializeField] private bool _hasHeader;
         [SerializeField] private string _header = string.Empty;
+        [SerializeField] private bool _hasOptions;
+        [SerializeField] private List<DSMOption> _options = new();
+
+        public bool HasOptions
+        {
+            get => _hasOptions;
+            set => _hasOptions = value;
+        }
+
+        public List<DSMOption> Options
+        {
+            get => _options;
+            set => _options = value;
+        }
+
+        public bool HasValidOptions
+        {
+            get
+            {
+                if (!_hasOptions || _type != DSMDataType.Int || _options.Count == 0) return false;
+
+                for (var i = 0; i < _options.Count; i++)
+                {
+                    if (string.IsNullOrWhiteSpace(_options[i].Label)) return false;
+                    for (var j = 0; j < i; j++)
+                        if (_options[j].Value == _options[i].Value) return false;
+                }
+
+                return true;
+            }
+        }
+
+        /// <summary>Index of the Option whose int is <paramref name="value"/>, or -1 when none matches.</summary>
+        public int IndexOfOptionValue(int value)
+        {
+            for (var i = 0; i < _options.Count; i++)
+                if (_options[i].Value == value) return i;
+            return -1;
+        }
 
         public string Key
         {

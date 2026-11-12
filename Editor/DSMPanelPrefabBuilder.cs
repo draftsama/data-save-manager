@@ -49,11 +49,12 @@ namespace DataSaveManager.Editor
             var colorWidget = BuildColorWidgetPrefab(Path.Combine(prefabDir, "ColorWidget.prefab").Replace('\\', '/'), font);
             var intSliderWidget = BuildIntSliderWidgetPrefab(Path.Combine(prefabDir, "IntSliderWidget.prefab").Replace('\\', '/'), font);
             var floatSliderWidget = BuildFloatSliderWidgetPrefab(Path.Combine(prefabDir, "FloatSliderWidget.prefab").Replace('\\', '/'), font);
+            var dropdownWidget = BuildDropdownWidgetPrefab(Path.Combine(prefabDir, "DropdownWidget.prefab").Replace('\\', '/'), font);
 
             var headerRow = BuildHeaderRowPrefab(Path.Combine(prefabDir, "HeaderRow.prefab").Replace('\\', '/'), font);
 
             var configPath = Path.Combine(prefabDir, "DSMWidgetConfig.asset").Replace('\\', '/');
-            BuildWidgetConfig(configPath, boolWidget, intWidget, floatWidget, stringWidget, vector2Widget, vector3Widget, colorWidget, intSliderWidget, floatSliderWidget, headerRow);
+            BuildWidgetConfig(configPath, boolWidget, intWidget, floatWidget, stringWidget, vector2Widget, vector3Widget, colorWidget, intSliderWidget, floatSliderWidget, dropdownWidget, headerRow);
             var widgetConfig = AssetDatabase.LoadAssetAtPath<DSMWidgetConfig>(configPath);
 
             var panelPath = Path.Combine(prefabDir, "DSMRuntimePanel.prefab").Replace('\\', '/');
@@ -72,6 +73,7 @@ namespace DataSaveManager.Editor
                        $"  {Path.Combine(prefabDir, "ColorWidget.prefab")}\n" +
                        $"  {Path.Combine(prefabDir, "IntSliderWidget.prefab")}\n" +
                        $"  {Path.Combine(prefabDir, "FloatSliderWidget.prefab")}\n" +
+                       $"  {Path.Combine(prefabDir, "DropdownWidget.prefab")}\n" +
                        $"  {Path.Combine(prefabDir, "HeaderRow.prefab")}\n" +
                        $"  {configPath}\n" +
                        $"  {panelPath}");
@@ -241,6 +243,43 @@ namespace DataSaveManager.Editor
             return saved.GetComponent<FloatSliderWidget>();
         }
 
+        private static DropdownWidget BuildDropdownWidgetPrefab(string path, TMP_FontAsset font)
+        {
+            var row = CreateRowRoot("DropdownWidget");
+            var label = CreateRowLabel(row, font);
+
+            var go = TMP_DefaultControls.CreateDropdown(TmpUiResources());
+            go.transform.SetParent(row.transform, false);
+            go.name = "Dropdown";
+
+            var dropdown = go.GetComponent<TMP_Dropdown>();
+            dropdown.ClearOptions();
+            if (dropdown.captionText != null)
+            {
+                dropdown.captionText.font = font;
+                dropdown.captionText.fontSize = FontSize;
+            }
+            if (dropdown.itemText != null)
+            {
+                dropdown.itemText.font = font;
+                dropdown.itemText.fontSize = FontSize;
+                var item = dropdown.itemText.transform.parent as RectTransform;
+                if (item != null) item.sizeDelta = new Vector2(item.sizeDelta.x, RowHeight - 4f);
+            }
+            if (dropdown.template != null)
+                dropdown.template.sizeDelta = new Vector2(dropdown.template.sizeDelta.x, 240f);
+
+            var layout = go.AddComponent<LayoutElement>();
+            layout.flexibleWidth = 1f;
+
+            var widget = row.AddComponent<DropdownWidget>();
+            SetField(widget, "_label", label);
+            SetField(widget, "_dropdown", dropdown);
+
+            var saved = SaveAndDestroy(row, path);
+            return saved.GetComponent<DropdownWidget>();
+        }
+
         private static DSMHeaderRow BuildHeaderRowPrefab(string path, TMP_FontAsset font)
         {
             var row = new GameObject("HeaderRow", typeof(RectTransform));
@@ -277,7 +316,7 @@ namespace DataSaveManager.Editor
             string path,
             BoolWidget boolWidget, IntWidget intWidget, FloatWidget floatWidget, StringWidget stringWidget,
             Vector2Widget vector2Widget, Vector3Widget vector3Widget, ColorWidget colorWidget,
-            IntSliderWidget intSliderWidget, FloatSliderWidget floatSliderWidget,
+            IntSliderWidget intSliderWidget, FloatSliderWidget floatSliderWidget, DropdownWidget dropdownWidget,
             DSMHeaderRow headerRow)
         {
             var config = AssetDatabase.LoadAssetAtPath<DSMWidgetConfig>(path);
@@ -296,6 +335,7 @@ namespace DataSaveManager.Editor
             SetField(config, "_colorWidget", colorWidget);
             SetField(config, "_intSliderWidget", intSliderWidget);
             SetField(config, "_floatSliderWidget", floatSliderWidget);
+            SetField(config, "_dropdownWidget", dropdownWidget);
             SetField(config, "_headerRow", headerRow);
 
             EditorUtility.SetDirty(config);

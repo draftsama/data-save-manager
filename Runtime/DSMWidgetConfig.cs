@@ -16,6 +16,7 @@ namespace DataSaveManager
         [SerializeField] private ColorWidget? _colorWidget;
         [SerializeField] private IntSliderWidget? _intSliderWidget;
         [SerializeField] private FloatSliderWidget? _floatSliderWidget;
+        [SerializeField] private DropdownWidget? _dropdownWidget;
         [SerializeField] private DSMHeaderRow? _headerRow;
 
         public DSMHeaderRow? HeaderRow => _headerRow;
@@ -32,9 +33,12 @@ namespace DataSaveManager
             _                   => null
         };
 
-        /// <summary>The slider prefab for an Entry with a valid Range (falling back to the plain prefab if that slot is empty), otherwise the plain prefab for its type.</summary>
+        /// <summary>The dropdown prefab for an Entry with valid Options, else the slider prefab for a valid Range (each falling back to the plain prefab if its slot is empty), otherwise the plain prefab for its type.</summary>
         public MonoBehaviour? GetWidgetPrefab(DSMEntryDefinition entry)
         {
+            if (entry.HasValidOptions && _dropdownWidget != null)
+                return _dropdownWidget;
+
             if (entry.HasValidRange)
             {
                 MonoBehaviour? slider = entry.Type switch
