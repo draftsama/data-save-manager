@@ -41,6 +41,10 @@ _Avoid_: choice, item, enum value
 An optional title on an **Exposed Entry**, shown on the **Runtime Panel** directly above that **Entry**'s row to start a visual group. Presentation only; it has no effect on the **Value**.
 _Avoid_: section, category, group
 
+**Presentation Hint**:
+A **Range**, set of **Options**, or **Header** on an **Exposed Entry**. It changes how the **Runtime Panel** shows the **Entry**, never its **Value**.
+_Avoid_: widget setting, UI option
+
 **Runtime Panel**:
 The in-game UI where an operator views and edits **Exposed Entries** while the app runs.
 _Avoid_: config canvas
@@ -60,6 +64,7 @@ Removing **Overrides** so **Values** fall back to their **Defaults**.
 - An **Exposed Entry** of type Int has at most one set of **Options**; with **Options** it shows as a dropdown. **Options** and a **Range** are mutually exclusive (**Options** win). A **Value** matching no **Option** is kept as-is and the dropdown shows it as unrecognised; nothing is written until the operator picks an **Option**.
 - The **Default** of an **Entry** with **Options** is chosen from its **Options** at authoring time; at runtime it is not enforced.
 - An **Exposed Entry** has at most one **Header**; an **Entry** that is not exposed shows no **Header**.
+- Which **Presentation Hints** an **Entry** may carry depends on its **Data Type**: a **Range** needs Int or Float, **Options** need Int, a **Header** fits any type.
 - A **Reset** from the **Runtime Panel** covers only **Exposed Entries**, and only after the operator confirms; **Overrides** of other **Entries** and of _ad-hoc keys_ survive it.
 - A **Key** used in code without an **Entry Definition** is an _ad-hoc key_: it works and persists like any **Override**, but is never added to the **Config** automatically.
 

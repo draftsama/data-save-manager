@@ -1,5 +1,6 @@
 #nullable enable
 
+using System;
 using UnityEngine;
 
 namespace DataSaveManager
@@ -33,24 +34,21 @@ namespace DataSaveManager
             _                   => null
         };
 
-        /// <summary>The dropdown prefab for an Entry with valid Options, else the slider prefab for a valid Range (each falling back to the plain prefab if its slot is empty), otherwise the plain prefab for its type.</summary>
-        public MonoBehaviour? GetWidgetPrefab(DSMEntryDefinition entry)
+        [Obsolete("Use DSMPresentation to pick the widget kind; removed in 3.0.")]
+        public MonoBehaviour? GetWidgetPrefab(DSMEntryDefinition entry) =>
+            GetWidgetPrefab(DSMPresentation.Present(DSMHintSettings.From(entry)).Widget, entry.Type);
+
+        /// <summary>The prefab for <paramref name="kind"/>, falling back to the plain prefab for <paramref name="type"/> when that slot is empty.</summary>
+        internal MonoBehaviour? GetWidgetPrefab(DSMWidgetKind kind, DSMDataType type)
         {
-            if (entry.HasValidOptions && _dropdownWidget != null)
-                return _dropdownWidget;
-
-            if (entry.HasValidRange)
+            MonoBehaviour? special = kind switch
             {
-                MonoBehaviour? slider = entry.Type switch
-                {
-                    DSMDataType.Int   => _intSliderWidget,
-                    DSMDataType.Float => _floatSliderWidget,
-                    _                 => null
-                };
-                if (slider != null) return slider;
-            }
-
-            return GetWidgetPrefab(entry.Type);
+                DSMWidgetKind.Dropdown => _dropdownWidget,
+                DSMWidgetKind.Slider when type == DSMDataType.Int => _intSliderWidget,
+                DSMWidgetKind.Slider when type == DSMDataType.Float => _floatSliderWidget,
+                _ => null
+            };
+            return special != null ? special : GetWidgetPrefab(type);
         }
     }
 }

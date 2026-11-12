@@ -231,26 +231,28 @@ namespace DataSaveManager
 
             foreach (var entry in DSM.Config.Entries.Where(e => e.Exposed))
             {
-                if (entry.HasRange && !entry.HasValidRange && (entry.Type is DSMDataType.Int or DSMDataType.Float))
-                    Debug.LogWarning($"DSMRuntimePanel on '{gameObject.name}': entry '{entry.Key}' has an invalid Range (min must be less than max); using the plain input widget.", this);
+                var presentation = DSMPresentation.Present(DSMHintSettings.From(entry));
 
-                if (entry.HasOptions && entry.Type == DSMDataType.Int && !entry.HasValidOptions)
-                    Debug.LogWarning($"DSMRuntimePanel on '{gameObject.name}': entry '{entry.Key}' has invalid Options (needs at least one Option, unique values, non-empty labels); using the plain input widget.", this);
+                if (presentation.RangeMessage != null)
+                    Debug.LogWarning($"DSMRuntimePanel on '{gameObject.name}': entry '{entry.Key}': {presentation.RangeMessage}", this);
 
-                var widgetPrefab = _widgetConfig.GetWidgetPrefab(entry);
+                if (presentation.OptionsMessage != null)
+                    Debug.LogWarning($"DSMRuntimePanel on '{gameObject.name}': entry '{entry.Key}': {presentation.OptionsMessage}", this);
+
+                var widgetPrefab = _widgetConfig.GetWidgetPrefab(presentation.Widget, entry.Type);
                 if (widgetPrefab == null)
                 {
                     Debug.LogError($"DSMRuntimePanel on '{gameObject.name}': no widget prefab configured for '{entry.Key}' ({entry.Type}).", this);
                     continue;
                 }
 
-                if (entry.ShowsHeader)
+                if (presentation.Header != null)
                 {
                     var headerPrefab = _widgetConfig.HeaderRow;
                     if (headerPrefab != null)
                     {
                         var headerRow = Instantiate(headerPrefab, _container);
-                        headerRow.SetText(entry.Header);
+                        headerRow.SetText(presentation.Header);
                         headerRow.ApplyLayout(_layout);
                     }
                     else if (!warnedMissingHeaderRow)

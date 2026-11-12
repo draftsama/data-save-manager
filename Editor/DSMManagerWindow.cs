@@ -305,15 +305,13 @@ namespace DataSaveManager.Editor
                    EditorGUIUtility.standardVerticalSpacing * (lines - 1);
         }
 
-        private static bool IsRangeType(DSMDataType type) => type is DSMDataType.Int or DSMDataType.Float;
-
         private static bool ShowsRangeLine(SerializedProperty elementProp) =>
             elementProp.FindPropertyRelative("_exposed").boolValue &&
-            IsRangeType((DSMDataType)elementProp.FindPropertyRelative("_type").enumValueIndex);
+            DSMPresentation.AllowsRange((DSMDataType)elementProp.FindPropertyRelative("_type").enumValueIndex);
 
         private static bool ShowsOptionsToggle(SerializedProperty elementProp) =>
             elementProp.FindPropertyRelative("_exposed").boolValue &&
-            (DSMDataType)elementProp.FindPropertyRelative("_type").enumValueIndex == DSMDataType.Int;
+            DSMPresentation.AllowsOptions((DSMDataType)elementProp.FindPropertyRelative("_type").enumValueIndex);
 
         // Toggle line, plus (when on) one line per Option and an add line.
         private static int OptionsLineCount(SerializedProperty elementProp)
@@ -325,6 +323,58 @@ namespace DataSaveManager.Editor
 
         private static bool ShowsHeaderLine(SerializedProperty elementProp) =>
             elementProp.FindPropertyRelative("_exposed").boolValue;
+
+        private static DSMHintSettings ReadHints(SerializedProperty elementProp)
+        {
+            var optionsProp = elementProp.FindPropertyRelative("_options");
+            var options = new List<DSMOption>(optionsProp.arraySize);
+            for (var i = 0; i < optionsProp.arraySize; i++)
+            {
+                var option = optionsProp.GetArrayElementAtIndex(i);
+                options.Add(new DSMOption(option.FindPropertyRelative("_label").stringValue, option.FindPropertyRelative("_value").intValue));
+            }
+
+            return new DSMHintSettings
+            {
+                Type = (DSMDataType)elementProp.FindPropertyRelative("_type").enumValueIndex,
+                DefaultJson = elementProp.FindPropertyRelative("_defaultJson").stringValue,
+                HasRange = elementProp.FindPropertyRelative("_hasRange").boolValue,
+                RangeMin = elementProp.FindPropertyRelative("_rangeMin").floatValue,
+                RangeMax = elementProp.FindPropertyRelative("_rangeMax").floatValue,
+                HasOptions = elementProp.FindPropertyRelative("_hasOptions").boolValue,
+                Options = options,
+                HasHeader = elementProp.FindPropertyRelative("_hasHeader").boolValue,
+                Header = elementProp.FindPropertyRelative("_header").stringValue
+            };
+        }
+
+        // Options are written separately (and deferred by callers) because resizing the array
+        // mid-draw would outgrow the card height the list already reserved.
+        private static void WriteHintScalars(SerializedProperty elementProp, in DSMHintSettings hints)
+        {
+            elementProp.FindPropertyRelative("_type").enumValueIndex = (int)hints.Type;
+            elementProp.FindPropertyRelative("_defaultJson").stringValue = hints.DefaultJson;
+            elementProp.FindPropertyRelative("_hasRange").boolValue = hints.HasRange;
+            elementProp.FindPropertyRelative("_rangeMin").floatValue = hints.RangeMin;
+            elementProp.FindPropertyRelative("_rangeMax").floatValue = hints.RangeMax;
+            elementProp.FindPropertyRelative("_hasOptions").boolValue = hints.HasOptions;
+        }
+
+        private static void WriteOptions(SerializedProperty optionsProp, IReadOnlyList<DSMOption> options)
+        {
+            optionsProp.arraySize = options.Count;
+            for (var i = 0; i < options.Count; i++)
+            {
+                var option = optionsProp.GetArrayElementAtIndex(i);
+                option.FindPropertyRelative("_label").stringValue = options[i].Label;
+                option.FindPropertyRelative("_value").intValue = options[i].Value;
+            }
+        }
+
+        private static void Tooltip(Rect rect, string? text)
+        {
+            if (text != null) GUI.Label(rect, new GUIContent(string.Empty, text));
+        }
 
         // Every line shares one prefix column (label + override-mark slot) so all fields start at the same x.
         private static float FieldStart(Rect line) => line.x + PrefixWidth + OverrideMarkWidth;
@@ -365,14 +415,14 @@ namespace DataSaveManager.Editor
             var priorLabelWidth = EditorGUIUtility.labelWidth;
             EditorGUIUtility.labelWidth = InlineLabelWidth;
 
-            var removeClicked = DrawKeyLine(NextLine(), keyProp, typeProp, defaultJsonProp, hasRangeProp, hasOptionsProp, isDuplicate, ref type);
+            var removeClicked = DrawKeyLine(NextLine(), elementProp, keyProp, isDuplicate, ref type);
             DrawExposedLine(NextLine(), exposedProp, labelProp);
             DrawDefaultField(NextLine(), defaultJsonProp, type, hasOptionsProp, optionsProp);
             DrawValueLine(NextLine(), key, type, valuesEditable);
-            if (showRange && IsRangeType(type))
-                DrawRangeLine(NextLine(), hasRangeProp, rangeMinProp, rangeMaxProp, hasOptionsProp, defaultJsonProp, type);
+            if (showRange && DSMPresentation.AllowsRange(type))
+                DrawRangeLine(NextLine(), elementProp, hasRangeProp, rangeMinProp, rangeMaxProp, type);
             if (showOptions)
-                DrawOptionsLines(NextLine, hasOptionsProp, optionsProp, hasRangeProp, defaultJsonProp);
+                DrawOptionsLines(NextLine, elementProp, hasOptionsProp, optionsProp);
             if (showHeader)
                 DrawHeaderLine(NextLine(), hasHeaderProp, headerProp);
 
@@ -382,11 +432,8 @@ namespace DataSaveManager.Editor
 
         private static bool DrawKeyLine(
             Rect rect,
+            SerializedProperty elementProp,
             SerializedProperty keyProp,
-            SerializedProperty typeProp,
-            SerializedProperty defaultJsonProp,
-            SerializedProperty hasRangeProp,
-            SerializedProperty hasOptionsProp,
             bool isDuplicate,
             ref DSMDataType type)
         {
@@ -404,10 +451,7 @@ namespace DataSaveManager.Editor
             var newType = (DSMDataType)EditorGUI.EnumPopup(typeRect, TypeHeader, type);
             if (newType != type)
             {
-                typeProp.enumValueIndex = (int)newType;
-                defaultJsonProp.stringValue = DSMEntryDefinition.DefaultJsonFor(newType);
-                if (!IsRangeType(newType)) hasRangeProp.boolValue = false;
-                if (newType != DSMDataType.Int) hasOptionsProp.boolValue = false;
+                WriteHintScalars(elementProp, DSMPresentation.ChangeType(ReadHints(elementProp), newType));
                 type = newType;
             }
 
@@ -430,11 +474,10 @@ namespace DataSaveManager.Editor
 
         private static void DrawRangeLine(
             Rect rect,
+            SerializedProperty elementProp,
             SerializedProperty hasRangeProp,
             SerializedProperty minProp,
             SerializedProperty maxProp,
-            SerializedProperty hasOptionsProp,
-            SerializedProperty defaultJsonProp,
             DSMDataType type)
         {
             var fieldX = FieldStart(rect);
@@ -443,15 +486,8 @@ namespace DataSaveManager.Editor
             var toggleRect = new Rect(fieldX, rect.y, ToggleWidth, rect.height);
             var wasOn = hasRangeProp.boolValue;
             var isOn = EditorGUI.Toggle(toggleRect, wasOn);
-            hasRangeProp.boolValue = isOn;
-            if (isOn && !wasOn) hasOptionsProp.boolValue = false;
-
-            if (isOn && !wasOn && minProp.floatValue == 0f && maxProp.floatValue == 0f)
-            {
-                var (initialMin, initialMax) = DSMEntryRules.InitialRange(type, defaultJsonProp.stringValue);
-                minProp.floatValue = initialMin;
-                maxProp.floatValue = initialMax;
-            }
+            if (isOn && !wasOn) WriteHintScalars(elementProp, DSMPresentation.TurnRangeOn(ReadHints(elementProp)));
+            else hasRangeProp.boolValue = isOn;
 
             if (!isOn) return;
 
@@ -460,8 +496,9 @@ namespace DataSaveManager.Editor
             var minRect = new Rect(startX, rect.y, fieldWidth, rect.height);
             var maxRect = new Rect(minRect.xMax + FieldSpacing, rect.y, fieldWidth, rect.height);
 
+            var rangeMessage = DSMPresentation.Present(ReadHints(elementProp)).RangeMessage;
             var priorColor = GUI.backgroundColor;
-            if (minProp.floatValue >= maxProp.floatValue) GUI.backgroundColor = DuplicateKeyColor;
+            if (rangeMessage != null) GUI.backgroundColor = DuplicateKeyColor;
 
             if (type == DSMDataType.Int)
             {
@@ -475,6 +512,8 @@ namespace DataSaveManager.Editor
             }
 
             GUI.backgroundColor = priorColor;
+            Tooltip(minRect, rangeMessage);
+            Tooltip(maxRect, rangeMessage);
         }
 
         private static void DrawHeaderLine(Rect rect, SerializedProperty hasHeaderProp, SerializedProperty headerProp)
@@ -493,10 +532,9 @@ namespace DataSaveManager.Editor
 
         private static void DrawOptionsLines(
             Func<Rect> nextLine,
+            SerializedProperty elementProp,
             SerializedProperty hasOptionsProp,
-            SerializedProperty optionsProp,
-            SerializedProperty hasRangeProp,
-            SerializedProperty defaultJsonProp)
+            SerializedProperty optionsProp)
         {
             var rect = nextLine();
             var fieldX = FieldStart(rect);
@@ -505,31 +543,24 @@ namespace DataSaveManager.Editor
             var toggleRect = new Rect(fieldX, rect.y, ToggleWidth, rect.height);
             var wasOn = hasOptionsProp.boolValue;
             var isOn = EditorGUI.Toggle(toggleRect, wasOn);
-            hasOptionsProp.boolValue = isOn;
 
             if (isOn && !wasOn)
             {
-                hasRangeProp.boolValue = false;
-                if (optionsProp.arraySize == 0)
-                {
-                    var initialValue = int.TryParse(defaultJsonProp.stringValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) ? parsed : 0;
-                    _deferred = () => AddOption(optionsProp, initialValue);
-                }
+                var before = ReadHints(elementProp);
+                var turnedOn = DSMPresentation.TurnOptionsOn(before);
+                WriteHintScalars(elementProp, turnedOn);
+                if (turnedOn.Options.Count != before.Options.Count)
+                    _deferred = () => WriteOptions(optionsProp, turnedOn.Options);
+            }
+            else
+            {
+                hasOptionsProp.boolValue = isOn;
             }
 
             if (!isOn) return;
 
-            var values = new List<int>(optionsProp.arraySize);
-            var labels = new List<string>(optionsProp.arraySize);
-            for (var i = 0; i < optionsProp.arraySize; i++)
-            {
-                var option = optionsProp.GetArrayElementAtIndex(i);
-                values.Add(option.FindPropertyRelative("_value").intValue);
-                labels.Add(option.FindPropertyRelative("_label").stringValue);
-            }
-
-            var duplicateValues = DSMEntryRules.DuplicateOptionValues(values);
-            var duplicateLabels = DSMEntryRules.DuplicateOptionLabels(labels);
+            var hints = ReadHints(elementProp);
+            var issues = DSMPresentation.CheckOptions(hints.Options);
 
             const float valueWidth = 80f;
             const float buttonWidth = 22f;
@@ -547,14 +578,17 @@ namespace DataSaveManager.Editor
                 var valueRect = new Rect(upRect.x - FieldSpacing - valueWidth, row.y, valueWidth, row.height);
                 var labelRect = new Rect(fieldX, row.y, Mathf.Max(40f, valueRect.x - FieldSpacing - fieldX), row.height);
 
+                var issue = issues[i];
                 var priorColor = GUI.backgroundColor;
-                if (string.IsNullOrWhiteSpace(labelProp.stringValue)) GUI.backgroundColor = DuplicateKeyColor;
-                else if (duplicateLabels.Contains(labelProp.stringValue)) GUI.backgroundColor = DuplicateLabelColor;
+                if ((issue & DSMOptionIssue.BlankLabel) != 0) GUI.backgroundColor = DuplicateKeyColor;
+                else if ((issue & DSMOptionIssue.DuplicateLabel) != 0) GUI.backgroundColor = DuplicateLabelColor;
                 labelProp.stringValue = EditorGUI.TextField(labelRect, labelProp.stringValue);
 
-                GUI.backgroundColor = duplicateValues.Contains(valueProp.intValue) ? DuplicateKeyColor : priorColor;
+                GUI.backgroundColor = (issue & DSMOptionIssue.DuplicateValue) != 0 ? DuplicateKeyColor : priorColor;
                 valueProp.intValue = EditorGUI.IntField(valueRect, GUIContent.none, valueProp.intValue);
                 GUI.backgroundColor = priorColor;
+                Tooltip(labelRect, DSMPresentation.DescribeLabelIssue(issue));
+                Tooltip(valueRect, DSMPresentation.DescribeValueIssue(issue));
 
                 var index = i;
                 using (new EditorGUI.DisabledScope(i == 0))
@@ -567,20 +601,14 @@ namespace DataSaveManager.Editor
             var addRow = nextLine();
             var addRect = new Rect(fieldX, addRow.y, 110f, addRow.height);
             if (GUI.Button(addRect, "+ Add Option"))
-                _deferred = () => AddOption(optionsProp, DSMEntryRules.NextOptionValue(values));
+            {
+                var added = DSMPresentation.AddOption(hints);
+                _deferred = () => WriteOptions(optionsProp, added.Options);
+            }
 
             if (optionsProp.arraySize == 0)
                 EditorGUI.LabelField(new Rect(addRect.xMax + FieldSpacing, addRow.y, addRow.xMax - addRect.xMax - FieldSpacing - RemoveWidth, addRow.height),
                     "At least one Option is required.", EditorStyles.miniLabel);
-        }
-
-        private static void AddOption(SerializedProperty optionsProp, int value)
-        {
-            var index = optionsProp.arraySize;
-            optionsProp.InsertArrayElementAtIndex(index);
-            var option = optionsProp.GetArrayElementAtIndex(index);
-            option.FindPropertyRelative("_label").stringValue = $"Option {index + 1}";
-            option.FindPropertyRelative("_value").intValue = value;
         }
 
         private static void DrawDefaultField(
@@ -594,7 +622,7 @@ namespace DataSaveManager.Editor
             var fieldRect = new Rect(fieldX, rect.y, rect.xMax - ResetWidth - FieldSpacing - fieldX, rect.height);
             EditorGUI.LabelField(new Rect(rect.x, rect.y, PrefixWidth, rect.height), DefaultHeader);
 
-            if (type == DSMDataType.Int && hasOptionsProp.boolValue && optionsProp.arraySize > 0)
+            if (DSMPresentation.AllowsOptions(type) && hasOptionsProp.boolValue && optionsProp.arraySize > 0)
             {
                 DrawOptionDefaultPopup(fieldRect, defaultJsonProp, optionsProp);
                 return;
@@ -611,22 +639,22 @@ namespace DataSaveManager.Editor
 
         private static void DrawOptionDefaultPopup(Rect fieldRect, SerializedProperty defaultJsonProp, SerializedProperty optionsProp)
         {
-            var count = optionsProp.arraySize;
-            var labels = new string[count];
-            var values = new int[count];
-            for (var i = 0; i < count; i++)
+            var options = new DSMOption[optionsProp.arraySize];
+            var labels = new string[options.Length];
+            for (var i = 0; i < options.Length; i++)
             {
                 var option = optionsProp.GetArrayElementAtIndex(i);
-                labels[i] = $"{option.FindPropertyRelative("_label").stringValue} ({option.FindPropertyRelative("_value").intValue})";
-                values[i] = option.FindPropertyRelative("_value").intValue;
+                options[i] = new DSMOption(option.FindPropertyRelative("_label").stringValue, option.FindPropertyRelative("_value").intValue);
+                labels[i] = $"{options[i].Label} ({options[i].Value})";
             }
 
-            var current = int.TryParse(defaultJsonProp.stringValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) ? parsed : int.MinValue;
-            var selected = Array.IndexOf(values, current);
+            var selected = int.TryParse(defaultJsonProp.stringValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var current)
+                ? DSMPresentation.IndexOfOption(options, current)
+                : -1;
 
             var next = EditorGUI.Popup(fieldRect, selected, labels);
             if (next >= 0 && next != selected)
-                defaultJsonProp.stringValue = values[next].ToString(CultureInfo.InvariantCulture);
+                defaultJsonProp.stringValue = options[next].Value.ToString(CultureInfo.InvariantCulture);
         }
 
         private static void DrawValueLine(Rect rect, string key, DSMDataType type, bool valuesEditable)
