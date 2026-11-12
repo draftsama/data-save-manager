@@ -124,6 +124,17 @@ namespace DataSaveManager.Tests
             AssertRoundTrip(DSMDataType.Color, Color.white);
         }
 
+        [Test]
+        public void EveryDataType_HasClrTypeAndDefaultJson()
+        {
+            foreach (DSMDataType type in System.Enum.GetValues(typeof(DSMDataType)))
+            {
+                Assert.That(DSMEntryDefinition.TryGetDataType(DSMEntryDefinition.ClrTypeOf(type), out var mapped), Is.True, type.ToString());
+                Assert.That(mapped, Is.EqualTo(type));
+                Assert.DoesNotThrow(() => JToken.Parse(DSMEntryDefinition.DefaultJsonFor(type)), type.ToString());
+            }
+        }
+
         private void AssertRoundTrip<T>(DSMDataType type, T expected)
         {
             var config = NewConfig(Entry("key", type));
