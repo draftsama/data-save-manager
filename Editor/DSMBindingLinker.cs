@@ -54,19 +54,11 @@ namespace DataSaveManager.Editor
             foreach (var link in binding.Links)
             {
                 var target = link.Target;
-                var member = link.Member;
-                if (target == null || member.Length < 3) continue;
+                if (target == null) continue;
+                if (!DSMBindingMembers.TryGetPreservedMember(link.Member, out var name, out var isField)) continue;
 
                 var type = target.GetType();
-                var name = member[2..];
-                var element = member[..2] switch
-                {
-                    "P:" => $"<method name=\"set_{SecurityElement.Escape(name)}\"/>",
-                    "F:" => $"<field name=\"{SecurityElement.Escape(name)}\"/>",
-                    "M:" => $"<method name=\"{SecurityElement.Escape(name)}\"/>",
-                    _ => null
-                };
-                if (element == null) continue;
+                var element = $"<{(isField ? "field" : "method")} name=\"{SecurityElement.Escape(name)}\"/>";
 
                 var assembly = type.Assembly.GetName().Name;
                 if (!s_preserved.TryGetValue(assembly, out var types))

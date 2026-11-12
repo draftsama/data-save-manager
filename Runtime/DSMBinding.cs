@@ -163,34 +163,11 @@ namespace DataSaveManager
                 return false;
             }
 
-            if (DSMBindingMembers.TryCreateSetter<T>(target, link.Member, out var typedSetter))
-            {
-                setter = typedSetter;
+            var format = link.Format;
+            if (DSMBindingMembers.TryCreateSetter<T>(target, link.Member, format,
+                    error => Debug.LogError($"DSM Binding: format '{format}' failed on '{target.GetType().Name}': {error}", this),
+                    out setter))
                 return true;
-            }
-
-            if (typeof(T) != typeof(string) &&
-                DSMBindingMembers.TryCreateSetter<string>(target, link.Member, out var stringSetter))
-            {
-                // Formatted fallback: the member is a string setter, so format the value through the link's format first.
-                // loggedFormatError keeps a bad format string from spamming the console on every value change.
-                var format = link.Format;
-                var loggedFormatError = false;
-                setter = value =>
-                {
-                    if (!DSMBindingMembers.TryFormat(format, value, out var text, out var error))
-                    {
-                        if (!loggedFormatError)
-                        {
-                            Debug.LogError($"DSM Binding: format '{format}' failed on '{target.GetType().Name}': {error}", this);
-                            loggedFormatError = true;
-                        }
-                        text = value?.ToString() ?? "";
-                    }
-                    stringSetter(text);
-                };
-                return true;
-            }
 
             Debug.LogError(
                 $"DSM Binding: member '{link.Member}' not found on '{target.GetType().Name}', or its type doesn't match '{valueType.Name}' or 'string'.",

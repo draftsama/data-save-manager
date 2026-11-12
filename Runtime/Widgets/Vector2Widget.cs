@@ -28,7 +28,7 @@ namespace DataSaveManager
             var xOk = TryParse(_xInput, out var x);
             var yOk = TryParse(_yInput, out var y);
             if (xOk && yOk) Commit(new Vector2(x, y));
-            else Show(DSM.Get(Key, Vector2.zero));
+            else Show(Store.Get(Key, Vector2.zero));
         }
 
         private static bool TryParse(TMP_InputField? input, out float value) =>

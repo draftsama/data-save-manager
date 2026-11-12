@@ -48,9 +48,13 @@ namespace DataSaveManager
 
         public bool IsVisible => _root != null && _root.activeSelf;
 
+        private static DSMStore Store => DSM.Store;
+
+        private static void SaveStore() => Store.Save();
+
         private void Awake()
         {
-            if (_saveButton != null) _saveButton.onClick.AddListener(DSM.Save);
+            if (_saveButton != null) _saveButton.onClick.AddListener(SaveStore);
             if (_resetButton != null) _resetButton.onClick.AddListener(OnResetClicked);
             if (_closeButton != null) _closeButton.onClick.AddListener(Hide);
             if (_confirmCancelButton != null) _confirmCancelButton.onClick.AddListener(CloseConfirmDialog);
@@ -93,7 +97,7 @@ namespace DataSaveManager
         public void Hide()
         {
             CloseConfirmDialog();
-            if (DSM.Config.AutoSave && DSM.Store.IsDirty) DSM.Save();
+            if (Store.Config.AutoSave && Store.IsDirty) Store.Save();
             if (_root != null) _root.SetActive(false);
             SetOpen(false);
         }
@@ -103,7 +107,7 @@ namespace DataSaveManager
             if (_confirmDialog == null)
             {
                 Debug.LogWarning($"DSMRuntimePanel on '{gameObject.name}': no confirm dialog assigned; resetting without confirmation.", this);
-                ResetExposedEntries();
+                Store.ResetExposedEntries();
                 return;
             }
             _confirmDialog.SetActive(true);
@@ -112,19 +116,12 @@ namespace DataSaveManager
         private void OnConfirmResetClicked()
         {
             CloseConfirmDialog();
-            ResetExposedEntries();
+            Store.ResetExposedEntries();
         }
 
         private void CloseConfirmDialog()
         {
             if (_confirmDialog != null) _confirmDialog.SetActive(false);
-        }
-
-        // Exposed Entries only: ResetAll would also wipe ad-hoc keys (e.g. window-layout keys).
-        private static void ResetExposedEntries()
-        {
-            foreach (var entry in DSM.Config.Entries.Where(e => e.Exposed))
-                DSM.Reset(entry.Key);
         }
 
         private void ApplySaveButtonMode()
@@ -135,7 +132,7 @@ namespace DataSaveManager
             {
                 DSMSaveButtonMode.Always => true,
                 DSMSaveButtonMode.Never  => false,
-                _                        => !DSM.Config.AutoSave
+                _                        => !Store.Config.AutoSave
             };
             _saveButton.gameObject.SetActive(active);
         }
@@ -227,9 +224,10 @@ namespace DataSaveManager
                 return;
             }
 
+            var store = Store;
             var warnedMissingHeaderRow = false;
 
-            foreach (var entry in DSM.Config.Entries.Where(e => e.Exposed))
+            foreach (var entry in store.Config.Entries.Where(e => e.Exposed))
             {
                 var presentation = DSMPresentation.Present(DSMHintSettings.From(entry));
 
@@ -269,7 +267,7 @@ namespace DataSaveManager
                     Debug.LogError($"DSMRuntimePanel on '{gameObject.name}': widget prefab for '{entry.Key}' has no IDSMWidget component.", this);
                     continue;
                 }
-                widget.Setup(entry);
+                widget.Setup(entry, store);
                 if (widget is IDSMLayoutAware layoutAware) layoutAware.ApplyLayout(_layout);
             }
         }

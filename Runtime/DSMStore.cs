@@ -103,6 +103,22 @@ namespace DataSaveManager
             MarkDirty();
         }
 
+        /// <summary>Removes the Overrides of Exposed Entries only; Overrides of other Entries and of ad-hoc keys survive. Each affected key notifies its Watchers once.</summary>
+        public void ResetExposedEntries()
+        {
+            var before = new Dictionary<string, JToken?>(StringComparer.Ordinal);
+            foreach (var entry in _config.Entries)
+            {
+                if (entry.Exposed && _overrides.ContainsKey(entry.Key) && !before.ContainsKey(entry.Key))
+                    before[entry.Key] = GetEffectiveToken(entry.Key);
+            }
+            if (before.Count == 0) return;
+
+            foreach (var key in before.Keys) _overrides.Remove(key);
+            NotifyWatchedChanges(before);
+            MarkDirty();
+        }
+
         public JToken? GetEffectiveToken(string key)
         {
             if (_overrides.TryGetValue(key, out var overrideToken)) return overrideToken;

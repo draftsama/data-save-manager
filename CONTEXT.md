@@ -55,6 +55,17 @@ Subscribing to an **Entry** to receive its **Value** now and every time it chang
 **Reset**:
 Removing **Overrides** so **Values** fall back to their **Defaults**.
 
+**Binding**:
+A component that pushes one **Entry**'s **Value**, live and one way, into members of other components on the same GameObject.
+_Avoid_: data binding, sync
+
+**Link**:
+One target member of a **Binding**. When the member takes text and the **Entry** is not a String, the **Value** goes through the **Link**'s **Format** first.
+_Avoid_: target, connection
+
+**Format**:
+The .NET composite format string on a **Link** (e.g. `Speed: {0:0.0}`) that turns a non-text **Value** into text.
+
 ## Relationships
 
 - The **Config** holds zero or more **Entry Definitions**; each defines exactly one **Entry**.
@@ -66,6 +77,7 @@ Removing **Overrides** so **Values** fall back to their **Defaults**.
 - An **Exposed Entry** has at most one **Header**; an **Entry** that is not exposed shows no **Header**.
 - Which **Presentation Hints** an **Entry** may carry depends on its **Data Type**: a **Range** needs Int or Float, **Options** need Int, a **Header** fits any type.
 - A **Reset** from the **Runtime Panel** covers only **Exposed Entries**, and only after the operator confirms; **Overrides** of other **Entries** and of _ad-hoc keys_ survive it.
+- A **Binding** has one or more **Links**. A **Link** whose member takes the **Entry**'s own **Data Type** receives the **Value** as-is; only when no such member exists does a text member receive it through the **Format**.
 - A **Key** used in code without an **Entry Definition** is an _ad-hoc key_: it works and persists like any **Override**, but is never added to the **Config** automatically.
 
 ## Flagged ambiguities

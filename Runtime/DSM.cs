@@ -45,6 +45,9 @@ public static class DSM
     /// <summary>Removes every Override, falling back to Defaults.</summary>
     public static void ResetAll() => Store.ResetAll();
 
+    /// <summary>Removes the Overrides of Exposed Entries only, as the Runtime Panel's Reset does; other Overrides survive.</summary>
+    public static void ResetExposedEntries() => Store.ResetExposedEntries();
+
     /// <summary>Synchronously saves all Overrides to the Save File.</summary>
     public static void Save() => Store.Save();
 

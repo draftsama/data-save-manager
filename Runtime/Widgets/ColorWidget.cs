@@ -32,7 +32,7 @@ namespace DataSaveManager
             if (trimmed.Length > 0 && trimmed[0] != '#') trimmed = "#" + trimmed;
 
             if (ColorUtility.TryParseHtmlString(trimmed, out var color)) Commit(color);
-            else Show(DSM.Get(Key, Color.white));
+            else Show(Store.Get(Key, Color.white));
         }
     }
 }
