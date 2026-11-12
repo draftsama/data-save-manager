@@ -1,5 +1,6 @@
 #nullable enable
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
@@ -252,7 +253,8 @@ namespace DataSaveManager.Editor
                 DSMDataType.Vector2 => DSMBindingMembers.TryFormat(format, DSM.Get<Vector2>(key), out text, out error),
                 DSMDataType.Vector3 => DSMBindingMembers.TryFormat(format, DSM.Get<Vector3>(key), out text, out error),
                 DSMDataType.Color => DSMBindingMembers.TryFormat(format, DSM.Get<Color>(key), out text, out error),
-                _ => DSMBindingMembers.TryFormat(format, DSM.Get<string>(key), out text, out error)
+                DSMDataType.String => DSMBindingMembers.TryFormat(format, DSM.Get<string>(key), out text, out error),
+                _ => throw new ArgumentOutOfRangeException(nameof(type), type, null)
             };
     }
 }
