@@ -35,30 +35,11 @@ namespace DataSaveManager
             set => _options = value;
         }
 
-        public bool HasValidOptions
-        {
-            get
-            {
-                if (!_hasOptions || _type != DSMDataType.Int || _options.Count == 0) return false;
+        [Obsolete("Presentation Hint rules live in DSMPresentation; removed in 3.0.")]
+        public bool HasValidOptions => DSMPresentation.IsOptionsValid(DSMHintSettings.From(this));
 
-                for (var i = 0; i < _options.Count; i++)
-                {
-                    if (string.IsNullOrWhiteSpace(_options[i].Label)) return false;
-                    for (var j = 0; j < i; j++)
-                        if (_options[j].Value == _options[i].Value) return false;
-                }
-
-                return true;
-            }
-        }
-
-        /// <summary>Index of the Option whose int is <paramref name="value"/>, or -1 when none matches.</summary>
-        public int IndexOfOptionValue(int value)
-        {
-            for (var i = 0; i < _options.Count; i++)
-                if (_options[i].Value == value) return i;
-            return -1;
-        }
+        [Obsolete("Presentation Hint rules live in DSMPresentation; removed in 3.0.")]
+        public int IndexOfOptionValue(int value) => DSMPresentation.IndexOfOption(_options, value);
 
         public string Key
         {
@@ -120,9 +101,11 @@ namespace DataSaveManager
             set => _header = value;
         }
 
-        public bool ShowsHeader => _hasHeader && !string.IsNullOrWhiteSpace(_header);
+        [Obsolete("Presentation Hint rules live in DSMPresentation; removed in 3.0.")]
+        public bool ShowsHeader => DSMPresentation.Present(DSMHintSettings.From(this)).Header != null;
 
-        public bool HasValidRange => _hasRange && _rangeMin < _rangeMax && (_type is DSMDataType.Int or DSMDataType.Float);
+        [Obsolete("Presentation Hint rules live in DSMPresentation; removed in 3.0.")]
+        public bool HasValidRange => DSMPresentation.IsRangeValid(DSMHintSettings.From(this));
 
         public string DisplayLabel => string.IsNullOrEmpty(_label) ? _key : _label;
 
