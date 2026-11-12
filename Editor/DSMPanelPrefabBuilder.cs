@@ -16,10 +16,7 @@ namespace DataSaveManager.Editor
     /// </summary>
     internal static class DSMPanelPrefabBuilder
     {
-        private const float RowHeight = 40f;
-        private const float LabelWidth = 220f;
-        private const float RowSpacerWidth = 1000f;
-        private const float FontSize = 20f;
+        private static readonly DSMPanelLayout Defaults = new();
         private const float SliderInputWidth = 100f;
 
         [MenuItem("Draft/DSM/Build Runtime Panel Prefabs")]
@@ -257,14 +254,14 @@ namespace DataSaveManager.Editor
             if (dropdown.captionText != null)
             {
                 dropdown.captionText.font = font;
-                dropdown.captionText.fontSize = FontSize;
+                dropdown.captionText.fontSize = Defaults.FontSize;
             }
             if (dropdown.itemText != null)
             {
                 dropdown.itemText.font = font;
-                dropdown.itemText.fontSize = FontSize;
+                dropdown.itemText.fontSize = Defaults.FontSize;
                 var item = dropdown.itemText.transform.parent as RectTransform;
-                if (item != null) item.sizeDelta = new Vector2(item.sizeDelta.x, RowHeight - 4f);
+                if (item != null) item.sizeDelta = new Vector2(item.sizeDelta.x, Defaults.RowHeight - 4f);
             }
             if (dropdown.template != null)
                 dropdown.template.sizeDelta = new Vector2(dropdown.template.sizeDelta.x, 240f);
@@ -285,7 +282,7 @@ namespace DataSaveManager.Editor
             var row = new GameObject("HeaderRow", typeof(RectTransform));
 
             var group = row.AddComponent<VerticalLayoutGroup>();
-            group.padding = new RectOffset(4, 4, 12, 0);
+            group.padding = new RectOffset(4, 4, Mathf.RoundToInt(Defaults.HeaderSpacing), 0);
             group.childControlWidth = true;
             group.childControlHeight = true;
             group.childForceExpandWidth = true;
@@ -297,7 +294,7 @@ namespace DataSaveManager.Editor
             var text = textGo.AddComponent<TextMeshProUGUI>();
             text.text = "Header";
             text.font = font;
-            text.fontSize = 24f;
+            text.fontSize = Defaults.HeaderFontSize;
             text.fontStyle = FontStyles.Bold;
             text.alignment = TextAlignmentOptions.Left;
             text.textWrappingMode = TextWrappingModes.NoWrap;
@@ -362,11 +359,11 @@ namespace DataSaveManager.Editor
             panelRect.anchorMin = new Vector2(0.5f, 0.5f);
             panelRect.anchorMax = new Vector2(0.5f, 0.5f);
             panelRect.pivot = new Vector2(0.5f, 0.5f);
-            panelRect.sizeDelta = new Vector2(900f, 800f);
+            panelRect.sizeDelta = Defaults.PanelSize;
             panelRect.anchoredPosition = Vector2.zero;
 
             var panelImage = panel.AddComponent<Image>();
-            panelImage.color = new Color(0.08f, 0.08f, 0.1f, 0.92f);
+            panelImage.color = Defaults.BackgroundColor;
 
             var panelLayout = panel.AddComponent<VerticalLayoutGroup>();
             panelLayout.padding = new RectOffset(16, 16, 16, 16);
@@ -455,7 +452,7 @@ namespace DataSaveManager.Editor
             contentRect.anchoredPosition = Vector2.zero;
 
             var contentLayout = contentGo.AddComponent<VerticalLayoutGroup>();
-            contentLayout.spacing = 4f;
+            contentLayout.spacing = Defaults.RowSpacing;
             contentLayout.childControlWidth = true;
             contentLayout.childControlHeight = true;
             contentLayout.childForceExpandWidth = true;
@@ -471,7 +468,7 @@ namespace DataSaveManager.Editor
             scrollRect.verticalScrollbar = scrollbar;
             scrollRect.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.AutoHideAndExpandViewport;
             scrollRect.verticalScrollbarSpacing = 6f;
-            scrollRect.scrollSensitivity = 30f;
+            scrollRect.scrollSensitivity = Defaults.ScrollSensitivity;
 
             return contentGo.transform;
         }
@@ -486,7 +483,7 @@ namespace DataSaveManager.Editor
             rect.anchorMin = new Vector2(1f, 0f);
             rect.anchorMax = Vector2.one;
             rect.pivot = Vector2.one;
-            rect.sizeDelta = new Vector2(20f, 0f);
+            rect.sizeDelta = new Vector2(Defaults.ScrollbarWidth, 0f);
             rect.anchoredPosition = Vector2.zero;
 
             go.GetComponent<Image>().color = new Color(1f, 1f, 1f, 0.08f);
@@ -564,7 +561,7 @@ namespace DataSaveManager.Editor
             var message = messageGo.AddComponent<TextMeshProUGUI>();
             message.text = "Reset all settings on this panel to their defaults?\nThis cannot be undone.";
             message.font = font;
-            message.fontSize = FontSize;
+            message.fontSize = Defaults.FontSize;
             message.alignment = TextAlignmentOptions.Center;
             message.textWrappingMode = TextWrappingModes.Normal;
             var messageLayout = messageGo.AddComponent<LayoutElement>();
@@ -627,21 +624,9 @@ namespace DataSaveManager.Editor
             rowLayoutGroup.childAlignment = TextAnchor.MiddleLeft;
 
             var rowLayoutElement = row.AddComponent<LayoutElement>();
-            rowLayoutElement.preferredHeight = RowHeight;
+            rowLayoutElement.preferredHeight = Defaults.RowHeight;
 
             return row;
-        }
-
-        private static void CreateRowSpacer(GameObject row)
-        {
-            var go = new GameObject("RowSpaceer", typeof(RectTransform));
-            go.transform.SetParent(row.transform, false);
-
-
-
-            var layout = go.AddComponent<LayoutElement>();
-            layout.preferredWidth = RowSpacerWidth;
-
         }
 
         private static TextMeshProUGUI CreateRowLabel(GameObject row, TMP_FontAsset font)
@@ -651,11 +636,11 @@ namespace DataSaveManager.Editor
 
             var label = go.AddComponent<TextMeshProUGUI>();
             label.font = font;
-            label.fontSize = FontSize;
+            label.fontSize = Defaults.FontSize;
             label.alignment = TextAlignmentOptions.Left;
 
             var layout = go.AddComponent<LayoutElement>();
-            layout.preferredWidth = LabelWidth;
+            layout.preferredWidth = Defaults.LabelWidth;
 
             return label;
         }
@@ -668,7 +653,7 @@ namespace DataSaveManager.Editor
             var label = go.AddComponent<TextMeshProUGUI>();
             label.text = text;
             label.font = font;
-            label.fontSize = FontSize;
+            label.fontSize = Defaults.FontSize;
             label.alignment = TextAlignmentOptions.Right;
 
             var layout = go.AddComponent<LayoutElement>();
@@ -690,7 +675,7 @@ namespace DataSaveManager.Editor
             if (input.textComponent is TextMeshProUGUI text)
             {
                 text.font = font;
-                text.fontSize = FontSize;
+                text.fontSize = Defaults.FontSize;
             }
             if (input.placeholder is TextMeshProUGUI placeholder)
                 placeholder.font = font;
@@ -737,8 +722,8 @@ namespace DataSaveManager.Editor
             if (builtInLabel != null) Object.DestroyImmediate(builtInLabel.gameObject);
 
             var layout = go.AddComponent<LayoutElement>();
-            layout.preferredWidth = RowHeight;
-            layout.preferredHeight = RowHeight;
+            layout.preferredWidth = Defaults.RowHeight;
+            layout.preferredHeight = Defaults.RowHeight;
 
             return toggle;
         }
@@ -752,8 +737,8 @@ namespace DataSaveManager.Editor
             image.color = Color.white;
 
             var layout = go.AddComponent<LayoutElement>();
-            layout.preferredWidth = RowHeight;
-            layout.preferredHeight = RowHeight;
+            layout.preferredWidth = Defaults.RowHeight;
+            layout.preferredHeight = Defaults.RowHeight;
 
             return image;
         }
