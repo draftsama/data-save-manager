@@ -83,6 +83,7 @@ All members are synchronous and must be called from the main thread.
 | `DSM.HasOverride(string key)` | Returns true if `key` has an explicit Override. |
 | `DSM.Reset(string key)` | Removes the Override for `key`, falling back to its Default. |
 | `DSM.ResetAll()` | Removes every Override, falling back to Defaults. |
+| `DSM.ResetExposedEntries()` | Removes the Overrides of Exposed Entries only, as the Runtime Panel's Reset does. |
 | `DSM.Save()` | Synchronously writes all Overrides to the Save File. |
 | `DSM.Load()` | Synchronously reads Overrides from the Save File, replacing the in-memory set. |
 | `DSM.WatchAsync<T>(string key)` | Returns an `IUniTaskAsyncEnumerable<T>` that emits the current Value immediately, then again on every subsequent change. |
@@ -175,7 +176,7 @@ The Color widget takes a hex code (`#RGB`, `#RRGGBB`, or `#RRGGBBAA`; the leadin
 
 - **Reset to Defaults** asks for confirmation in a popup, then resets only the Exposed Entries.
   Overrides of non-exposed Entries and of ad-hoc keys (keys used in code without an Entry Definition)
-  are left alone. `DSM.ResetAll()` still clears every Override.
+  are left alone. Code gets the same Reset from `DSM.ResetExposedEntries()`; `DSM.ResetAll()` still clears every Override.
 - **Save Button Mode** (on the `DSMRuntimePanel` component) controls the Save button: `Auto` shows it only
   when AutoSave is off, `Always` always shows it, `Never` hides it.
 - **Close** (and the toggle key) cancels an open reset confirmation. With AutoSave on, it also saves any
@@ -226,8 +227,11 @@ numbers; float sliders round committed values to **Float Decimals**.
 ### Custom widgets
 
 - Subclass `DSMWidget<T>`: implement `Show(T value)` to render, and call `Commit(value)` when the
-  user edits the control.
-- Or implement `IDSMWidget` directly for full control over `Setup(DSMEntryDefinition entry)`.
+  user edits the control. Read other Values through the protected `Store`, the store the Runtime
+  Panel handed the row, rather than the static `DSM`.
+- Or implement `IDSMWidget` directly for full control over `Setup(DSMEntryDefinition entry, DSMStore store)`.
+  The panel calls this overload; its default calls `Setup(DSMEntryDefinition entry)`, so widgets
+  written before 2.2 keep working against the global store.
 
 - `DSMWidget<T>` also implements `IDSMLayoutAware`; override `ApplyLayout(DSMPanelLayout)` to pick up
   extra Layout settings, and `OnSetup(DSMEntryDefinition)` to read the Entry (for example its Range)
