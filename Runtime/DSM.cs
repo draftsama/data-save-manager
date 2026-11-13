@@ -1,5 +1,6 @@
 #nullable enable
 
+using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
 using DataSaveManager;
 using UnityEngine;
@@ -47,6 +48,9 @@ public static class DSM
 
     /// <summary>Removes the Overrides of Exposed Entries only, as the Runtime Panel's Reset does; other Overrides survive.</summary>
     public static void ResetExposedEntries() => Store.ResetExposedEntries();
+
+    /// <summary>Removes the Overrides of the Exposed Entries a Runtime Panel serving <paramref name="panelAudienceIds"/> shows; other Overrides survive.</summary>
+    public static void ResetExposedEntries(IReadOnlyList<string> panelAudienceIds) => Store.ResetExposedEntries(panelAudienceIds);
 
     /// <summary>Synchronously saves all Overrides to the Save File.</summary>
     public static void Save() => Store.Save();

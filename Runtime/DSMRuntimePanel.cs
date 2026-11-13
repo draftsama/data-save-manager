@@ -1,7 +1,7 @@
 #nullable enable
 
 using System;
-using System.Linq;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Serialization;
 using UnityEngine.UI;
@@ -35,6 +35,7 @@ namespace DataSaveManager
         [SerializeField] private KeyCode _toggleKey = KeyCode.F1;
         [SerializeField] private bool _startVisible;
         [SerializeField] private DSMPanelLayout _layout = new();
+        [SerializeField] private List<string> _audienceIds = new();
 
 #if ENABLE_INPUT_SYSTEM
         private Key _inputSystemToggleKey;
@@ -45,6 +46,9 @@ namespace DataSaveManager
         public static event Action<bool>? OpenChanged;
 
         public DSMPanelLayout Layout => _layout;
+
+        /// <summary>Ids of the Audiences this Panel serves; empty means it shows every Exposed Entry.</summary>
+        public IReadOnlyList<string> AudienceIds => _audienceIds;
 
         public bool IsVisible => _root != null && _root.activeSelf;
 
@@ -107,7 +111,7 @@ namespace DataSaveManager
             if (_confirmDialog == null)
             {
                 Debug.LogWarning($"DSMRuntimePanel on '{gameObject.name}': no confirm dialog assigned; resetting without confirmation.", this);
-                Store.ResetExposedEntries();
+                Store.ResetExposedEntries(_audienceIds);
                 return;
             }
             _confirmDialog.SetActive(true);
@@ -116,7 +120,7 @@ namespace DataSaveManager
         private void OnConfirmResetClicked()
         {
             CloseConfirmDialog();
-            Store.ResetExposedEntries();
+            Store.ResetExposedEntries(_audienceIds);
         }
 
         private void CloseConfirmDialog()
@@ -227,8 +231,10 @@ namespace DataSaveManager
             var store = Store;
             var warnedMissingHeaderRow = false;
 
-            foreach (var entry in store.Config.Entries.Where(e => e.Exposed))
+            foreach (var entry in store.Config.Entries)
             {
+                if (!DSMAudienceFilter.Shows(entry, _audienceIds)) continue;
+
                 var presentation = DSMPresentation.Present(DSMHintSettings.From(entry));
 
                 if (presentation.RangeMessage != null)

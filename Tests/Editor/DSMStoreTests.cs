@@ -251,6 +251,33 @@ namespace DataSaveManager.Tests
         }
 
         [Test]
+        public void ResetExposedEntries_ForAudiences_KeepsOverridesThePanelDoesNotShow()
+        {
+            var technician = IntEntry("technicianKey");
+            technician.Exposed = true;
+            technician.AudienceIds.Add("technician");
+            var admin = IntEntry("adminKey");
+            admin.Exposed = true;
+            admin.AudienceIds.Add("admin");
+            var shared = IntEntry("sharedKey");
+            shared.Exposed = true;
+            var config = NewConfig(technician, admin, shared);
+            var store = NewStore(config);
+            store.Load();
+            store.Set("technicianKey", 1);
+            store.Set("adminKey", 2);
+            store.Set("sharedKey", 3);
+
+            store.ResetExposedEntries(new[] { "admin" });
+
+            Assert.IsTrue(store.HasOverride("technicianKey"));
+            Assert.IsFalse(store.HasOverride("adminKey"));
+            Assert.IsFalse(store.HasOverride("sharedKey"));
+
+            store.Dispose();
+        }
+
+        [Test]
         public void ResetExposedEntries_NotifiesEachAffectedKeyOnce()
         {
             var first = IntEntry("first");

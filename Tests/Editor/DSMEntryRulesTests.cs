@@ -39,6 +39,19 @@ namespace DataSaveManager.Tests
         private static DSMEntryDefinition Entry(string key, DSMDataType type) =>
             new() { Key = key, Type = type, DefaultJson = DSMEntryDefinition.DefaultJsonFor(type) };
 
+        [Test]
+        public void EntriesNamingAudience_ListsOnlyEntriesThatNameIt()
+        {
+            var named = Entry("named", DSMDataType.Int);
+            named.AudienceIds.Add("technician");
+            var other = Entry("other", DSMDataType.Int);
+            other.AudienceIds.Add("admin");
+            var config = NewConfig(named, other, Entry("untagged", DSMDataType.Int));
+
+            CollectionAssert.AreEqual(new[] { "named" }, DSMEntryRules.EntriesNamingAudience(config, "technician"));
+            CollectionAssert.IsEmpty(DSMEntryRules.EntriesNamingAudience(config, "unused"));
+        }
+
         // ── ValidateNewKey ───────────────────────────────────────────────────
 
         [Test]

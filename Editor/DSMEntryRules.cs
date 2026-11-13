@@ -18,6 +18,13 @@ namespace DataSaveManager.Editor
             return null;
         }
 
+        /// <summary>Keys of the Entries that name <paramref name="audienceId"/>, in Config order.</summary>
+        public static List<string> EntriesNamingAudience(DSMConfig config, string audienceId) =>
+            config.Entries
+                .Where(e => e.AudienceIds.Contains(audienceId, StringComparer.Ordinal))
+                .Select(e => e.Key)
+                .ToList();
+
         public static HashSet<string> DuplicateKeys(DSMConfig config) =>
             config.Entries
                 .Select(e => e.Key)

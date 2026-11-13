@@ -22,6 +22,14 @@ namespace DataSaveManager
         [SerializeField] private string _header = string.Empty;
         [SerializeField] private bool _hasOptions;
         [SerializeField] private List<DSMOption> _options = new();
+        [SerializeField] private List<string> _audienceIds = new();
+
+        /// <summary>Ids of the Audiences this Entry is meant for; empty means every Audience.</summary>
+        public List<string> AudienceIds
+        {
+            get => _audienceIds;
+            set => _audienceIds = value;
+        }
 
         public bool HasOptions
         {
