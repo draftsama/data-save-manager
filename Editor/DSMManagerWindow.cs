@@ -42,6 +42,9 @@ namespace DataSaveManager.Editor
         private static readonly GUIContent RangeMaxHeader = new("Max");
         private static readonly GUIContent OptionsHeader = new("Options", "Show this Int Entry as a dropdown in the Runtime Panel. Each Option stores its own int. A presentation hint only: the Value is never clamped.");
         private static readonly GUIContent HeaderHeader = new("Header", "Show a title above this Entry in the Runtime Panel.");
+        private static readonly GUIContent AudiencesHeader = new("Audience", "Runtime Panels serving any of these Audiences show this Entry. None selected: every Runtime Panel shows it.");
+        private static readonly GUIContent ViewAsLabel = new("View as", "Grey out the Entries a Runtime Panel serving this Audience would not show.");
+        private const float DimmedAlpha = 0.4f;
         private static readonly GUIContent ValueHeader = new("Value", "Current value. \u25cf marks an Override stored in the Save File.");
         private static readonly GUIContent OverrideMark = new("\u25cf", "Overridden: this value is stored in the Save File. Reset returns it to the Default.");
 
@@ -53,6 +56,9 @@ namespace DataSaveManager.Editor
         private bool _settingsFoldout = true;
         private string _newKey = string.Empty;
         private DSMDataType _newType = DSMDataType.String;
+        private string[] _audienceNames = Array.Empty<string>();
+        private int _viewAsIndex = -1;
+        private Action? _pendingAudienceEdit;
 
         [MenuItem("Draft/DSM/Open Manager")]
         internal static void Open()
@@ -88,6 +94,9 @@ namespace DataSaveManager.Editor
 
         private void OnGUI()
         {
+            if (_config != null) _audienceNames = DSMAudienceEditing.Names(_config);
+            if (_viewAsIndex >= _audienceNames.Length) _viewAsIndex = -1;
+
             DrawToolbar();
 
             if (_config == null || _configSo == null)
@@ -124,6 +133,14 @@ namespace DataSaveManager.Editor
             EditorGUILayout.Space();
             DrawFooter();
 
+            if (_pendingAudienceEdit != null)
+            {
+                var edit = _pendingAudienceEdit;
+                _pendingAudienceEdit = null;
+                edit();
+                Repaint();
+            }
+
             _configSo.ApplyModifiedProperties();
         }
 
@@ -135,6 +152,16 @@ namespace DataSaveManager.Editor
                     Reload(fromDisk: true);
 
                 GUILayout.FlexibleSpace();
+
+                if (_audienceNames.Length > 0)
+                {
+                    GUILayout.Label(ViewAsLabel, EditorStyles.miniLabel);
+                    var choices = new string[_audienceNames.Length + 1];
+                    choices[0] = "All";
+                    Array.Copy(_audienceNames, 0, choices, 1, _audienceNames.Length);
+                    _viewAsIndex = EditorGUILayout.Popup(_viewAsIndex + 1, choices, EditorStyles.toolbarPopup, GUILayout.Width(110)) - 1;
+                }
+
                 _search = EditorGUILayout.TextField(_search, EditorStyles.toolbarSearchField, GUILayout.Width(180));
             }
         }
@@ -186,7 +213,67 @@ namespace DataSaveManager.Editor
                         }
                     }
                 }
+
+                EditorGUILayout.Space(4);
+                DrawAudiences();
             }
+        }
+
+        private void DrawAudiences()
+        {
+            var audiencesProp = _configSo!.FindProperty("_audiences");
+            EditorGUILayout.LabelField(new GUIContent("Audiences", "Kinds of operator an Exposed Entry is meant for. Each Runtime Panel picks the Audiences it serves."));
+
+            for (var i = 0; i < audiencesProp.arraySize; i++)
+            {
+                var audienceProp = audiencesProp.GetArrayElementAtIndex(i);
+                var nameProp = audienceProp.FindPropertyRelative("_name");
+                var id = audienceProp.FindPropertyRelative("_id").stringValue;
+
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    nameProp.stringValue = EditorGUILayout.TextField(nameProp.stringValue);
+                    if (GUILayout.Button("✕", GUILayout.Width(RemoveWidth)))
+                    {
+                        var index = i;
+                        var name = nameProp.stringValue;
+                        _pendingAudienceEdit = () => TryRemoveAudience(audiencesProp, index, id, name);
+                    }
+                }
+            }
+
+            using (new EditorGUI.DisabledScope(audiencesProp.arraySize >= DSMAudienceEditing.MaxAudiences))
+            {
+                if (GUILayout.Button("+ Add Audience", GUILayout.Width(120)))
+                {
+                    _pendingAudienceEdit = () =>
+                    {
+                        var index = audiencesProp.arraySize;
+                        audiencesProp.InsertArrayElementAtIndex(index);
+                        var added = audiencesProp.GetArrayElementAtIndex(index);
+                        added.FindPropertyRelative("_id").stringValue = DSMAudience.NewId();
+                        added.FindPropertyRelative("_name").stringValue = $"Audience {index + 1}";
+                    };
+                }
+            }
+        }
+
+        private void TryRemoveAudience(SerializedProperty audiencesProp, int index, string id, string name)
+        {
+            // Users are found against saved data, so pending edits in this window must land first.
+            _configSo!.ApplyModifiedProperties();
+            var users = DSMAudienceEditing.FindUsers(_config!, id);
+            if (users.Count > 0)
+            {
+                EditorUtility.DisplayDialog(
+                    "Audience in use",
+                    $"'{name}' can't be removed while it is still named by:\n\n- {string.Join("\n- ", users)}\n\nRemove it from these first.",
+                    "OK");
+                return;
+            }
+
+            if (EditorUtility.DisplayDialog("Remove Audience", $"Remove Audience '{name}'?", "Remove", "Cancel"))
+                audiencesProp.DeleteArrayElementAtIndex(index);
         }
 
         private void DrawEntries(IReadOnlyCollection<string> duplicates, bool valuesEditable)
@@ -208,11 +295,16 @@ namespace DataSaveManager.Editor
                        label.IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0;
             }
 
+            var config = _config!;
+            var audienceNames = _audienceNames;
+            var hasAudiences = audienceNames.Length > 0;
+            var viewAsIds = _viewAsIndex >= 0 ? new[] { config.Audiences[_viewAsIndex].Id } : null;
+
             list.elementHeightCallback = index =>
             {
                 if (!Matches(index)) return 0f;
                 var element = entriesProp.GetArrayElementAtIndex(index);
-                return CardHeight(ShowsRangeLine(element), OptionsLineCount(element), ShowsHeaderLine(element));
+                return CardHeight(ShowsRangeLine(element), OptionsLineCount(element), ShowsHeaderLine(element), ShowsAudienceLine(element, hasAudiences));
             };
 
             list.drawElementBackgroundCallback = (rect, index, isActive, isFocused) =>
@@ -234,8 +326,14 @@ namespace DataSaveManager.Editor
                 var key = keyProp.stringValue;
                 var isDuplicate = duplicates.Contains(key);
 
-                if (DrawEntryCard(rect, element, isDuplicate, valuesEditable))
+                var dimmed = viewAsIds != null && index < config.Entries.Count && !DSMAudienceFilter.Shows(config.Entries[index], viewAsIds);
+                var priorColor = GUI.color;
+                if (dimmed) GUI.color = new Color(priorColor.r, priorColor.g, priorColor.b, priorColor.a * DimmedAlpha);
+
+                if (DrawEntryCard(rect, element, isDuplicate, valuesEditable, config, audienceNames))
                     pendingRemoveIndex = index;
+
+                GUI.color = priorColor;
             };
 
             using (var scroll = new EditorGUILayout.ScrollViewScope(_entriesScroll, false, false, GUILayout.ExpandHeight(true)))
@@ -297,9 +395,9 @@ namespace DataSaveManager.Editor
             EditorGUI.DrawRect(new Rect(rect.x, rect.y, TypeStripeWidth, rect.height), color);
         }
 
-        private static float CardHeight(bool withRangeLine, int optionsLines, bool withHeaderLine)
+        private static float CardHeight(bool withRangeLine, int optionsLines, bool withHeaderLine, bool withAudienceLine)
         {
-            var lines = 4 + (withRangeLine ? 1 : 0) + optionsLines + (withHeaderLine ? 1 : 0);
+            var lines = 4 + (withRangeLine ? 1 : 0) + optionsLines + (withHeaderLine ? 1 : 0) + (withAudienceLine ? 1 : 0);
             return CardPadding * 2f +
                    EditorGUIUtility.singleLineHeight * lines +
                    EditorGUIUtility.standardVerticalSpacing * (lines - 1);
@@ -323,6 +421,9 @@ namespace DataSaveManager.Editor
 
         private static bool ShowsHeaderLine(SerializedProperty elementProp) =>
             elementProp.FindPropertyRelative("_exposed").boolValue;
+
+        private static bool ShowsAudienceLine(SerializedProperty elementProp, bool hasAudiences) =>
+            hasAudiences && elementProp.FindPropertyRelative("_exposed").boolValue;
 
         private static DSMHintSettings ReadHints(SerializedProperty elementProp)
         {
@@ -381,7 +482,7 @@ namespace DataSaveManager.Editor
 
         // Returns true when the row's remove button was clicked; the caller defers the actual
         // DeleteArrayElementAtIndex until after the list has finished drawing.
-        private static bool DrawEntryCard(Rect rect, SerializedProperty elementProp, bool isDuplicate, bool valuesEditable)
+        private static bool DrawEntryCard(Rect rect, SerializedProperty elementProp, bool isDuplicate, bool valuesEditable, DSMConfig config, string[] audienceNames)
         {
             var keyProp = elementProp.FindPropertyRelative("_key");
             var typeProp = elementProp.FindPropertyRelative("_type");
@@ -401,6 +502,7 @@ namespace DataSaveManager.Editor
             var showRange = ShowsRangeLine(elementProp);
             var showOptions = ShowsOptionsToggle(elementProp);
             var showHeader = ShowsHeaderLine(elementProp);
+            var showAudiences = ShowsAudienceLine(elementProp, audienceNames.Length > 0);
 
             var lineH = EditorGUIUtility.singleLineHeight;
             var vSpace = EditorGUIUtility.standardVerticalSpacing;
@@ -425,6 +527,8 @@ namespace DataSaveManager.Editor
                 DrawOptionsLines(NextLine, elementProp, hasOptionsProp, optionsProp);
             if (showHeader)
                 DrawHeaderLine(NextLine(), hasHeaderProp, headerProp);
+            if (showAudiences)
+                DrawAudienceLine(NextLine(), elementProp.FindPropertyRelative("_audienceIds"), config, audienceNames);
 
             EditorGUIUtility.labelWidth = priorLabelWidth;
             return removeClicked && TryRemoveEntry(key);
@@ -528,6 +632,14 @@ namespace DataSaveManager.Editor
             var textRect = new Rect(textX, rect.y, rect.xMax - RemoveWidth - FieldSpacing - textX, rect.height);
             using (new EditorGUI.DisabledScope(!hasHeaderProp.boolValue))
                 headerProp.stringValue = EditorGUI.TextField(textRect, headerProp.stringValue);
+        }
+
+        private static void DrawAudienceLine(Rect rect, SerializedProperty audienceIdsProp, DSMConfig config, string[] audienceNames)
+        {
+            var fieldX = FieldStart(rect);
+            EditorGUI.LabelField(new Rect(rect.x, rect.y, PrefixWidth, rect.height), AudiencesHeader);
+            var fieldRect = new Rect(fieldX, rect.y, rect.xMax - RemoveWidth - FieldSpacing - fieldX, rect.height);
+            DSMAudienceEditing.DrawMaskField(fieldRect, GUIContent.none, audienceIdsProp, config, audienceNames);
         }
 
         private static void DrawOptionsLines(
@@ -751,6 +863,7 @@ namespace DataSaveManager.Editor
             element.FindPropertyRelative("_header").stringValue = string.Empty;
             element.FindPropertyRelative("_hasOptions").boolValue = false;
             element.FindPropertyRelative("_options").ClearArray();
+            element.FindPropertyRelative("_audienceIds").ClearArray();
         }
 
         private void DrawFooter()
