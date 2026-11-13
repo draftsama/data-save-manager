@@ -14,6 +14,21 @@ namespace DataSaveManager
         [SerializeField] private string _saveDirectory = string.Empty;
         [SerializeField] private string _fileName = "save.json";
         [SerializeField] private List<DSMEntryDefinition> _entries = new();
+        [SerializeField] private List<DSMAudience> _audiences = new();
+
+        public IReadOnlyList<DSMAudience> Audiences => _audiences;
+
+        public bool TryGetAudience(string id, out DSMAudience audience)
+        {
+            foreach (var a in _audiences)
+            {
+                if (a.Id != id) continue;
+                audience = a;
+                return true;
+            }
+            audience = null!;
+            return false;
+        }
 
         public bool AutoSave => _autoSave;
         public float AutoSaveDebounce => _autoSaveDebounce;
