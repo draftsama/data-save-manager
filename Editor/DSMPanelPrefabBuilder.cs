@@ -684,6 +684,9 @@ namespace DataSaveManager.Editor
             viewportRect.sizeDelta = Vector2.zero;
             viewportRect.pivot = new Vector2(0f, 1f);
             viewportGo.AddComponent<RectMask2D>();
+            // Without a raycast target here, drags on empty space between rows hit the Panel behind the ScrollRect and never scroll.
+            var viewportHitArea = viewportGo.AddComponent<Image>();
+            viewportHitArea.color = Color.clear;
 
             var contentGo = new GameObject("Content", typeof(RectTransform));
             contentGo.transform.SetParent(viewportGo.transform, false);
