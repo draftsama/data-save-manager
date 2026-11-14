@@ -1,4 +1,4 @@
-# DataSaveManager (DSM)
+# OperatorConsole (OC)
 
 A small settings store for Unity: tweakable settings of an installed app (values an on-site
 technician adjusts), not player progress. Every Entry has a typed Default defined in a Config
@@ -10,7 +10,7 @@ File.
 Add via Package Manager → Add package from git URL:
 
 ```
-https://github.com/draftsama/data-save-manager.git
+https://github.com/draftsama/operator-console.git
 ```
 
 Dependencies (installed automatically, see `package.json`):
@@ -19,29 +19,29 @@ Dependencies (installed automatically, see `package.json`):
 - [Newtonsoft Json for Unity](https://docs.unity3d.com/Packages/com.unity.nuget.newtonsoft-json@3.0/manual/index.html) (`com.unity.nuget.newtonsoft-json`)
 
 The Runtime Panel needs TextMeshPro and uGUI (`com.unity.ugui`) in the project. The Input System
-package is optional — DSM falls back to the legacy Input Manager, or to no hotkey at all, if it
+package is optional — OC falls back to the legacy Input Manager, or to no hotkey at all, if it
 isn't installed.
 
 ## Quick start
 
-1. **DSM › Create Config Asset** — creates `Assets/Resources/DSMConfig.asset`.
-2. **DSM › Open Manager** — add Entries (key, type, default, label, exposed flag).
+1. **Draft › Operator Console › Create Config Asset** — creates `Assets/Resources/DSMConfig.asset`.
+2. **Draft › Operator Console › Open Manager** — add Entries (key, type, default, label, exposed flag).
 3. Read and write values from code:
 
 ```csharp
-using DataSaveManager;
+using OperatorConsole;
 
 // Read: Override if one was set, else the Entry's Default, else default(T)
-var speed = DSM.Get<float>("speed");
+var speed = OC.Get<float>("speed");
 
 // Read with an explicit fallback, used only when there's neither an Override nor a Default
-var gravity = DSM.Get("gravity", -9.81f);
+var gravity = OC.Get("gravity", -9.81f);
 
 // Write an Override
-DSM.Set("speed", 7f);
+OC.Set("speed", 7f);
 
 // Persist Overrides to the Save File
-DSM.Save();
+OC.Save();
 ```
 
 Watch a value for every change (initial value, then every subsequent Set/Load/Reset):
@@ -49,9 +49,9 @@ Watch a value for every change (initial value, then every subsequent Set/Load/Re
 ```csharp
 using Cysharp.Threading.Tasks;
 using Cysharp.Threading.Tasks.Linq;
-using DataSaveManager;
+using OperatorConsole;
 
-DSM.WatchAsync<float>("speed")
+OC.WatchAsync<float>("speed")
     .ForEachAsync(v => moveSpeed = v, destroyCancellationToken)
     .Forget();
 ```
@@ -66,7 +66,7 @@ DSM.WatchAsync<float>("speed")
   there is neither an Override nor a Default (i.e. no Entry Definition, or the Entry Definition's
   default JSON is empty/unparsable).
 - **Ad-hoc key** — a key used in code with no matching Entry Definition in the Config. It works
-  and persists like any Override, but DSM logs one warning the first time it's touched and never
+  and persists like any Override, but OC logs one warning the first time it's touched and never
   adds it to the Config automatically.
 
 ## API reference
@@ -75,20 +75,20 @@ All members are synchronous and must be called from the main thread.
 
 | Member | Description |
 |---|---|
-| `DSM.Store` | The active `DSMStore`, created lazily from `Resources/DSMConfig.asset` on first access. |
-| `DSM.Configure(DSMConfig config)` | Saves and disposes the current store (if dirty), then creates and loads a new store for `config`. Runtime Panels already created are destroyed and created again from `config`. |
-| `DSM.Get<T>(string key)` | Returns the Value for `key`, or `default(T)` if there is neither an Override nor a usable Default. |
-| `DSM.Get<T>(string key, T fallback)` | Returns the Value for `key`, or `fallback` if there is neither an Override nor a usable Default. |
-| `DSM.Set<T>(string key, T value)` | Sets an Override for `key`. Triggers the AutoSave debounce if AutoSave is enabled. |
-| `DSM.HasOverride(string key)` | Returns true if `key` has an explicit Override. |
-| `DSM.Reset(string key)` | Removes the Override for `key`, falling back to its Default. |
-| `DSM.ResetAll()` | Removes every Override, falling back to Defaults. |
-| `DSM.ResetExposedEntries()` | Removes the Overrides of Exposed Entries only, as the Runtime Panel's Reset does. |
-| `DSM.Save()` | Synchronously writes all Overrides to the Save File. |
-| `DSM.Load()` | Synchronously reads Overrides from the Save File, replacing the in-memory set. |
-| `DSM.WatchAsync<T>(string key)` | Returns an `IUniTaskAsyncEnumerable<T>` that emits the current Value immediately, then again on every subsequent change. |
-| `DSM.Config` | The active `DSMConfig`. |
-| `DSM.SaveFilePath` | The resolved absolute path of the Save File. |
+| `OC.Store` | The active `OCStore`, created lazily from `Resources/DSMConfig.asset` on first access. |
+| `OC.Configure(OCConfig config)` | Saves and disposes the current store (if dirty), then creates and loads a new store for `config`. Runtime Panels already created are destroyed and created again from `config`. |
+| `OC.Get<T>(string key)` | Returns the Value for `key`, or `default(T)` if there is neither an Override nor a usable Default. |
+| `OC.Get<T>(string key, T fallback)` | Returns the Value for `key`, or `fallback` if there is neither an Override nor a usable Default. |
+| `OC.Set<T>(string key, T value)` | Sets an Override for `key`. Triggers the AutoSave debounce if AutoSave is enabled. |
+| `OC.HasOverride(string key)` | Returns true if `key` has an explicit Override. |
+| `OC.Reset(string key)` | Removes the Override for `key`, falling back to its Default. |
+| `OC.ResetAll()` | Removes every Override, falling back to Defaults. |
+| `OC.ResetExposedEntries()` | Removes the Overrides of Exposed Entries only, as the Runtime Panel's Reset does. |
+| `OC.Save()` | Synchronously writes all Overrides to the Save File. |
+| `OC.Load()` | Synchronously reads Overrides from the Save File, replacing the in-memory set. |
+| `OC.WatchAsync<T>(string key)` | Returns an `IUniTaskAsyncEnumerable<T>` that emits the current Value immediately, then again on every subsequent change. |
+| `OC.Config` | The active `OCConfig`. |
+| `OC.SaveFilePath` | The resolved absolute path of the Save File. |
 
 ## Supported types
 
@@ -104,8 +104,8 @@ All members are synchronous and must be called from the main thread.
 
 ## Config settings
 
-Set on the `DSMConfig` asset (`Assets/Resources/DSMConfig.asset`), either in the Inspector or via
-**DSM › Open Manager**:
+Set on the `OCConfig` asset (`Assets/Resources/DSMConfig.asset`), either in the Inspector or via
+**Draft › Operator Console › Open Manager**:
 
 | Field | Default | Description |
 |---|---|---|
@@ -126,8 +126,8 @@ AutoSave.
 
 The full Save File path is `<resolved directory>/<File Name>`.
 
-If the Save File is missing, DSM starts with no Overrides (every Entry reads its Default). If the
-Save File exists but fails to parse, DSM logs a warning and falls back to no Overrides rather than
+If the Save File is missing, OC starts with no Overrides (every Entry reads its Default). If the
+Save File exists but fails to parse, OC logs a warning and falls back to no Overrides rather than
 throwing.
 
 Example Save File — a flat JSON object of only the Overrides that have been set:
@@ -142,7 +142,7 @@ Example Save File — a flat JSON object of only the Overrides that have been se
 
 ## Editor
 
-### DSM Manager window (**DSM › Open Manager**)
+### Operator Console window (**Draft › Operator Console › Open Manager**)
 
 - **Settings** — edits AutoSave, AutoSave Debounce, Save Directory, and File Name on the Config
   asset; shows the resolved Save File path with buttons to open its folder or delete the file.
@@ -155,14 +155,14 @@ Example Save File — a flat JSON object of only the Overrides that have been se
 - **Footer** — Reset All Values, and a live count of current Overrides.
 
 In Edit mode, changing an Entry's current value saves the Save File immediately. In Play mode,
-value edits are live on the running `DSM.Store` and persisted whenever AutoSave next fires (or on
+value edits are live on the running `OC.Store` and persisted whenever AutoSave next fires (or on
 quit).
 
 ### Other menu items
 
-- **DSM › Create Config Asset** — creates `Assets/Resources/DSMConfig.asset` if it doesn't exist
+- **Draft › Operator Console › Create Config Asset** — creates `Assets/Resources/DSMConfig.asset` if it doesn't exist
   yet, otherwise selects the existing one.
-- **DSM › Open Save Folder** — reveals the resolved Save File's directory in Finder/Explorer.
+- **Draft › Operator Console › Open Save Folder** — reveals the resolved Save File's directory in Finder/Explorer.
 
 ## Runtime Panel
 
@@ -170,7 +170,7 @@ An in-game UI for an operator to view and edit Exposed Entries while the app run
 
 The Color widget takes a hex code (`#RGB`, `#RRGGBB`, or `#RRGGBBAA`; the leading `#` is optional).
 
-1. In the DSM Manager window, open **Runtime Panels** and press **+ Add Panel**. Each enabled
+1. In the Operator Console window, open **Runtime Panels** and press **+ Add Panel**. Each enabled
    **Panel Definition** becomes one Runtime Panel when the app starts; nothing goes in a scene.
 2. Mark the Entries you want visible as **Exposed**.
 3. Press the toggle key (default `F1`, via the Input System if installed, otherwise the legacy
@@ -181,26 +181,26 @@ loads. It brings its own Canvas (**Sort Order**, default 1000) and adds an `Even
 that has none. Several Panel Definitions give several panels, e.g. an open Technician panel on `F1`
 beside a locked Admin panel on a Corner Tap; two that share an Open Trigger both open on it, but only one Lock Screen shows at a time: of
 the locked ones, only the first in the Manager's list opens (the Manager warns). **Enabled** off keeps a Panel Definition, Passcode included, without creating its panel.
-**Prefab** picks the panel prefab (default `Prefab/DSMRuntimePanel.prefab`). See
+**Prefab** picks the panel prefab (default `Prefab/OCRuntimePanel.prefab`). See
 [ADR 0005](docs/adr/0005-runtime-panels-from-panel-definitions.md).
 
-Code finds a panel by its Panel Definition's **Name**: `DSM.Panels.Get("Admin")` (null and one
-warning when no panel has that name), `DSM.Panels.TryGet`, `DSM.Panels.All`, `DSM.Panels.HideAll()`.
-Renaming a Panel Definition breaks code that used the old name. `DSMRuntimePanel.IsOpen` is true while
+Code finds a panel by its Panel Definition's **Name**: `OC.Panels.Get("Admin")` (null and one
+warning when no panel has that name), `OC.Panels.TryGet`, `OC.Panels.All`, `OC.Panels.HideAll()`.
+Renaming a Panel Definition breaks code that used the old name. `OCRuntimePanel.IsOpen` is true while
 any panel or its Lock Screen is open.
 
 Panel Definition edits made in the Manager during Play mode apply at once and, because the Config is
 an asset, are kept after Play mode ends. Adding or removing a Panel Definition or changing its
 Prefab takes effect the next time Play mode starts.
 
-**Moving from a scene-placed panel:** a `DSMRuntimePanel` placed in a scene now stays hidden and logs
+**Moving from a scene-placed panel:** a `OCRuntimePanel` placed in a scene now stays hidden and logs
 a warning. Open its scene, press **Import Scene Panels** under Runtime Panels to turn each one into a
 Panel Definition (Audiences, Open Triggers, Passcode, Layout and sort order carry over), then remove
-the panel from the scene and save it. Replace Inspector references to the panel with `DSM.Panels`.
+the panel from the scene and save it. Replace Inspector references to the panel with `OC.Panels`.
 
 - **Reset to Defaults** asks for confirmation in a popup, then resets only the Exposed Entries.
   Overrides of non-exposed Entries and of ad-hoc keys (keys used in code without an Entry Definition)
-  are left alone. Code gets the same Reset from `DSM.ResetExposedEntries()`; `DSM.ResetAll()` still clears every Override.
+  are left alone. Code gets the same Reset from `OC.ResetExposedEntries()`; `OC.ResetAll()` still clears every Override.
 - **Save Button Mode** (on the Panel Definition) controls the Save button: `Auto` shows it only
   when AutoSave is off, `Always` always shows it, `Never` hides it.
 - **Close** (and the toggle key) cancels an open reset confirmation. With AutoSave on, it also saves any
@@ -230,11 +230,11 @@ Code chooses whether to ask: `RequestOpen()` and `Toggle()` go through the Lock 
 opens at once. `IsOpen` is true while a Lock Screen is up.
 
 A prefab built before the Lock Screen existed has none, and a locked panel without one refuses to
-open (it logs an error). Add one in place with **DSM › Add Lock Screen to Runtime Panel Prefab**,
+open (it logs an error). Add one in place with **Draft › Operator Console › Add Lock Screen to Runtime Panel Prefab**,
 which keeps the rest of the prefab.
 
-Regenerate or restyle the default widget prefabs with **DSM › Build Runtime Panel Prefabs** — this
-overwrites the existing prefabs and the `DSMWidgetConfig` asset under `Prefab/`.
+Regenerate or restyle the default widget prefabs with **Draft › Operator Console › Build Runtime Panel Prefabs** — this
+overwrites the existing prefabs and the `OCWidgetConfig` asset under `Prefab/`.
 
 ### Layout
 
@@ -263,7 +263,7 @@ open panel immediately.
 
 ### Headers
 
-In the DSM Manager, an Exposed Entry of any type gets a **Header** line: a toggle plus a text field.
+In the Operator Console, an Exposed Entry of any type gets a **Header** line: a toggle plus a text field.
 When the toggle is on and the text is not blank, the Runtime Panel shows the text as a title row
 directly above that Entry's row, to start a visual group. Turning the toggle off keeps the text. A
 header is presentation only and has no effect on the Value. It needs the Widget Config's **Header Row**
@@ -271,7 +271,7 @@ slot; if that slot is empty the panel logs one warning per rebuild and skips the
 
 ### Range sliders
 
-In the DSM Manager, an Exposed Entry of type Int or Float gets a **Range** line: a toggle plus Min and
+In the Operator Console, an Exposed Entry of type Int or Float gets a **Range** line: a toggle plus Min and
 Max. With a Range the Runtime Panel shows the Entry as `Label | Slider | InputField`; without one it
 shows the plain input. Min must be less than Max — otherwise the fields are tinted red and the panel
 logs a warning and falls back to the plain input.
@@ -282,45 +282,45 @@ numbers; float sliders round committed values to **Float Decimals**.
 
 ### Custom widgets
 
-- Subclass `DSMWidget<T>`: implement `Show(T value)` to render, and call `Commit(value)` when the
+- Subclass `OCWidget<T>`: implement `Show(T value)` to render, and call `Commit(value)` when the
   user edits the control. Read other Values through the protected `Store`, the store the Runtime
-  Panel handed the row, rather than the static `DSM`.
-- Or implement `IDSMWidget` directly for full control over `Setup(DSMEntryDefinition entry, DSMStore store)`.
-  The panel calls this overload; its default calls `Setup(DSMEntryDefinition entry)`, so widgets
+  Panel handed the row, rather than the static `OC`.
+- Or implement `IOCWidget` directly for full control over `Setup(OCEntryDefinition entry, OCStore store)`.
+  The panel calls this overload; its default calls `Setup(OCEntryDefinition entry)`, so widgets
   written before 2.2 keep working against the global store.
 
-- `DSMWidget<T>` also implements `IDSMLayoutAware`; override `ApplyLayout(DSMPanelLayout)` to pick up
-  extra Layout settings, and `OnSetup(DSMEntryDefinition)` to read the Entry (for example its Range)
-  before the first `Show`. A widget that implements only `IDSMWidget` can add `IDSMLayoutAware` itself.
+- `OCWidget<T>` also implements `IOCLayoutAware`; override `ApplyLayout(OCPanelLayout)` to pick up
+  extra Layout settings, and `OnSetup(OCEntryDefinition)` to read the Entry (for example its Range)
+  before the first `Show`. A widget that implements only `IOCWidget` can add `IOCLayoutAware` itself.
 
-Either way, assign your widget's prefab to the matching type slot on a `DSMWidgetConfig` asset,
+Either way, assign your widget's prefab to the matching type slot on a `OCWidgetConfig` asset,
 and assign that asset to the Widget Config field of the panel prefab a Panel Definition uses. The Int Slider Widget and
 Float Slider Widget slots are used for Int and Float Entries that have a valid Range; if a slider slot
 is empty, those Entries fall back to the plain Int or Float widget. The **Header Row** slot takes a
-prefab with a `DSMHeaderRow` component (a root with a `VerticalLayoutGroup` and a text assigned to its
+prefab with a `OCHeaderRow` component (a root with a `VerticalLayoutGroup` and a text assigned to its
 `_text` field); it is spawned above Entries that have a Header.
 
 ### Commands
 
 A Command is an action an operator runs from the panel's **Commands** tab, such as reconnecting a
-device or clearing a cache. Mark a method with `[DSMCommand]` and have its owner register while it is
+device or clearing a cache. Mark a method with `[OCCommand]` and have its owner register while it is
 enabled:
 
 ```csharp
 using System.Threading;
 using Cysharp.Threading.Tasks;
-using DataSaveManager;
+using OperatorConsole;
 using UnityEngine;
 
 public sealed class Projector : MonoBehaviour
 {
-    void OnEnable()  => DSM.Commands.Register(this);
-    void OnDisable() => DSM.Commands.Unregister(this);
+    void OnEnable()  => OC.Commands.Register(this);
+    void OnDisable() => OC.Commands.Unregister(this);
 
-    [DSMCommand("Reconnect", Description = "Drops the link and opens it again.", Header = "Projectors")]
+    [OCCommand("Reconnect", Description = "Drops the link and opens it again.", Header = "Projectors")]
     private async UniTask Reconnect(CancellationToken ct) { /* ... */ }
 
-    [DSMCommand("Show test pattern", Confirm = true, Audiences = new[] { "Technician" }, Order = 10)]
+    [OCCommand("Show test pattern", Confirm = true, Audiences = new[] { "Technician" }, Order = 10)]
     private void ShowTestPattern() { /* ... */ }
 }
 ```
@@ -328,9 +328,9 @@ public sealed class Projector : MonoBehaviour
 - **Signature** — no parameters, or a single `CancellationToken`; returns `void` or `UniTask`. Any
   access level. Other methods are skipped with an error at `Register`, and the Editor warns about them
   after each script reload.
-- **Static methods** — `DSM.Commands.Register(typeof(Maintenance))` / `Unregister(typeof(Maintenance))`.
+- **Static methods** — `OC.Commands.Register(typeof(Maintenance))` / `Unregister(typeof(Maintenance))`.
   `Register(this)` reads instance methods only.
-- **From code** — `DSM.Commands.Register(owner, "Title", ct => ..., new DSMCommandOptions { ... })`;
+- **From code** — `OC.Commands.Register(owner, "Title", ct => ..., new OCCommandOptions { ... })`;
   `Unregister(owner)` removes it too.
 - **Running** — a dot beside the Run button turns amber while it runs (the button reads `Running…` and is
   disabled), then green, or red with the exception message under the Description; the exception is also logged. The outcome stays with the Command, so it is still
@@ -347,28 +347,28 @@ public sealed class Projector : MonoBehaviour
   Commands sees no change. The panel always opens on Settings, or on Commands when it shows no Exposed
   Entry.
 
-`[DSMCommand]` derives from Unity's `PreserveAttribute`, so IL2CPP code stripping keeps the methods.
-The Widget Config's **Command Row** slot takes a prefab with a `DSMCommandRow` component; prefabs built
-before 2.3 have no tab bar — regenerate them with **DSM › Build Runtime Panel Prefabs**.
+`[OCCommand]` derives from Unity's `PreserveAttribute`, so IL2CPP code stripping keeps the methods.
+The Widget Config's **Command Row** slot takes a prefab with a `OCCommandRow` component; prefabs built
+before 2.3 have no tab bar — regenerate them with **Draft › Operator Console › Build Runtime Panel Prefabs**.
 
 ### Entry Actions
 
 An Entry Action is a button beside one Exposed Entry whose result becomes that Entry's Value — browse
-for a folder, fetch a token. It registers with the same `DSM.Commands.Register(this)` call as Commands:
+for a folder, fetch a token. It registers with the same `OC.Commands.Register(this)` call as Commands:
 
 ```csharp
 public sealed class ContentFolders : MonoBehaviour
 {
-    void OnEnable()  => DSM.Commands.Register(this);
-    void OnDisable() => DSM.Commands.Unregister(this);
+    void OnEnable()  => OC.Commands.Register(this);
+    void OnDisable() => OC.Commands.Unregister(this);
 
-    [DSMEntryAction("contentFolderPath", "Browse…")]
+    [OCEntryAction("contentFolderPath", "Browse…")]
     UniTask<string> Browse(string current, CancellationToken ct) => MyFileDialog.PickFolder(current, ct);
 
-    [DSMEntryAction("apiToken", "Fetch", Confirm = true)]
+    [OCEntryAction("apiToken", "Fetch", Confirm = true)]
     async UniTask<string> Fetch(CancellationToken ct)
     {
-        using var request = UnityWebRequest.Get(DSM.Get<string>("apiUrl") + "/token");
+        using var request = UnityWebRequest.Get(OC.Get<string>("apiUrl") + "/token");
         await request.SendWebRequest().WithCancellation(ct);
         if (request.result != UnityWebRequest.Result.Success)
             throw new InvalidOperationException(request.error);
@@ -387,19 +387,19 @@ public sealed class ContentFolders : MonoBehaviour
   Key or a non-Exposed Entry is warned about at `Register`.
 - **While running** — the whole row is locked (input and its other actions) and the button reads
   `Running…`. A failure shows its message on a line under the row.
-- **From code** — `DSM.Commands.Register<string>(owner, "contentFolderPath", "Browse…", (current, ct) => ..., new DSMEntryActionOptions { Confirm = true, Order = 1 })`.
+- **From code** — `OC.Commands.Register<string>(owner, "contentFolderPath", "Browse…", (current, ct) => ..., new OCEntryActionOptions { Confirm = true, Order = 1 })`.
 - **Order**, **Confirm**, **Same Title twice** — as for Commands.
 
 The Widget Config's **Entry Action Bar** and **Entry Action Error** slots take prefabs with
-`DSMEntryActionBar` and `DSMEntryActionError` components; regenerate prefabs built before 2.4 with
-**DSM › Build Runtime Panel Prefabs**.
+`OCEntryActionBar` and `OCEntryActionError` components; regenerate prefabs built before 2.4 with
+**Draft › Operator Console › Build Runtime Panel Prefabs**.
 
 ## Binding
 
 A no-code, one-way link from an Entry's Value to one or more members of components on the same GameObject —
 no widget or hand-written code needed.
 
-1. Add a `DSM Binding` component to the GameObject.
+1. Add an `OC Binding` component to the GameObject.
 2. Pick **Key** (an Entry from the Config), then add a **Link** per member to drive. Each Link has a
    **Component** (any component on the same GameObject), a **Member** (a public property, field, or
    single-argument method on that component whose type exactly matches the Entry's type), and its own **Format**
@@ -407,10 +407,10 @@ no widget or hand-written code needed.
 3. Every member updates live whenever the Entry's Value changes, and once immediately when the
    binding is enabled.
 
-Binding is one-way (DSM → component) and requires an exact type match — no implicit conversions — except for formatted `string` members, below.
+Binding is one-way (OC → component) and requires an exact type match — no implicit conversions — except for formatted `string` members, below.
 
 A `string` member (for example `TMP_Text.text`) can be bound to an Entry of any type: pick a member listed as
-`DSM_Set…` (e.g. `DSM_SetText (format → text)`), then set **Format**, a .NET composite format where `{0}` is the value (invariant culture; empty
+`OC_Set…` (e.g. `OC_SetText (format → text)`), then set **Format**, a .NET composite format where `{0}` is the value (invariant culture; empty
 means `{0}`). The Inspector previews the result with the current Value. Examples:
 
 - `Speed: {0:0.0} m/s` for a Float
@@ -419,7 +419,7 @@ means `{0}`). The Inspector previews the result with the current Value. Examples
 
 An invalid format logs one error at runtime and falls back to the plain value.
 
-IL2CPP builds strip members referenced only by name through reflection, so DSM generates a `link.xml` at
+IL2CPP builds strip members referenced only by name through reflection, so OC generates a `link.xml` at
 build time that preserves every bound member found in the built scenes and in the project's prefabs. A
 binding created from code, or on a prefab outside `Assets/`, isn't covered — add `[Preserve]` to that
 member yourself.
@@ -429,6 +429,24 @@ member yourself.
 The Save File is plain, readable, hand-editable JSON — anyone with file access can read or change
 it. Do not store secrets or player progression you need to protect from tampering; see
 [ADR 0001](docs/adr/0001-scope-to-on-site-settings.md) for the reasoning behind this scope.
+
+## Migrating from DataSaveManager 3.x
+
+4.0 renames the package; nothing about the Save File or the Config changes.
+
+- Package id `com.draftsama.datasavemanager` → `com.draftsama.operatorconsole`; the repository is
+  now `operator-console`.
+- Namespace `DataSaveManager` → `OperatorConsole`, assemblies `DSM.*` → `OperatorConsole.*`.
+  An asmdef that references the package by name (`"DSM.Runtime"`) needs the new name; one that
+  references it by GUID keeps working.
+- Every `DSM*` type is now `OC*` (`DSMConfig` → `OCConfig`, `[DSMCommand]` → `[OCCommand]`,
+  `IDSMWidget` → `IOCWidget`). Scenes, prefabs and assets keep their references: the scripts kept
+  their GUIDs.
+- The facade `DSM` is now `OC`. `DSM` still compiles, marked `[Obsolete]`, and is removed in 5.0.
+- Menus moved from **Draft › DSM** to **Draft › Operator Console**; the DSM Manager window is now
+  the Operator Console window.
+- Unchanged: the Config is still loaded from `Resources/DSMConfig.asset`, and the default Save File
+  is still `persistentDataPath/DSM/save.json`.
 
 ## Migrating from 1.x
 
@@ -447,5 +465,5 @@ renamed or removed key become ad-hoc keys and must be cleaned up by hand.
 
 ## Tests
 
-EditMode tests live in the `DSM.Tests.Editor` assembly (`Tests/Editor/`). Run them from
+EditMode tests live in the `OperatorConsole.Tests.Editor` assembly (`Tests/Editor/`). Run them from
 **Window › General › Test Runner** (EditMode tab).
