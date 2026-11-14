@@ -59,6 +59,10 @@ namespace DataSaveManager.Editor
         private string[] _audienceNames = Array.Empty<string>();
         private int _viewAsIndex = -1;
         private Action? _pendingAudienceEdit;
+        private bool _commandsFoldout = true;
+        private DSMRegisteredCommand? _pendingCommandRun;
+        private GUIStyle? _commandErrorStyle;
+        private static readonly GUIContent CommandsHeader = new("Commands", "Registered Commands, listed while in Play mode. Run them here without opening the Runtime Panel.");
 
         [MenuItem("Draft/DSM/Open Manager")]
         internal static void Open()
@@ -128,10 +132,20 @@ namespace DataSaveManager.Editor
             DrawEntries(duplicates, valuesEditable);
 
             EditorGUILayout.Space();
+            DrawCommands(_config);
+
+            EditorGUILayout.Space();
             DrawAddEntry();
 
             EditorGUILayout.Space();
             DrawFooter();
+
+            if (_pendingCommandRun != null)
+            {
+                var command = _pendingCommandRun;
+                _pendingCommandRun = null;
+                RunCommand(command);
+            }
 
             if (_pendingAudienceEdit != null)
             {
@@ -164,6 +178,72 @@ namespace DataSaveManager.Editor
 
                 _search = EditorGUILayout.TextField(_search, EditorStyles.toolbarSearchField, GUILayout.Width(180));
             }
+        }
+
+        private void DrawCommands(DSMConfig config)
+        {
+            _commandsFoldout = EditorGUILayout.Foldout(_commandsFoldout, CommandsHeader, true, EditorStyles.foldoutHeader);
+            if (!_commandsFoldout) return;
+
+            if (!EditorApplication.isPlaying)
+            {
+                EditorGUILayout.HelpBox("Commands register while the app runs. Enter Play mode to see and run them.", MessageType.None);
+                return;
+            }
+
+            var registry = DSM.Commands;
+            if (registry.Commands.Count == 0)
+            {
+                EditorGUILayout.HelpBox("No Commands are registered. An owner calls DSM.Commands.Register(this) in OnEnable.", MessageType.None);
+                return;
+            }
+
+            _commandErrorStyle ??= new GUIStyle(EditorStyles.wordWrappedMiniLabel) { normal = { textColor = new Color(0.89f, 0.34f, 0.30f) } };
+            var viewAsIds = _viewAsIndex >= 0 ? new[] { config.Audiences[_viewAsIndex].Id } : null;
+
+            foreach (var command in registry.Commands)
+            {
+                var dimmed = viewAsIds != null && !DSMAudienceFilter.Shows(command, viewAsIds, config);
+                var previousColor = GUI.color;
+                if (dimmed) GUI.color = new Color(previousColor.r, previousColor.g, previousColor.b, DimmedAlpha);
+
+                using (new EditorGUILayout.HorizontalScope(EditorStyles.helpBox))
+                {
+                    using (new EditorGUILayout.VerticalScope())
+                    {
+                        EditorGUILayout.LabelField(registry.DisplayTitle(command), EditorStyles.boldLabel);
+                        if (command.Description != null)
+                            EditorGUILayout.LabelField(command.Description, EditorStyles.wordWrappedMiniLabel);
+                        if (command.Status == DSMCommandStatus.Failed && command.LastError != null)
+                            EditorGUILayout.LabelField(command.LastError, _commandErrorStyle);
+                    }
+
+                    GUILayout.Label(StatusMark(command.Status), GUILayout.Width(18));
+                    using (new EditorGUI.DisabledScope(command.IsRunning))
+                    {
+                        if (GUILayout.Button(command.IsRunning ? "Running\u2026" : "Run", GUILayout.Width(80), GUILayout.Height(22)))
+                            _pendingCommandRun = command;
+                    }
+                }
+
+                GUI.color = previousColor;
+            }
+        }
+
+        private static string StatusMark(DSMCommandStatus status) => status switch
+        {
+            DSMCommandStatus.Running   => "\u25CC",
+            DSMCommandStatus.Succeeded => "\u2713",
+            DSMCommandStatus.Failed    => "\u2717",
+            _                          => string.Empty
+        };
+
+        private static void RunCommand(DSMRegisteredCommand command)
+        {
+            if (command.Confirm
+                && !EditorUtility.DisplayDialog("Run Command", $"Run \u201C{DSM.Commands.DisplayTitle(command)}\u201D?", "Run", "Cancel"))
+                return;
+            command.Run();
         }
 
         private void DrawNoConfig()
