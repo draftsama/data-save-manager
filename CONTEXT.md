@@ -110,9 +110,9 @@ The .NET composite format string on a **Link** (e.g. `Speed: {0:0.0}`) that turn
 - A **Binding** has one or more **Links**. A **Link** whose member takes the **Entry**'s own **Data Type** receives the **Value** as-is; only when no such member exists does a text member receive it through the **Format**.
 - A **Key** used in code without an **Entry Definition** is an _ad-hoc key_: it works and persists like any **Override**, but is never added to the **Config** automatically.
 - An **Entry Action** names its **Entry** by **Key** and must produce a **Value** of that **Entry**'s **Data Type**. It is shown wherever its **Entry** is shown and nowhere else; it has no **Audiences** or **Header** of its own.
-- An **Entry Action** is given the **Entry**'s current **Value** when it starts. When it finishes, its result is set exactly as if the operator had typed it: it becomes an **Override** at once, and saving follows the usual rules. A cancelled **Entry Action** leaves the **Value** unchanged.
+- An **Entry Action** is given the **Entry**'s current **Value** when it starts. When it finishes, its result is set exactly as if the operator had typed it: it becomes an **Override** at once, and saving follows the usual rules. A cancelled **Entry Action** leaves the **Value** unchanged. Its result is set even if the **Value** changed while it ran: the last write wins.
 - One **Entry** may have several **Entry Actions**. While any of them runs, that **Entry**'s row on the **Runtime Panel** is locked: no other of its **Entry Actions** and no typing.
-- An **Entry Action** may require confirmation, like a **Command**. It keeps running when the **Runtime Panel** closes and is stopped when its owner unregisters, like a **Command**.
+- An **Entry Action** may require confirmation, like a **Command**. It keeps running when the **Runtime Panel** closes and is stopped when its owner unregisters, like a **Command**. Two owners giving one **Entry** an **Entry Action** with the same **Title** are told apart by owner, like **Commands**.
 
 ## Flagged ambiguities
 
