@@ -1,6 +1,6 @@
 {
   "name": "com.draftsama.operatorconsole",
-  "version": "5.1.0",
+  "version": "6.0.0",
   "displayName": "Operator Console",
   "description": "On-site operator tools for an installed Unity app: Entries with typed defaults in a Config asset, a single hand-editable JSON save file holding only overrides, live change watching via UniTask, an Editor window, and in-game Runtime Panels with operator Commands.",
   "unity": "6000.0",
@@ -9,7 +9,8 @@
   },
   "dependencies": {
     "com.cysharp.unitask": "https://github.com/Cysharp/UniTask.git?path=src/UniTask/Assets/Plugins/UniTask#2.5.11",
-    "com.unity.nuget.newtonsoft-json": "3.2.1"
+    "com.unity.nuget.newtonsoft-json": "3.2.1",
+    "com.unity.modules.uielements": "1.0.0"
   },
   "keywords": [
     "save",

@@ -1,19 +1,31 @@
 #nullable enable
 
-using TMPro;
 using UnityEngine;
-using UnityEngine.UI;
+using UnityEngine.UIElements;
 
 namespace OperatorConsole
 {
-    public sealed class ColorWidget : OCWidget<Color>
+    internal sealed class ColorWidget : OCWidget<Color>
     {
-        [SerializeField] private TMP_InputField? _hexInput;
-        [SerializeField] private Image? _swatch;
+        private const float SwatchInset = 6f;
 
-        private void Awake()
+        private readonly VisualElement _swatch = new();
+        private readonly TextField _hex = new() { isDelayed = true };
+
+        public ColorWidget()
         {
-            if (_hexInput != null) _hexInput.onEndEdit.AddListener(_ => Apply());
+            _swatch.AddToClassList("ocp-swatch");
+            _hex.textEdition.placeholder = "#RRGGBBAA";
+            _hex.RegisterValueChangedCallback(e => Apply(e.newValue));
+            Field.Add(_swatch);
+            Field.Add(Grow(_hex));
+        }
+
+        public override void ApplyLayout(OCPanelLayout layout)
+        {
+            base.ApplyLayout(layout);
+            _swatch.style.width = layout.RowHeight - SwatchInset;
+            _swatch.style.height = layout.RowHeight - SwatchInset;
         }
 
         protected override void Show(Color value)
@@ -21,13 +33,12 @@ namespace OperatorConsole
             var hex = "#" + (value.a >= 1f
                 ? ColorUtility.ToHtmlStringRGB(value)
                 : ColorUtility.ToHtmlStringRGBA(value));
-            if (_hexInput != null) _hexInput.SetTextWithoutNotify(hex);
-            if (_swatch != null) _swatch.color = value;
+            _hex.SetValueWithoutNotify(hex);
+            _swatch.style.backgroundColor = value;
         }
 
-        private void Apply()
+        private void Apply(string text)
         {
-            var text = _hexInput != null ? _hexInput.text : string.Empty;
             var trimmed = text.Trim();
             if (trimmed.Length > 0 && trimmed[0] != '#') trimmed = "#" + trimmed;
 

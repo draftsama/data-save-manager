@@ -1,31 +1,23 @@
 #nullable enable
 
-using TMPro;
-using UnityEngine;
-using UnityEngine.UI;
+using UnityEngine.UIElements;
 
 namespace OperatorConsole
 {
-    /// <summary>A title row the Runtime Panel places directly above an Exposed Entry's widget row.</summary>
-    public sealed class OCHeaderRow : MonoBehaviour, IOCLayoutAware
+    /// <summary>A title row the Runtime Panel places directly above an Exposed Entry's widget row, or above a group of Commands.</summary>
+    internal sealed class OCHeaderRow : Label, IOCLayoutAware
     {
-        [SerializeField] private TMP_Text? _text;
+        private const float HeaderScale = 0.62f;
 
-        public void SetText(string text)
+        public OCHeaderRow(string text) : base(text.ToUpperInvariant())
         {
-            if (_text != null) _text.text = text;
+            AddToClassList("ocp-header");
         }
 
         public void ApplyLayout(OCPanelLayout layout)
         {
-            if (_text != null) _text.fontSize = layout.HeaderFontSize;
-
-            if (TryGetComponent<VerticalLayoutGroup>(out var group))
-            {
-                // A new RectOffset: assigning the same instance back would not mark the layout dirty.
-                var padding = group.padding;
-                group.padding = new RectOffset(padding.left, padding.right, Mathf.RoundToInt(layout.HeaderSpacing), padding.bottom);
-            }
+            style.fontSize = layout.HeaderFontSize * HeaderScale;
+            style.marginTop = layout.HeaderSpacing;
         }
     }
 }

@@ -107,12 +107,15 @@ namespace OperatorConsole.Tests
             Assert.AreEqual(0, OCEntryRules.DuplicateKeys(config).Count);
         }
 
-        // ── OCWidgetTemplates ───────────────────────────────────────────────
+        // ── OCWidgets ───────────────────────────────────────────────────────
 
         [Test]
-        public void GetWidget_FallsBackToPlainWhenDropdownSlotEmpty()
+        public void Create_FallsBackToPlainWhenKindDoesNotApplyToType()
         {
-            Assert.IsNull(new OCWidgetTemplates().GetWidget(OCWidgetKind.Dropdown, OCDataType.Int));
+            Assert.IsInstanceOf<DropdownWidget>(OCWidgets.Create(OCWidgetKind.Dropdown, OCDataType.Int));
+            Assert.IsInstanceOf<StringWidget>(OCWidgets.Create(OCWidgetKind.Dropdown, OCDataType.String));
+            Assert.IsInstanceOf<FloatSliderWidget>(OCWidgets.Create(OCWidgetKind.Slider, OCDataType.Float));
+            Assert.IsInstanceOf<BoolWidget>(OCWidgets.Create(OCWidgetKind.Slider, OCDataType.Bool));
         }
 
         // ── DefaultJsonFor round-trip ────────────────────────────────────────

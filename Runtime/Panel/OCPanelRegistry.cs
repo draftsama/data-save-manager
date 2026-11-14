@@ -119,19 +119,19 @@ namespace OperatorConsole
 
         private static OCRuntimePanel? Spawn(OCPanelDefinition definition)
         {
-            // Built under an inactive holder so Awake waits until the panel has its Panel Definition.
+            // Built under an inactive holder so nothing wakes before the panel has its Panel Definition.
             var holder = new GameObject("OC Panel Holder");
             holder.SetActive(false);
-            var panel = OCPanelFactory.Create(holder.transform);
-            if (panel == null)
+            var go = new GameObject($"OC Panel ({definition.Name})");
+            go.transform.SetParent(holder.transform, false);
+            var panel = go.AddComponent<OCRuntimePanel>();
+            if (!panel.Initialize(definition))
             {
                 Object.Destroy(holder);
                 return null;
             }
-            panel.name = $"OC Panel ({definition.Name})";
-            panel.Initialize(definition);
-            panel.transform.SetParent(null, false);
-            Object.DontDestroyOnLoad(panel.gameObject);
+            go.transform.SetParent(null, false);
+            Object.DontDestroyOnLoad(go);
             Object.Destroy(holder);
             return panel;
         }

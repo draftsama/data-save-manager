@@ -12,7 +12,7 @@ namespace OperatorConsole
     {
         [SerializeField] private string _name = "Panel";
         [SerializeField] private bool _enabled = true;
-        [SerializeField, Tooltip("Canvas sort order; higher draws on top.")] private int _sortOrder = 1000;
+        [SerializeField, Tooltip("UI Toolkit panel sort order; higher draws on top.")] private int _sortOrder = 1000;
         [SerializeField] private List<string> _audienceIds = new();
         [SerializeField, Tooltip("Auto shows the Save button only when AutoSave is off. Always / Never force it on / off.")]
         private OCSaveButtonMode _saveButtonMode = OCSaveButtonMode.Auto;
@@ -26,10 +26,11 @@ namespace OperatorConsole
 
         public OCPanelDefinition() { }
 
-        internal OCPanelDefinition(string name)
+        internal OCPanelDefinition(string name, bool startVisible = false)
         {
             _name = name;
             _hotkeyEnabled = false;
+            _startVisible = startVisible;
         }
 
         public string Name => _name;

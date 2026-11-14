@@ -2,8 +2,8 @@
 
 namespace OperatorConsole
 {
-    /// <summary>Optional companion to <see cref="IOCWidget"/>: a row that wants the Runtime Panel's layout settings applied to it.</summary>
-    public interface IOCLayoutAware
+    /// <summary>A Runtime Panel element that takes the Panel Definition's layout settings.</summary>
+    internal interface IOCLayoutAware
     {
         void ApplyLayout(OCPanelLayout layout);
     }

@@ -1,32 +1,30 @@
 #nullable enable
 
-using TMPro;
-using UnityEngine;
-using UnityEngine.UI;
+using UnityEngine.UIElements;
 
 namespace OperatorConsole
 {
     /// <summary>The line under a widget row that shows why its last Entry Action failed. Hidden while there is no error.</summary>
-    public sealed class OCEntryActionError : MonoBehaviour, IOCLayoutAware
+    internal sealed class OCEntryActionError : Label, IOCLayoutAware
     {
-        [SerializeField] private TMP_Text? _text;
+        private const float RowPaddingAndSpacing = 24f;
 
-        private const int RowPaddingAndSpacing = 12;
+        public OCEntryActionError()
+        {
+            AddToClassList("ocp-error");
+            style.display = DisplayStyle.None;
+        }
 
         public void SetError(string? message)
         {
-            if (_text != null) _text.text = message ?? string.Empty;
-            gameObject.SetActive(!string.IsNullOrEmpty(message));
+            text = message ?? string.Empty;
+            style.display = string.IsNullOrEmpty(message) ? DisplayStyle.None : DisplayStyle.Flex;
         }
 
         public void ApplyLayout(OCPanelLayout layout)
         {
-            if (_text != null) _text.fontSize = layout.EntryActionErrorFontSize;
-            if (TryGetComponent<HorizontalOrVerticalLayoutGroup>(out var group))
-            {
-                var padding = group.padding;
-                group.padding = new RectOffset(Mathf.RoundToInt(layout.LabelWidth) + RowPaddingAndSpacing, padding.right, padding.top, padding.bottom);
-            }
+            style.fontSize = layout.EntryActionErrorFontSize;
+            style.paddingLeft = layout.LabelWidth + RowPaddingAndSpacing;
         }
     }
 }

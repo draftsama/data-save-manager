@@ -1,39 +1,33 @@
 #nullable enable
 
 using System;
-using TMPro;
 using UnityEngine;
-using UnityEngine.UI;
+using UnityEngine.UIElements;
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
 #endif
 
 namespace OperatorConsole
 {
-    /// <summary>The full-screen keypad a Panel Lock shows before its Runtime Panel opens.</summary>
-    public sealed class OCLockScreen : MonoBehaviour, IOCLayoutAware
+    /// <summary>The full-screen keypad a Panel Lock shows before its Runtime Panel opens. The owning panel calls <see cref="Tick"/> every frame.</summary>
+    internal sealed class OCLockScreen : VisualElement, IOCLayoutAware
     {
         private const float CheckDelay = 0.12f;
         private const float ShakeDuration = 0.4f;
         private const float ShakeAmplitude = 14f;
         private const float ShakeFrequency = 9f;
-
-        [SerializeField] private Image? _backdrop;
-        [SerializeField, Tooltip("Digit keys, indexed by the digit they enter (element 0 is the 0 key).")]
-        private Button[] _digitKeys = Array.Empty<Button>();
-        [SerializeField] private Button? _cancelKey;
-        [SerializeField] private Button? _backspaceKey;
-        [SerializeField] private GridLayoutGroup? _keypad;
-        [SerializeField, Tooltip("One dot per possible digit; only as many as the Passcode has are shown.")]
-        private Image[] _dots = Array.Empty<Image>();
-        [SerializeField] private RectTransform? _dotRow;
-        [SerializeField] private LayoutElement? _dotRowSlot;
-        [SerializeField] private TMP_Text? _error;
-        [SerializeField] private string _wrongPasscodeText = "Wrong passcode";
+        private const string WrongPasscodeText = "Wrong passcode";
+        private const int Columns = 3;
 
         private enum Phase { Entering, Checking, Shaking }
 
         private readonly char[] _entered = new char[OCPasscode.MaxLength];
+        private readonly VisualElement[] _dots = new VisualElement[OCPasscode.MaxLength];
+        private readonly VisualElement _dotRow = new();
+        private readonly Label _error = new();
+        private readonly VisualElement _pad = new();
+        private readonly Button[] _keys = new Button[12];
+        private int _keyCount;
         private int _count;
         private Phase _phase;
         private float _phaseStart;
@@ -46,21 +40,41 @@ namespace OperatorConsole
         private static readonly Key[] NumpadKeys = { Key.Numpad0, Key.Numpad1, Key.Numpad2, Key.Numpad3, Key.Numpad4, Key.Numpad5, Key.Numpad6, Key.Numpad7, Key.Numpad8, Key.Numpad9 };
 #endif
 
-        public bool IsShown => gameObject.activeSelf;
-
-        private void Awake()
+        public OCLockScreen()
         {
-            for (var i = 0; i < _digitKeys.Length; i++)
+            AddToClassList("ocp-lock");
+            var content = new VisualElement();
+            content.style.alignItems = Align.Center;
+
+            var title = new Label("Enter Passcode");
+            title.AddToClassList("ocp-lock__title");
+            content.Add(title);
+
+            _dotRow.AddToClassList("ocp-lock__dots");
+            for (var i = 0; i < _dots.Length; i++)
             {
-                var key = _digitKeys[i];
-                if (key == null) continue;
-                var digit = (char)('0' + i);
-                key.onClick.AddListener(() => PressDigit(digit));
-                if (key.targetGraphic is Image image) image.sprite = OCCircleSprites.Disc;
+                var dot = new VisualElement();
+                dot.AddToClassList("ocp-lock__dot");
+                _dots[i] = dot;
+                _dotRow.Add(dot);
             }
-            if (_cancelKey != null) _cancelKey.onClick.AddListener(Cancel);
-            if (_backspaceKey != null) _backspaceKey.onClick.AddListener(PressBackspace);
+            content.Add(_dotRow);
+
+            _error.AddToClassList("ocp-lock__error");
+            content.Add(_error);
+
+            _pad.AddToClassList("ocp-lock__pad");
+            for (var digit = 1; digit <= 9; digit++) AddDigitKey(digit);
+            AddKey("Cancel", ghost: true, Cancel);
+            AddDigitKey(0);
+            AddKey("Delete", ghost: true, PressBackspace);
+            content.Add(_pad);
+
+            Add(content);
+            style.display = DisplayStyle.None;
         }
+
+        public bool IsShown => style.display != DisplayStyle.None;
 
         /// <summary>Shows the keypad for <paramref name="passcode"/>. Exactly one of the callbacks runs, unless <see cref="Close"/> is called first.</summary>
         public void Open(OCPasscode passcode, Action onUnlocked, Action onCancelled)
@@ -69,10 +83,10 @@ namespace OperatorConsole
             _onUnlocked = onUnlocked;
             _onCancelled = onCancelled;
             ClearEntry();
-            if (_error != null) _error.text = string.Empty;
+            _error.text = string.Empty;
             for (var i = 0; i < _dots.Length; i++)
-                if (_dots[i] != null) _dots[i].gameObject.SetActive(i < passcode.Length);
-            gameObject.SetActive(true);
+                _dots[i].style.display = i < passcode.Length ? DisplayStyle.Flex : DisplayStyle.None;
+            style.display = DisplayStyle.Flex;
         }
 
         /// <summary>Hides the keypad without running either callback.</summary>
@@ -82,13 +96,13 @@ namespace OperatorConsole
             _onUnlocked = null;
             _onCancelled = null;
             ClearEntry();
-            gameObject.SetActive(false);
+            style.display = DisplayStyle.None;
         }
 
         /// <summary>Hides the keypad and runs the cancel callback.</summary>
         public void Cancel()
         {
-            if (!IsShown) return;
+            if (style.display == DisplayStyle.None) return;
             var onCancelled = _onCancelled;
             Close();
             onCancelled?.Invoke();
@@ -97,7 +111,7 @@ namespace OperatorConsole
         public void PressDigit(char digit)
         {
             if (_phase != Phase.Entering || _passcode == null || _count >= _passcode.Length) return;
-            if (_count == 0 && _error != null) _error.text = string.Empty;
+            if (_count == 0) _error.text = string.Empty;
             _entered[_count++] = digit;
             RefreshDots();
             if (_count == _passcode.Length) StartPhase(Phase.Checking);
@@ -112,41 +126,38 @@ namespace OperatorConsole
 
         public void ApplyLayout(OCPanelLayout layout)
         {
-            if (_backdrop != null)
+            style.backgroundColor = new Color(0.03f, 0.035f, 0.047f, layout.LockBackgroundAlpha);
+
+            var size = layout.LockKeySize;
+            var spacing = layout.LockKeySpacing;
+            for (var i = 0; i < _keys.Length; i++)
             {
-                var color = _backdrop.color;
-                color.a = layout.LockBackgroundAlpha;
-                _backdrop.color = color;
+                var key = _keys[i];
+                key.style.width = size;
+                key.style.height = size;
+                key.style.borderTopLeftRadius = key.style.borderTopRightRadius =
+                    key.style.borderBottomLeftRadius = key.style.borderBottomRightRadius = size / 2f;
+                key.style.marginLeft = i % Columns == 0 ? 0f : spacing;
+                key.style.marginTop = i < Columns ? 0f : spacing;
+                key.style.fontSize = key.ClassListContains("ocp-lock__key--ghost") ? layout.LockKeyFontSize * 0.5f : layout.LockKeyFontSize;
             }
 
-            if (_keypad != null)
+            var dotSize = layout.LockDotSize;
+            _dotRow.style.height = dotSize;
+            for (var i = 0; i < _dots.Length; i++)
             {
-                _keypad.cellSize = new Vector2(layout.LockKeySize, layout.LockKeySize);
-                _keypad.spacing = new Vector2(layout.LockKeySpacing, layout.LockKeySpacing);
+                var dot = _dots[i];
+                dot.style.width = dotSize;
+                dot.style.height = dotSize;
+                dot.style.borderTopLeftRadius = dot.style.borderTopRightRadius =
+                    dot.style.borderBottomLeftRadius = dot.style.borderBottomRightRadius = dotSize / 2f;
+                dot.style.marginLeft = i == 0 ? 0f : dotSize * 1.1f;
             }
-            foreach (var key in _digitKeys) SetLabelSize(key, layout.LockKeyFontSize);
-            SetLabelSize(_cancelKey, layout.LockKeyFontSize * 0.5f);
-            SetLabelSize(_backspaceKey, layout.LockKeyFontSize * 0.5f);
-
-            foreach (var dot in _dots)
-            {
-                if (dot == null || !dot.TryGetComponent<LayoutElement>(out var element)) continue;
-                element.preferredWidth = layout.LockDotSize;
-                element.preferredHeight = layout.LockDotSize;
-            }
-            if (_dotRow != null && _dotRow.TryGetComponent<HorizontalLayoutGroup>(out var row)) row.spacing = layout.LockDotSize * 1.1f;
-            if (_dotRowSlot != null) _dotRowSlot.preferredHeight = layout.LockDotSize;
         }
 
-        private static void SetLabelSize(Button? key, float size)
+        public void Tick()
         {
-            if (key == null) return;
-            var label = key.GetComponentInChildren<TMP_Text>(true);
-            if (label != null) label.fontSize = size;
-        }
-
-        private void Update()
-        {
+            if (style.display == DisplayStyle.None) return;
             switch (_phase)
             {
                 case Phase.Entering:
@@ -157,17 +168,33 @@ namespace OperatorConsole
                     break;
                 case Phase.Shaking:
                     var t = (Time.unscaledTime - _phaseStart) / ShakeDuration;
-                    if (t >= 1f)
-                    {
-                        SetDotRowOffset(0f);
-                        ClearEntry();
-                    }
-                    else
-                    {
-                        SetDotRowOffset(Mathf.Sin(t * ShakeFrequency * Mathf.PI * 2f) * ShakeAmplitude * (1f - t));
-                    }
+                    if (t >= 1f) ClearEntry();
+                    else SetDotRowOffset(Mathf.Sin(t * ShakeFrequency * Mathf.PI * 2f) * ShakeAmplitude * (1f - t));
                     break;
             }
+        }
+
+        private void AddDigitKey(int digit)
+        {
+            var c = (char)('0' + digit);
+            AddKey(digit.ToString(), ghost: false, () => PressDigit(c));
+        }
+
+        private void AddKey(string text, bool ghost, Action onClick)
+        {
+            var key = new Button(onClick) { text = text };
+            key.AddToClassList("ocp-lock__key");
+            if (ghost) key.AddToClassList("ocp-lock__key--ghost");
+            // One row per three keys, so pixel rounding can never wrap a key onto the next line.
+            var index = _keyCount++;
+            if (index % Columns == 0)
+            {
+                var row = new VisualElement();
+                row.AddToClassList("ocp-lock__row");
+                _pad.Add(row);
+            }
+            _keys[index] = key;
+            _pad[_pad.childCount - 1].Add(key);
         }
 
         private void Check()
@@ -180,7 +207,7 @@ namespace OperatorConsole
                 return;
             }
 
-            if (_error != null) _error.text = _wrongPasscodeText;
+            _error.text = WrongPasscodeText;
             StartPhase(Phase.Shaking);
         }
 
@@ -220,15 +247,9 @@ namespace OperatorConsole
         private void RefreshDots()
         {
             for (var i = 0; i < _dots.Length; i++)
-                if (_dots[i] != null) _dots[i].sprite = i < _count ? OCCircleSprites.Disc : OCCircleSprites.Ring;
+                _dots[i].EnableInClassList("ocp-lock__dot--filled", i < _count);
         }
 
-        private void SetDotRowOffset(float x)
-        {
-            if (_dotRow == null) return;
-            var position = _dotRow.anchoredPosition;
-            position.x = x;
-            _dotRow.anchoredPosition = position;
-        }
+        private void SetDotRowOffset(float x) => _dotRow.style.translate = new Translate(x, 0f);
     }
 }

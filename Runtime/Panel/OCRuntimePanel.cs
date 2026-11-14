@@ -2,10 +2,9 @@
 
 using System;
 using System.Collections.Generic;
-using TMPro;
 using UnityEngine;
 using UnityEngine.Serialization;
-using UnityEngine.UI;
+using UnityEngine.UIElements;
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
 #endif
@@ -22,24 +21,14 @@ namespace OperatorConsole
     /// <summary>The in-game UI where an operator views and edits Exposed Entries and runs Commands and Entry Actions while the app runs. Created from a Panel Definition; see <see cref="OC.Panels"/>.</summary>
     public sealed class OCRuntimePanel : MonoBehaviour
     {
-        [SerializeField] private GameObject? _root;
-        [SerializeField] private Transform? _container;
-        [SerializeField] private Button? _saveButton;
-        [SerializeField, FormerlySerializedAs("_resetAllButton")] private Button? _resetButton;
-        [SerializeField] private Button? _closeButton;
-        [SerializeField] private GameObject? _confirmDialog;
-        [SerializeField] private Button? _confirmCancelButton;
-        [SerializeField] private Button? _confirmResetButton;
-        [SerializeField, Tooltip("Keypad shown before the panel opens when a Passcode is set.")]
-        private OCLockScreen? _lockScreen;
-        [SerializeField] private GameObject? _tabBar;
-        [SerializeField] private OCPanelTab? _settingsTab;
-        [SerializeField] private OCPanelTab? _commandsTab;
-        [SerializeField] private GameObject? _settingsView;
-        [SerializeField] private GameObject? _commandsView;
-        [SerializeField] private Transform? _commandContainer;
-        [SerializeField] private TMP_Text? _confirmMessage;
-        [SerializeField] private TMP_Text? _confirmButtonLabel;
+        private const string ThemePath = "OperatorConsole/OCRuntimeTheme";
+        private const string ResetConfirmMessage = "Reset all settings on this panel to their defaults?\nThis cannot be undone.";
+        private const string ResetConfirmButtonText = "Reset";
+        private const float TitleScale = 1.2f;
+        private const float PillScale = 0.65f;
+        private const float TabInset = 8f;
+        private const float FooterButtonExtra = 6f;
+        private static readonly Vector2Int ReferenceResolution = new(1920, 1080);
 
         // Settings from before Panel Definitions; read only by the Operator Console's import from scene panels.
 #pragma warning disable CS0414
@@ -53,19 +42,38 @@ namespace OperatorConsole
         [SerializeField, HideInInspector, FormerlySerializedAs("_audienceIds")] private List<string> _legacyAudienceIds = new();
 #pragma warning restore CS0414
 
+        private static ThemeStyleSheet? s_theme;
+
         private OCPanelDefinition? _definition;
-        private OCWidgetTemplates? _templates;
+        private UIDocument? _document;
+        private PanelSettings? _panelSettings;
         private bool _countedOpen;
+        private bool _visible;
         private static int s_openCount;
 
+        private VisualElement? _card;
+        private Label? _title;
+        private Label? _pill;
+        private VisualElement? _tabBar;
+        private Button? _settingsTab;
+        private Button? _commandsTab;
+        private ScrollView? _settingsView;
+        private ScrollView? _commandsView;
+        private Button? _saveButton;
+        private Button? _resetButton;
+        private Button? _closeButton;
+        private VisualElement? _confirmDialog;
+        private Label? _confirmMessage;
+        private Button? _confirmCancelButton;
+        private Button? _confirmButton;
+        private OCLockScreen? _lockScreen;
+
         private readonly List<OCRegisteredCommand> _shownCommands = new();
+        private readonly List<IOCLayoutAware> _entryLayoutTargets = new();
+        private readonly List<IOCLayoutAware> _commandLayoutTargets = new();
         private int _shownEntryCount;
         private bool _commandsSelected;
         private Action? _pendingConfirm;
-        private string _resetConfirmMessage = string.Empty;
-        private string _resetConfirmButtonText = string.Empty;
-        private bool _warnedMissingCommandRow;
-        private bool _warnedMissingEntryActionBar;
         private Action? _onUnlocked;
         private Action? _onLockCancelled;
 
@@ -90,7 +98,7 @@ namespace OperatorConsole
 
         private OCPanelDefinition Definition => _definition!;
 
-        public bool IsVisible => _root != null && _root.activeSelf;
+        public bool IsVisible => _visible;
 
         /// <summary>True while the Lock Screen is asking for this Panel's Passcode.</summary>
         public bool IsLocking => _lockScreen != null && _lockScreen.IsShown;
@@ -101,39 +109,36 @@ namespace OperatorConsole
 
         private static void SaveStore() => Store.Save();
 
-        internal void Initialize(OCPanelDefinition definition)
+        /// <summary>Gives the panel its Panel Definition and a UI Toolkit document. Call on an inactive GameObject; false, after logging an error, when the runtime theme is missing.</summary>
+        internal bool Initialize(OCPanelDefinition definition)
         {
             _definition = definition;
-            if (TryGetComponent<Canvas>(out var canvas)) canvas.sortingOrder = definition.SortOrder;
+            if (s_theme == null) s_theme = Resources.Load<ThemeStyleSheet>(ThemePath);
+            if (s_theme == null)
+            {
+                Debug.LogError($"OC: no theme at Resources/{ThemePath}.tss, so no Runtime Panel was created. Reimport the Operator Console package.");
+                return false;
+            }
+
+            _panelSettings = ScriptableObject.CreateInstance<PanelSettings>();
+            _panelSettings.name = $"OC Panel Settings ({definition.Name})";
+            _panelSettings.themeStyleSheet = s_theme;
+            _panelSettings.scaleMode = PanelScaleMode.ScaleWithScreenSize;
+            _panelSettings.referenceResolution = ReferenceResolution;
+            _panelSettings.screenMatchMode = PanelScreenMatchMode.MatchWidthOrHeight;
+            _panelSettings.match = 0.5f;
+            _panelSettings.sortingOrder = definition.SortOrder;
+
+            _document = gameObject.AddComponent<UIDocument>();
+            _document.panelSettings = _panelSettings;
+            return true;
         }
 
         private void Awake()
         {
-            if (_definition == null)
-            {
-                Debug.LogWarning($"OCRuntimePanel on '{gameObject.name}' was placed in a scene. Runtime Panels are now created from Panel Definitions: import this one in the Operator Console, then remove it from the scene.", this);
-                gameObject.SetActive(false);
-                return;
-            }
-
-            if (_saveButton != null) _saveButton.onClick.AddListener(SaveStore);
-            if (_resetButton != null) _resetButton.onClick.AddListener(OnResetClicked);
-            if (_closeButton != null) _closeButton.onClick.AddListener(Hide);
-            if (_confirmCancelButton != null) _confirmCancelButton.onClick.AddListener(CloseConfirmDialog);
-            if (_confirmResetButton != null) _confirmResetButton.onClick.AddListener(OnConfirmClicked);
-            if (_settingsTab != null && _settingsTab.Button != null) _settingsTab.Button.onClick.AddListener(SelectSettings);
-            if (_commandsTab != null && _commandsTab.Button != null) _commandsTab.Button.onClick.AddListener(SelectCommands);
-            if (_confirmMessage != null) _resetConfirmMessage = _confirmMessage.text;
-            if (_confirmButtonLabel != null) _resetConfirmButtonText = _confirmButtonLabel.text;
-            _onUnlocked = Show;
-            _onLockCancelled = OnLockCancelled;
-            if (_lockScreen != null) _lockScreen.Close();
-
-            CloseConfirmDialog();
-            ApplySaveButtonMode();
-
-            if (Definition.StartVisible) Show();
-            else if (_root != null) _root.SetActive(false);
+            if (_definition != null) return;
+            Debug.LogWarning($"OCRuntimePanel on '{gameObject.name}' was placed in a scene. Runtime Panels are now created from Panel Definitions: import this one in the Operator Console, then remove it from the scene.", this);
+            gameObject.SetActive(false);
         }
 
         private void OnEnable()
@@ -146,8 +151,18 @@ namespace OperatorConsole
             if (_definition != null) OC.Commands.Changed -= OnCommandsChanged;
         }
 
+        // UIDocument creates its root in its own OnEnable, so the tree is built here or on first use, whichever comes first.
+        private void Start()
+        {
+            if (_definition == null || !EnsureBuilt()) return;
+            if (Definition.StartVisible && !_visible) Show();
+        }
+
         private void Update()
         {
+            if (_definition == null) return;
+            _lockScreen?.Tick();
+
             if (Definition.HotkeyEnabled && HotkeyPressed()) Toggle();
 
             var cornerTap = Definition.CornerTap;
@@ -207,20 +222,15 @@ namespace OperatorConsole
         /// <summary>Opens the panel the way an Open Trigger does: through the Lock Screen when a Passcode is set.</summary>
         public void RequestOpen()
         {
-            if (IsVisible || IsLocking) return;
+            if (IsVisible || IsLocking || !EnsureBuilt()) return;
             var passcode = Definition.Passcode;
             if (!passcode.IsSet)
             {
                 Show();
                 return;
             }
-            if (_lockScreen == null)
-            {
-                Debug.LogError($"OCRuntimePanel on '{gameObject.name}': a Passcode is set but no Lock Screen is assigned, so the panel stays closed.", this);
-                return;
-            }
             if (!OC.Panels.ClaimLockScreen(this)) return;
-            _lockScreen.ApplyLayout(Layout);
+            _lockScreen!.ApplyLayout(Layout);
             _lockScreen.Open(passcode, _onUnlocked!, _onLockCancelled!);
             SetOpen(true);
         }
@@ -242,6 +252,7 @@ namespace OperatorConsole
         /// <summary>Opens the panel at once, without asking for the Passcode.</summary>
         public void Show()
         {
+            if (!EnsureBuilt()) return;
             OC.Panels.ReleaseLockScreen(this);
             if (IsLocking) _lockScreen!.Close();
             CloseConfirmDialog();
@@ -249,7 +260,8 @@ namespace OperatorConsole
             RebuildCommands();
             _commandsSelected = _shownEntryCount == 0 && _shownCommands.Count > 0;
             ApplyTabs();
-            if (_root != null) _root.SetActive(true);
+            _card!.style.display = DisplayStyle.Flex;
+            _visible = true;
             SetOpen(true);
         }
 
@@ -258,8 +270,11 @@ namespace OperatorConsole
             OC.Panels.ReleaseLockScreen(this);
             if (IsLocking) _lockScreen!.Close();
             CloseConfirmDialog();
+            // A delayed field commits its edit on blur, so blur first or Auto Save misses it.
+            _document?.rootVisualElement?.focusController?.focusedElement?.Blur();
             if (Store.Config.AutoSave && Store.IsDirty) Store.Save();
-            if (_root != null) _root.SetActive(false);
+            if (_card != null) _card.style.display = DisplayStyle.None;
+            _visible = false;
             SetOpen(false);
         }
 
@@ -277,14 +292,15 @@ namespace OperatorConsole
 
         private void ApplyTabs()
         {
+            if (_card == null) return;
             if (_shownCommands.Count == 0) _commandsSelected = false;
 
-            if (_tabBar != null) _tabBar.SetActive(_shownCommands.Count > 0);
-            if (_settingsTab != null) _settingsTab.SetSelected(!_commandsSelected);
-            if (_commandsTab != null) _commandsTab.SetSelected(_commandsSelected);
-            if (_settingsView != null) _settingsView.SetActive(!_commandsSelected);
-            if (_commandsView != null) _commandsView.SetActive(_commandsSelected);
-            if (_resetButton != null) _resetButton.gameObject.SetActive(!_commandsSelected);
+            SetShown(_tabBar, _shownCommands.Count > 0);
+            _settingsTab!.EnableInClassList("ocp-tab--selected", !_commandsSelected);
+            _commandsTab!.EnableInClassList("ocp-tab--selected", _commandsSelected);
+            SetShown(_settingsView, !_commandsSelected);
+            SetShown(_commandsView, _commandsSelected);
+            SetShown(_resetButton, !_commandsSelected);
             ApplySaveButtonMode();
         }
 
@@ -296,92 +312,31 @@ namespace OperatorConsole
             ApplyTabs();
         }
 
-        private void OnResetClicked()
-        {
-            if (_confirmDialog == null)
-            {
-                Debug.LogWarning($"OCRuntimePanel on '{gameObject.name}': no confirm dialog assigned; resetting without confirmation.", this);
-                ResetShownEntries();
-                return;
-            }
-            OpenConfirmDialog(_resetConfirmMessage, _resetConfirmButtonText, ResetShownEntries);
-        }
+        private void OnResetClicked() => OpenConfirmDialog(ResetConfirmMessage, ResetConfirmButtonText, ResetShownEntries);
 
         private void ResetShownEntries() => Store.ResetExposedEntries(Definition.AudienceIds);
 
         private void OnRunClicked(OCRegisteredCommand command)
         {
-            if (!command.Confirm)
-            {
-                command.Run();
-                return;
-            }
-            if (_confirmDialog == null)
-            {
-                Debug.LogWarning($"OCRuntimePanel on '{gameObject.name}': no confirm dialog assigned; running '{command.Title}' without confirmation.", this);
-                command.Run();
-                return;
-            }
-            OpenConfirmDialog($"Run \u201C{OC.Commands.DisplayTitle(command)}\u201D?", "Run", command.Run);
+            if (!command.Confirm) command.Run();
+            else OpenConfirmDialog($"Run “{OC.Commands.DisplayTitle(command)}”?", "Run", command.Run);
         }
 
         private void OnEntryActionClicked(OCRegisteredEntryAction action)
         {
             void Run() => action.Run(Store);
 
-            if (!action.Confirm)
-            {
-                Run();
-                return;
-            }
-            if (_confirmDialog == null)
-            {
-                Debug.LogWarning($"OCRuntimePanel on '{gameObject.name}': no confirm dialog assigned; running '{action.Title}' without confirmation.", this);
-                Run();
-                return;
-            }
-            OpenConfirmDialog($"Run \u201C{OC.Commands.DisplayTitle(action)}\u201D?", "Run", Run);
-        }
-
-        private void AddEntryActions(GameObject widgetRow, string key)
-        {
-            var registry = OC.Commands;
-            var actions = registry.EntryActionsFor(key);
-            if (actions.Count == 0 || _templates == null || _container == null) return;
-
-            var barTemplate = _templates.EntryActionBar;
-            if (barTemplate == null)
-            {
-                if (!_warnedMissingEntryActionBar)
-                {
-                    _warnedMissingEntryActionBar = true;
-                    Debug.LogWarning($"OCRuntimePanel on '{gameObject.name}': Entry Actions are skipped because there is no Entry Action Bar template.", this);
-                }
-                return;
-            }
-
-            var rowGroup = widgetRow.TryGetComponent<CanvasGroup>(out var group) ? group : widgetRow.AddComponent<CanvasGroup>();
-
-            OCEntryActionError? error = null;
-            var errorTemplate = _templates.EntryActionError;
-            if (errorTemplate != null)
-            {
-                error = Instantiate(errorTemplate, _container);
-                error.transform.SetSiblingIndex(widgetRow.transform.GetSiblingIndex() + 1);
-                error.ApplyLayout(Layout);
-            }
-
-            var bar = Instantiate(barTemplate, widgetRow.transform);
-            bar.Setup(actions, registry.DisplayTitle, OnEntryActionClicked, rowGroup, error);
+            if (!action.Confirm) Run();
+            else OpenConfirmDialog($"Run “{OC.Commands.DisplayTitle(action)}”?", "Run", Run);
         }
 
         private void OpenConfirmDialog(string message, string buttonText, Action onConfirm)
         {
             if (_confirmDialog == null) return;
-            if (_confirmMessage != null) _confirmMessage.text = message;
-            if (_confirmButtonLabel != null) _confirmButtonLabel.text = buttonText;
+            _confirmMessage!.text = message;
+            _confirmButton!.text = buttonText;
             _pendingConfirm = onConfirm;
-            _confirmDialog.SetActive(true);
+            _confirmDialog.style.display = DisplayStyle.Flex;
         }
 
         private void OnConfirmClicked()
@@ -394,7 +349,7 @@ namespace OperatorConsole
         private void CloseConfirmDialog()
         {
             _pendingConfirm = null;
-            if (_confirmDialog != null) _confirmDialog.SetActive(false);
+            SetShown(_confirmDialog, false);
         }
 
         private void ApplySaveButtonMode()
@@ -407,13 +362,16 @@ namespace OperatorConsole
                 OCSaveButtonMode.Never  => false,
                 _                        => !Store.Config.AutoSave
             };
-            _saveButton.gameObject.SetActive(active && !_commandsSelected);
+            SetShown(_saveButton, active && !_commandsSelected);
         }
 
         private void OnDestroy()
         {
             SetOpen(false);
             if (_definition != null) OC.Panels.Remove(this);
+            // Detached first: the UIDocument may still be live when this runs.
+            if (_document != null) _document.panelSettings = null;
+            if (_panelSettings != null) Destroy(_panelSettings);
         }
 
         private void SetOpen(bool open)
@@ -439,73 +397,162 @@ namespace OperatorConsole
         /// <summary>Applies the Panel Definition's layout and Save Button Mode again, for edits made while the panel is up.</summary>
         public void ApplySettings()
         {
-            if (_definition == null || _root == null || _container == null) return;
+            if (_definition == null || _card == null) return;
 
-            if (TryGetComponent<Canvas>(out var canvas)) canvas.sortingOrder = Definition.SortOrder;
+            if (_panelSettings != null) _panelSettings.sortingOrder = Definition.SortOrder;
             ApplyPanelLayout();
             ApplySaveButtonMode();
-            foreach (var row in _container.GetComponentsInChildren<IOCLayoutAware>(true))
-                row.ApplyLayout(Layout);
-            if (_commandContainer != null)
-                foreach (var row in _commandContainer.GetComponentsInChildren<IOCLayoutAware>(true))
-                    row.ApplyLayout(Layout);
+            foreach (var target in _entryLayoutTargets) target.ApplyLayout(Layout);
+            foreach (var target in _commandLayoutTargets) target.ApplyLayout(Layout);
+            ApplyRowSpacing(_settingsView);
+            ApplyRowSpacing(_commandsView);
+        }
+
+        public void Rebuild()
+        {
+            if (!EnsureBuilt()) return;
+            ApplyPanelLayout();
+            _shownEntryCount = 0;
+            _entryLayoutTargets.Clear();
+            var container = _settingsView!.contentContainer;
+            container.Clear();
+
+            var store = Store;
+            var registry = OC.Commands;
+            foreach (var entry in store.Config.Entries)
+            {
+                if (!OCAudienceFilter.Shows(entry, Definition.AudienceIds)) continue;
+                _shownEntryCount++;
+
+                var presentation = OCPresentation.Present(OCHintSettings.From(entry));
+
+                if (presentation.RangeMessage != null)
+                    Debug.LogWarning($"OCRuntimePanel on '{gameObject.name}': entry '{entry.Key}': {presentation.RangeMessage}", this);
+
+                if (presentation.OptionsMessage != null)
+                    Debug.LogWarning($"OCRuntimePanel on '{gameObject.name}': entry '{entry.Key}': {presentation.OptionsMessage}", this);
+
+                var widget = OCWidgets.Create(presentation.Widget, entry.Type);
+                if (widget == null)
+                {
+                    Debug.LogError($"OCRuntimePanel on '{gameObject.name}': no widget for '{entry.Key}' ({entry.Type}).", this);
+                    continue;
+                }
+
+                if (presentation.Header != null) AddLayoutTarget(container, new OCHeaderRow(presentation.Header), _entryLayoutTargets);
+
+                AddLayoutTarget(container, widget, _entryLayoutTargets);
+                widget.Setup(entry, store);
+
+                var actions = registry.EntryActionsFor(entry.Key);
+                if (actions.Count == 0) continue;
+                var error = new OCEntryActionError();
+                container.Add(error);
+                _entryLayoutTargets.Add(new OCEntryActionBar(widget, widget.Field, actions, registry.DisplayTitle, OnEntryActionClicked, error));
+            }
+
+            foreach (var target in _entryLayoutTargets) target.ApplyLayout(Layout);
+            ApplyRowSpacing(_settingsView);
+        }
+
+        /// <summary>Lists the Registered Commands this Panel shows on its Commands tab.</summary>
+        public void RebuildCommands()
+        {
+            _shownCommands.Clear();
+            var registry = OC.Commands;
+            var config = Store.Config;
+            foreach (var command in registry.Commands)
+                if (OCAudienceFilter.Shows(command, Definition.AudienceIds, config)) _shownCommands.Add(command);
+
+            if (!EnsureBuilt()) return;
+            _commandLayoutTargets.Clear();
+            var container = _commandsView!.contentContainer;
+            container.Clear();
+
+            string? previousHeader = null;
+            foreach (var command in _shownCommands)
+            {
+                var startsGroup = command.Header != null && !string.Equals(command.Header, previousHeader, StringComparison.Ordinal);
+                previousHeader = command.Header;
+                if (startsGroup) AddLayoutTarget(container, new OCHeaderRow(command.Header!), _commandLayoutTargets);
+                AddLayoutTarget(container, new OCCommandRow(command, registry.DisplayTitle(command), OnRunClicked), _commandLayoutTargets);
+            }
+
+            foreach (var target in _commandLayoutTargets) target.ApplyLayout(Layout);
+            ApplyRowSpacing(_commandsView);
+        }
+
+        private static void AddLayoutTarget<TElement>(VisualElement container, TElement element, List<IOCLayoutAware> targets)
+            where TElement : VisualElement, IOCLayoutAware
+        {
+            container.Add(element);
+            targets.Add(element);
+        }
+
+        private void ApplyRowSpacing(ScrollView? view)
+        {
+            if (view == null) return;
+            foreach (var child in view.contentContainer.Children())
+                child.style.marginBottom = Layout.RowSpacing;
         }
 
         private void ApplyPanelLayout()
         {
-            if (_root == null) return;
+            if (_card == null) return;
+            var layout = Layout;
+            var s = _card.style;
+            _card.EnableInClassList("ocp--edge", layout.SizeMode == OCPanelSizeMode.FullScreen && layout.FullScreenPadding <= 0f);
 
-            if (_root.TryGetComponent<RectTransform>(out var rect))
+            if (layout.SizeMode == OCPanelSizeMode.FullScreen)
             {
-                if (Layout.SizeMode == OCPanelSizeMode.FullScreen)
-                {
-                    var padding = Layout.FullScreenPadding;
-                    rect.anchorMin = Vector2.zero;
-                    rect.anchorMax = Vector2.one;
-                    rect.pivot = new Vector2(0.5f, 0.5f);
-                    rect.offsetMin = new Vector2(padding, padding);
-                    rect.offsetMax = new Vector2(-padding, -padding);
-                }
-                else
-                {
-                    var point = AnchorPoint(Layout.Anchor);
-                    rect.anchorMin = point;
-                    rect.anchorMax = point;
-                    rect.pivot = point;
-                    rect.sizeDelta = Layout.PanelSize;
-                    rect.anchoredPosition = Layout.Offset;
-                }
+                var padding = layout.FullScreenPadding;
+                s.left = padding;
+                s.top = padding;
+                s.right = padding;
+                s.bottom = padding;
+                s.width = StyleKeyword.Auto;
+                s.height = StyleKeyword.Auto;
+                s.translate = new Translate(0f, 0f);
+                s.marginLeft = 0f;
+                s.marginTop = 0f;
             }
-
-            if (_root.TryGetComponent<Image>(out var background))
-                background.color = Layout.BackgroundColor;
-
-            ApplyContainerLayout(_container);
-            ApplyContainerLayout(_commandContainer);
-            if (_settingsTab != null) _settingsTab.ApplyLayout(Layout);
-            if (_commandsTab != null) _commandsTab.ApplyLayout(Layout);
-            if (_lockScreen != null) _lockScreen.ApplyLayout(Layout);
-        }
-
-        private void ApplyContainerLayout(Transform? container)
-        {
-            if (container == null) return;
-
-            if (container.TryGetComponent<VerticalLayoutGroup>(out var group))
-                group.spacing = Layout.RowSpacing;
-
-            var scrollRect = container.GetComponentInParent<ScrollRect>(true);
-            if (scrollRect != null)
+            else
             {
-                scrollRect.scrollSensitivity = Layout.ScrollSensitivity;
-                if (scrollRect.verticalScrollbar != null
-                    && scrollRect.verticalScrollbar.TryGetComponent<RectTransform>(out var barRect))
-                {
-                    var size = barRect.sizeDelta;
-                    size.x = Layout.ScrollbarWidth;
-                    barRect.sizeDelta = size;
-                }
+                // uGUI anchors count y from the bottom; UI Toolkit counts it from the top.
+                var point = AnchorPoint(layout.Anchor);
+                var x = point.x * 100f;
+                var y = (1f - point.y) * 100f;
+                s.left = Length.Percent(x);
+                s.top = Length.Percent(y);
+                s.right = StyleKeyword.Auto;
+                s.bottom = StyleKeyword.Auto;
+                s.width = layout.PanelSize.x;
+                s.height = layout.PanelSize.y;
+                s.translate = new Translate(Length.Percent(-x), Length.Percent(-y));
+                s.marginLeft = layout.Offset.x;
+                s.marginTop = -layout.Offset.y;
             }
+            s.backgroundColor = layout.BackgroundColor;
+
+            _title!.style.fontSize = layout.FontSize * TitleScale;
+            _pill!.style.fontSize = layout.FontSize * PillScale;
+            foreach (var tab in new[] { _settingsTab!, _commandsTab! })
+            {
+                tab.style.height = layout.TabHeight - TabInset;
+                tab.style.fontSize = layout.FontSize;
+            }
+            foreach (var view in new[] { _settingsView!, _commandsView! })
+            {
+                view.verticalScroller.style.width = layout.ScrollbarWidth;
+                view.mouseWheelScrollSize = layout.ScrollSensitivity;
+            }
+            foreach (var button in new[] { _saveButton!, _resetButton!, _closeButton!, _confirmCancelButton!, _confirmButton! })
+            {
+                button.style.fontSize = layout.FontSize;
+                button.style.height = layout.RowHeight + FooterButtonExtra;
+            }
+            _confirmMessage!.style.fontSize = layout.FontSize;
+            _lockScreen!.ApplyLayout(layout);
         }
 
         private static Vector2 AnchorPoint(OCPanelAnchor anchor) => anchor switch
@@ -521,119 +568,113 @@ namespace OperatorConsole
             _                          => new Vector2(0.5f, 0.5f)
         };
 
-        public void Rebuild()
+        private static void SetShown(VisualElement? element, bool shown)
         {
-            ApplyPanelLayout();
-            _shownEntryCount = 0;
-
-            if (_container == null) return;
-
-            foreach (Transform child in _container)
-                Destroy(child.gameObject);
-
-            if (_templates == null)
-            {
-                Debug.LogError($"OCRuntimePanel on '{gameObject.name}' has no row templates; Runtime Panels are built by OC.Panels.", this);
-                return;
-            }
-
-            var store = Store;
-            var warnedMissingHeaderRow = false;
-
-            foreach (var entry in store.Config.Entries)
-            {
-                if (!OCAudienceFilter.Shows(entry, Definition.AudienceIds)) continue;
-                _shownEntryCount++;
-
-                var presentation = OCPresentation.Present(OCHintSettings.From(entry));
-
-                if (presentation.RangeMessage != null)
-                    Debug.LogWarning($"OCRuntimePanel on '{gameObject.name}': entry '{entry.Key}': {presentation.RangeMessage}", this);
-
-                if (presentation.OptionsMessage != null)
-                    Debug.LogWarning($"OCRuntimePanel on '{gameObject.name}': entry '{entry.Key}': {presentation.OptionsMessage}", this);
-
-                var widgetTemplate = _templates.GetWidget(presentation.Widget, entry.Type);
-                if (widgetTemplate == null)
-                {
-                    Debug.LogError($"OCRuntimePanel on '{gameObject.name}': no widget template for '{entry.Key}' ({entry.Type}).", this);
-                    continue;
-                }
-
-                if (presentation.Header != null)
-                {
-                    var headerTemplate = _templates.HeaderRow;
-                    if (headerTemplate != null)
-                    {
-                        var headerRow = Instantiate(headerTemplate, _container);
-                        headerRow.SetText(presentation.Header);
-                        headerRow.ApplyLayout(Layout);
-                    }
-                    else if (!warnedMissingHeaderRow)
-                    {
-                        warnedMissingHeaderRow = true;
-                        Debug.LogWarning($"OCRuntimePanel on '{gameObject.name}': headers are skipped because there is no Header Row template.", this);
-                    }
-                }
-
-                var go = Instantiate(widgetTemplate.gameObject, _container);
-                var widget = go.GetComponent<IOCWidget>();
-                if (widget == null)
-                {
-                    Debug.LogError($"OCRuntimePanel on '{gameObject.name}': widget template for '{entry.Key}' has no IOCWidget component.", this);
-                    continue;
-                }
-                widget.Setup(entry, store);
-                AddEntryActions(go, entry.Key);
-                if (widget is IOCLayoutAware layoutAware) layoutAware.ApplyLayout(Layout);
-                foreach (var bar in go.GetComponentsInChildren<OCEntryActionBar>(true)) bar.ApplyLayout(Layout);
-            }
+            if (element != null) element.style.display = shown ? DisplayStyle.Flex : DisplayStyle.None;
         }
 
-        /// <summary>Lists the Registered Commands this Panel shows on its Commands tab.</summary>
-        public void RebuildCommands()
+        private bool EnsureBuilt()
         {
-            _shownCommands.Clear();
-            var registry = OC.Commands;
-            var config = Store.Config;
-            foreach (var command in registry.Commands)
-                if (OCAudienceFilter.Shows(command, Definition.AudienceIds, config)) _shownCommands.Add(command);
+            if (_card != null) return true;
+            var root = _document != null ? _document.rootVisualElement : null;
+            if (root == null) return false;
 
-            if (_commandContainer == null) return;
+            root.pickingMode = PickingMode.Ignore;
+            var overlay = new VisualElement { pickingMode = PickingMode.Ignore };
+            overlay.AddToClassList("ocp-overlay");
 
-            foreach (Transform child in _commandContainer)
-                Destroy(child.gameObject);
+            _card = new VisualElement();
+            _card.AddToClassList("ocp");
 
-            if (_shownCommands.Count == 0 || _templates == null) return;
+            var head = new VisualElement();
+            head.AddToClassList("ocp-head");
+            _title = new Label("Settings");
+            _title.AddToClassList("ocp-title");
+            _pill = new Label(Definition.Name);
+            _pill.AddToClassList("ocp-pill");
+            head.Add(_title);
+            head.Add(_pill);
+            _card.Add(head);
 
-            var rowTemplate = _templates.CommandRow;
-            if (rowTemplate == null)
-            {
-                if (!_warnedMissingCommandRow)
-                {
-                    _warnedMissingCommandRow = true;
-                    Debug.LogWarning($"OCRuntimePanel on '{gameObject.name}': Commands are skipped because there is no Command Row template.", this);
-                }
-                return;
-            }
+            _tabBar = new VisualElement();
+            _tabBar.AddToClassList("ocp-tabs");
+            _settingsTab = TabButton("Settings", SelectSettings);
+            _commandsTab = TabButton("Commands", SelectCommands);
+            _tabBar.Add(_settingsTab);
+            _tabBar.Add(_commandsTab);
+            _card.Add(_tabBar);
 
-            var headerTemplate = _templates.HeaderRow;
-            string? previousHeader = null;
-            foreach (var command in _shownCommands)
-            {
-                var startsGroup = command.Header != null && !string.Equals(command.Header, previousHeader, StringComparison.Ordinal);
-                previousHeader = command.Header;
-                if (startsGroup && headerTemplate != null)
-                {
-                    var headerRow = Instantiate(headerTemplate, _commandContainer);
-                    headerRow.SetText(command.Header);
-                    headerRow.ApplyLayout(Layout);
-                }
+            _settingsView = ScrollView();
+            _commandsView = ScrollView();
+            _card.Add(_settingsView);
+            _card.Add(_commandsView);
 
-                var row = Instantiate(rowTemplate, _commandContainer);
-                row.Setup(command, registry.DisplayTitle(command), OnRunClicked);
-                row.ApplyLayout(Layout);
-            }
+            var footer = new VisualElement();
+            footer.AddToClassList("ocp-foot");
+            _resetButton = FooterButton("Reset to Defaults", "ocp-button--danger", OnResetClicked);
+            var spacer = new VisualElement();
+            spacer.AddToClassList("ocp-grow");
+            _closeButton = FooterButton("Close", "ocp-button--ghost", Hide);
+            _saveButton = FooterButton("Save", "ocp-button--primary", SaveStore);
+            footer.Add(_resetButton);
+            footer.Add(spacer);
+            footer.Add(_closeButton);
+            footer.Add(_saveButton);
+            _card.Add(footer);
+
+            _confirmDialog = new VisualElement();
+            _confirmDialog.AddToClassList("ocp-confirm");
+            var box = new VisualElement();
+            box.AddToClassList("ocp-confirm__box");
+            _confirmMessage = new Label();
+            _confirmMessage.AddToClassList("ocp-confirm__message");
+            var buttons = new VisualElement();
+            buttons.AddToClassList("ocp-confirm__buttons");
+            _confirmCancelButton = FooterButton("Cancel", "ocp-button--ghost", CloseConfirmDialog);
+            _confirmButton = FooterButton(ResetConfirmButtonText, "ocp-button--danger", OnConfirmClicked);
+            buttons.Add(_confirmCancelButton);
+            buttons.Add(_confirmButton);
+            box.Add(_confirmMessage);
+            box.Add(buttons);
+            _confirmDialog.Add(box);
+            _card.Add(_confirmDialog);
+
+            overlay.Add(_card);
+            _lockScreen = new OCLockScreen();
+            overlay.Add(_lockScreen);
+            root.Add(overlay);
+
+            _onUnlocked = Show;
+            _onLockCancelled = OnLockCancelled;
+            _card.style.display = DisplayStyle.None;
+            CloseConfirmDialog();
+            SetShown(_tabBar, false);
+            SetShown(_commandsView, false);
+            ApplyPanelLayout();
+            ApplySaveButtonMode();
+            return true;
+        }
+
+        private static Button TabButton(string text, Action onClick)
+        {
+            var button = new Button(onClick) { text = text };
+            button.AddToClassList("ocp-tab");
+            return button;
+        }
+
+        private static Button FooterButton(string text, string variant, Action onClick)
+        {
+            var button = new Button(onClick) { text = text };
+            button.AddToClassList("ocp-button");
+            button.AddToClassList(variant);
+            return button;
+        }
+
+        private static ScrollView ScrollView()
+        {
+            var view = new ScrollView(ScrollViewMode.Vertical) { horizontalScrollerVisibility = ScrollerVisibility.Hidden };
+            view.AddToClassList("ocp-scroll");
+            return view;
         }
     }
 }

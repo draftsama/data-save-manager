@@ -2,62 +2,52 @@
 
 using System;
 using System.Collections.Generic;
-using TMPro;
-using UnityEngine;
-using UnityEngine.UI;
+using UnityEngine.UIElements;
 
 namespace OperatorConsole
 {
     /// <summary>The Entry Action buttons at the end of one widget row. While any of them runs, the whole row is locked.</summary>
-    public sealed class OCEntryActionBar : MonoBehaviour, IOCLayoutAware
+    internal sealed class OCEntryActionBar : IOCLayoutAware
     {
-        [SerializeField] private Button? _buttonTemplate;
-        [SerializeField] private string _runningText = "Running…";
+        private const string RunningText = "Running…";
 
         private readonly List<OCRegisteredEntryAction> _actions = new();
         private readonly List<Button> _buttons = new();
-        private readonly List<TMP_Text?> _labels = new();
         private readonly List<string> _titles = new();
-        private CanvasGroup? _rowGroup;
-        private OCEntryActionError? _error;
+        private readonly VisualElement _row;
+        private readonly OCEntryActionError _error;
 
-        public void Setup(
+        public OCEntryActionBar(
+            VisualElement row,
+            VisualElement buttonParent,
             IReadOnlyList<OCRegisteredEntryAction> actions,
             Func<OCRegisteredEntryAction, string> displayTitle,
             Action<OCRegisteredEntryAction> onRun,
-            CanvasGroup rowGroup,
-            OCEntryActionError? error)
+            OCEntryActionError error)
         {
-            Unsubscribe();
-            foreach (var button in _buttons) Destroy(button.gameObject);
-            _actions.Clear();
-            _buttons.Clear();
-            _labels.Clear();
-            _titles.Clear();
-
-            _rowGroup = rowGroup;
+            _row = row;
             _error = error;
-            if (_buttonTemplate == null) return;
-            _buttonTemplate.gameObject.SetActive(false);
-
             foreach (var action in actions)
             {
-                var button = Instantiate(_buttonTemplate, transform);
-                button.gameObject.SetActive(true);
-                button.name = action.Title;
-                var label = button.GetComponentInChildren<TMP_Text>(true);
                 var title = displayTitle(action);
-                button.onClick.AddListener(() =>
+                var button = new Button(() =>
                 {
                     if (!AnyRunning()) onRun(action);
-                });
-
+                }) { text = title, tooltip = title };
+                button.AddToClassList("ocp-button");
+                buttonParent.Add(button);
                 _actions.Add(action);
                 _buttons.Add(button);
-                _labels.Add(label);
                 _titles.Add(title);
-                action.StatusChanged += OnStatusChanged;
             }
+
+            row.RegisterCallback<AttachToPanelEvent>(_ =>
+            {
+                Unsubscribe();
+                foreach (var action in _actions) action.StatusChanged += OnStatusChanged;
+                Refresh();
+            });
+            row.RegisterCallback<DetachFromPanelEvent>(_ => Unsubscribe());
             Refresh();
         }
 
@@ -65,12 +55,11 @@ namespace OperatorConsole
         {
             foreach (var button in _buttons)
             {
-                var element = button.TryGetComponent<LayoutElement>(out var e) ? e : button.gameObject.AddComponent<LayoutElement>();
-                element.preferredWidth = layout.EntryActionButtonWidth;
-                element.flexibleWidth = 0f;
+                button.style.width = layout.EntryActionButtonWidth;
+                button.style.height = layout.RowHeight - 6f;
+                button.style.flexShrink = 0f;
             }
-            foreach (var label in _labels)
-                if (label != null) label.fontSize = layout.FontSize;
+            _error.ApplyLayout(layout);
         }
 
         private bool AnyRunning()
@@ -80,38 +69,26 @@ namespace OperatorConsole
             return false;
         }
 
-        private void OnStatusChanged(OCRegisteredEntryAction action)
-        {
-            if (this != null) Refresh();
-        }
+        private void OnStatusChanged(OCRegisteredEntryAction action) => Refresh();
 
         private void Refresh()
         {
-            var running = AnyRunning();
-            if (_rowGroup != null) _rowGroup.interactable = !running;
+            _row.SetEnabled(!AnyRunning());
 
             string? lastError = null;
             for (var i = 0; i < _actions.Count; i++)
             {
                 var action = _actions[i];
-                var label = _labels[i];
-                if (label != null)
-                {
-                    label.text = action.IsRunning ? _runningText : _titles[i];
-                    label.overflowMode = TextOverflowModes.Ellipsis;
-                    label.textWrappingMode = TextWrappingModes.NoWrap;
-                }
+                _buttons[i].text = action.IsRunning ? RunningText : _titles[i];
                 if (action.Status == OCCommandStatus.Failed && !string.IsNullOrEmpty(action.LastError))
                     lastError = action.LastError;
             }
-            if (_error != null) _error.SetError(lastError);
+            _error.SetError(lastError);
         }
 
         private void Unsubscribe()
         {
             foreach (var action in _actions) action.StatusChanged -= OnStatusChanged;
         }
-
-        private void OnDestroy() => Unsubscribe();
     }
 }

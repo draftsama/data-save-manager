@@ -50,12 +50,22 @@ namespace OperatorConsole.Tests
             Assert.IsFalse(panel.IsVisible);
         }
 
-        private static OCConfig ConfigWithPanel(string name)
+        [UnityTest]
+        public IEnumerator SpawnedPanel_WithStartVisible_IsVisibleAfterFirstFrame()
+        {
+            OC.Configure(ConfigWithPanel("Shown", startVisible: true));
+            Assert.IsTrue(OC.Panels.TryGet("Shown", out var panel));
+            yield return null;
+
+            Assert.IsTrue(panel.IsVisible);
+        }
+
+        private static OCConfig ConfigWithPanel(string name, bool startVisible = false)
         {
             var config = ScriptableObject.CreateInstance<OCConfig>();
             var dir = Path.Combine(Path.GetTempPath(), "dsm-tests", Guid.NewGuid().ToString("N"));
             config.SetForTests(false, 0f, dir, "save.json");
-            config.AddPanelForTests(new OCPanelDefinition(name));
+            config.AddPanelForTests(new OCPanelDefinition(name, startVisible));
             return config;
         }
     }
