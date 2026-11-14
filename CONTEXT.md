@@ -51,7 +51,7 @@ A **Range**, set of **Options**, **Header**, or set of **Audiences** on an **Exp
 _Avoid_: widget setting, UI option
 
 **Runtime Panel**:
-The in-game UI where an operator views and edits **Exposed Entries** and runs **Commands** while the app runs. An app may have more than one, each serving its own **Audiences**.
+The in-game UI where an operator views and edits **Exposed Entries** and runs **Commands** and **Entry Actions** while the app runs. An app may have more than one, each serving its own **Audiences**.
 _Avoid_: config canvas
 
 **Command**:
@@ -61,6 +61,10 @@ _Avoid_: action, button, function
 **Registered Command**:
 A **Command** that is live right now because the object that owns it has registered it. The **Runtime Panel** lists only **Registered Commands**; a **Command** whose owner is gone or disabled is not shown.
 _Avoid_: available command
+
+**Entry Action**:
+A named action shown beside one **Exposed Entry** on the **Runtime Panel**, with a **Title**, whose result becomes that **Entry**'s **Value** (e.g. browse for a folder, fetch a token). Like a **Command** it is code, not data, and is live only while its owner has registered it; unlike a **Command** it belongs to exactly one **Entry** and exists to change its **Value**.
+_Avoid_: entry command, value source, fill button
 
 **Watch**:
 Subscribing to an **Entry** to receive its **Value** now and every time it changes, whatever the cause (set, load, reset).
@@ -105,6 +109,10 @@ The .NET composite format string on a **Link** (e.g. `Speed: {0:0.0}`) that turn
 - A **Command** never changes a **Value** by being run through the **Runtime Panel**; anything it changes, it changes through code like any other caller.
 - A **Binding** has one or more **Links**. A **Link** whose member takes the **Entry**'s own **Data Type** receives the **Value** as-is; only when no such member exists does a text member receive it through the **Format**.
 - A **Key** used in code without an **Entry Definition** is an _ad-hoc key_: it works and persists like any **Override**, but is never added to the **Config** automatically.
+- An **Entry Action** names its **Entry** by **Key** and must produce a **Value** of that **Entry**'s **Data Type**. It is shown wherever its **Entry** is shown and nowhere else; it has no **Audiences** or **Header** of its own.
+- An **Entry Action** is given the **Entry**'s current **Value** when it starts. When it finishes, its result is set exactly as if the operator had typed it: it becomes an **Override** at once, and saving follows the usual rules. A cancelled **Entry Action** leaves the **Value** unchanged.
+- One **Entry** may have several **Entry Actions**. While any of them runs, that **Entry**'s row on the **Runtime Panel** is locked: no other of its **Entry Actions** and no typing.
+- An **Entry Action** may require confirmation, like a **Command**. It keeps running when the **Runtime Panel** closes and is stopped when its owner unregisters, like a **Command**.
 
 ## Flagged ambiguities
 
