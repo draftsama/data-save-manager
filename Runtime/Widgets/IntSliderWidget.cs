@@ -5,9 +5,9 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
-namespace DataSaveManager
+namespace OperatorConsole
 {
-    public sealed class IntSliderWidget : DSMWidget<int>
+    public sealed class IntSliderWidget : OCWidget<int>
     {
         [SerializeField] private Slider? _slider;
         [SerializeField] private TMP_InputField? _input;
@@ -17,7 +17,7 @@ namespace DataSaveManager
             if (_input != null) _input.onEndEdit.AddListener(OnEndEdit);
         }
 
-        protected override void OnSetup(DSMEntryDefinition entry)
+        protected override void OnSetup(OCEntryDefinition entry)
         {
             if (_slider == null) return;
             _slider.wholeNumbers = true;

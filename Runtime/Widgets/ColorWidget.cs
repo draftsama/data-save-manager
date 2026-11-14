@@ -4,9 +4,9 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
-namespace DataSaveManager
+namespace OperatorConsole
 {
-    public sealed class ColorWidget : DSMWidget<Color>
+    public sealed class ColorWidget : OCWidget<Color>
     {
         [SerializeField] private TMP_InputField? _hexInput;
         [SerializeField] private Image? _swatch;

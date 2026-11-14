@@ -3,9 +3,9 @@
 using UnityEngine;
 using UnityEngine.UI;
 
-namespace DataSaveManager
+namespace OperatorConsole
 {
-    public sealed class BoolWidget : DSMWidget<bool>
+    public sealed class BoolWidget : OCWidget<bool>
     {
         [SerializeField] private Toggle? _toggle;
 

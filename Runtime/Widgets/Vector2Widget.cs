@@ -4,9 +4,9 @@ using System.Globalization;
 using TMPro;
 using UnityEngine;
 
-namespace DataSaveManager
+namespace OperatorConsole
 {
-    public sealed class Vector2Widget : DSMWidget<Vector2>
+    public sealed class Vector2Widget : OCWidget<Vector2>
     {
         [SerializeField] private TMP_InputField? _xInput;
         [SerializeField] private TMP_InputField? _yInput;

@@ -1,10 +1,10 @@
 using System.Runtime.CompilerServices;
 
-// DSM.Tests.Editor is a separate assembly, so internal test-only hooks such as
-// DSMStore's internal ctor and ChangedForTests event are unreachable without this grant.
-[assembly: InternalsVisibleTo("DSM.Tests.Editor")]
-[assembly: InternalsVisibleTo("DSM.Tests.Runtime")]
+// OperatorConsole.Tests.Editor is a separate assembly, so internal test-only hooks such as
+// OCStore's internal ctor and ChangedForTests event are unreachable without this grant.
+[assembly: InternalsVisibleTo("OperatorConsole.Tests.Editor")]
+[assembly: InternalsVisibleTo("OperatorConsole.Tests.Runtime")]
 
-// DSM.Editor reuses internal runtime pieces (DSMSerializer, DSMStore.SetToken) rather than
+// OperatorConsole.Editor reuses internal runtime pieces (OCSerializer, OCStore.SetToken) rather than
 // duplicating JSON conversion logic for the manager window.
-[assembly: InternalsVisibleTo("DSM.Editor")]
+[assembly: InternalsVisibleTo("OperatorConsole.Editor")]

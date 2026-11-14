@@ -4,9 +4,9 @@ using System.Globalization;
 using TMPro;
 using UnityEngine;
 
-namespace DataSaveManager
+namespace OperatorConsole
 {
-    public sealed class FloatWidget : DSMWidget<float>
+    public sealed class FloatWidget : OCWidget<float>
     {
         [SerializeField] private TMP_InputField? _input;
 

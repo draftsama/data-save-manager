@@ -4,9 +4,9 @@ using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 
-namespace DataSaveManager
+namespace OperatorConsole
 {
-    public sealed class DropdownWidget : DSMWidget<int>
+    public sealed class DropdownWidget : OCWidget<int>
     {
         [SerializeField] private TMP_Dropdown? _dropdown;
 
@@ -18,7 +18,7 @@ namespace DataSaveManager
             if (_dropdown != null) _dropdown.onValueChanged.AddListener(OnSelected);
         }
 
-        protected override void OnSetup(DSMEntryDefinition entry)
+        protected override void OnSetup(OCEntryDefinition entry)
         {
             if (_dropdown == null) return;
 

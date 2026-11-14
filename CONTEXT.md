@@ -1,4 +1,4 @@
-# DataSaveManager
+# OperatorConsole
 
 A small persistence layer for tweakable settings of an installed app (e.g. values an on-site
 technician adjusts), plus the on-site actions that technician runs. One save per app;
