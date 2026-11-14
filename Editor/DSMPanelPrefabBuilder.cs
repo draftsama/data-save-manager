@@ -50,9 +50,11 @@ namespace DataSaveManager.Editor
 
             var headerRow = BuildHeaderRowPrefab(Path.Combine(prefabDir, "HeaderRow.prefab").Replace('\\', '/'), font);
             var commandRow = BuildCommandRowPrefab(Path.Combine(prefabDir, "CommandRow.prefab").Replace('\\', '/'), font);
+            var entryActionBar = BuildEntryActionBarPrefab(Path.Combine(prefabDir, "EntryActionBar.prefab").Replace('\\', '/'), font);
+            var entryActionError = BuildEntryActionErrorPrefab(Path.Combine(prefabDir, "EntryActionError.prefab").Replace('\\', '/'), font);
 
             var configPath = Path.Combine(prefabDir, "DSMWidgetConfig.asset").Replace('\\', '/');
-            BuildWidgetConfig(configPath, boolWidget, intWidget, floatWidget, stringWidget, vector2Widget, vector3Widget, colorWidget, intSliderWidget, floatSliderWidget, dropdownWidget, headerRow, commandRow);
+            BuildWidgetConfig(configPath, boolWidget, intWidget, floatWidget, stringWidget, vector2Widget, vector3Widget, colorWidget, intSliderWidget, floatSliderWidget, dropdownWidget, headerRow, commandRow, entryActionBar, entryActionError);
             var widgetConfig = AssetDatabase.LoadAssetAtPath<DSMWidgetConfig>(configPath);
 
             var panelPath = Path.Combine(prefabDir, "DSMRuntimePanel.prefab").Replace('\\', '/');
@@ -74,6 +76,8 @@ namespace DataSaveManager.Editor
                        $"  {Path.Combine(prefabDir, "DropdownWidget.prefab")}\n" +
                        $"  {Path.Combine(prefabDir, "HeaderRow.prefab")}\n" +
                        $"  {Path.Combine(prefabDir, "CommandRow.prefab")}\n" +
+                       $"  {Path.Combine(prefabDir, "EntryActionBar.prefab")}\n" +
+                       $"  {Path.Combine(prefabDir, "EntryActionError.prefab")}\n" +
                        $"  {configPath}\n" +
                        $"  {panelPath}");
         }
@@ -374,6 +378,59 @@ namespace DataSaveManager.Editor
             return saved.GetComponent<DSMCommandRow>();
         }
 
+        private static DSMEntryActionBar BuildEntryActionBarPrefab(string path, TMP_FontAsset font)
+        {
+            var bar = new GameObject("EntryActionBar", typeof(RectTransform));
+            var barLayout = bar.AddComponent<HorizontalLayoutGroup>();
+            barLayout.spacing = 8f;
+            barLayout.childControlWidth = true;
+            barLayout.childControlHeight = true;
+            barLayout.childForceExpandWidth = false;
+            barLayout.childForceExpandHeight = true;
+            barLayout.childAlignment = TextAnchor.MiddleRight;
+            bar.AddComponent<LayoutElement>().flexibleWidth = 0f;
+
+            var buttonGo = TMP_DefaultControls.CreateButton(TmpUiResources());
+            buttonGo.transform.SetParent(bar.transform, false);
+            buttonGo.name = "ButtonTemplate";
+            var buttonLayout = buttonGo.AddComponent<LayoutElement>();
+            buttonLayout.preferredWidth = Defaults.EntryActionButtonWidth;
+            buttonLayout.flexibleWidth = 0f;
+            var label = buttonGo.GetComponentInChildren<TextMeshProUGUI>();
+            label.text = "Action";
+            label.font = font;
+            label.fontSize = Defaults.FontSize;
+            label.textWrappingMode = TextWrappingModes.NoWrap;
+            label.overflowMode = TextOverflowModes.Ellipsis;
+            buttonGo.SetActive(false);
+
+            var component = bar.AddComponent<DSMEntryActionBar>();
+            SetField(component, "_buttonTemplate", buttonGo.GetComponent<Button>());
+
+            var saved = SaveAndDestroy(bar, path);
+            return saved.GetComponent<DSMEntryActionBar>();
+        }
+
+        private static DSMEntryActionError BuildEntryActionErrorPrefab(string path, TMP_FontAsset font)
+        {
+            var row = new GameObject("EntryActionError", typeof(RectTransform));
+            var rowLayout = row.AddComponent<HorizontalLayoutGroup>();
+            rowLayout.padding = new RectOffset(Mathf.RoundToInt(Defaults.LabelWidth) + 12, 4, 0, 4);
+            rowLayout.childControlWidth = true;
+            rowLayout.childControlHeight = true;
+            rowLayout.childForceExpandWidth = true;
+            rowLayout.childForceExpandHeight = false;
+
+            var text = CreateCommandText(row, "Text", font, Defaults.EntryActionErrorFontSize, new Color(0.89f, 0.34f, 0.30f, 1f));
+
+            var component = row.AddComponent<DSMEntryActionError>();
+            SetField(component, "_text", text);
+            row.SetActive(false);
+
+            var saved = SaveAndDestroy(row, path);
+            return saved.GetComponent<DSMEntryActionError>();
+        }
+
         private static TextMeshProUGUI CreateCommandText(GameObject parent, string goName, TMP_FontAsset font, float fontSize, Color color)
         {
             var go = new GameObject(goName, typeof(RectTransform));
@@ -394,7 +451,7 @@ namespace DataSaveManager.Editor
             BoolWidget boolWidget, IntWidget intWidget, FloatWidget floatWidget, StringWidget stringWidget,
             Vector2Widget vector2Widget, Vector3Widget vector3Widget, ColorWidget colorWidget,
             IntSliderWidget intSliderWidget, FloatSliderWidget floatSliderWidget, DropdownWidget dropdownWidget,
-            DSMHeaderRow headerRow, DSMCommandRow commandRow)
+            DSMHeaderRow headerRow, DSMCommandRow commandRow, DSMEntryActionBar entryActionBar, DSMEntryActionError entryActionError)
         {
             var config = AssetDatabase.LoadAssetAtPath<DSMWidgetConfig>(path);
             if (config == null)
@@ -415,6 +472,8 @@ namespace DataSaveManager.Editor
             SetField(config, "_dropdownWidget", dropdownWidget);
             SetField(config, "_headerRow", headerRow);
             SetField(config, "_commandRow", commandRow);
+            SetField(config, "_entryActionBar", entryActionBar);
+            SetField(config, "_entryActionError", entryActionError);
 
             EditorUtility.SetDirty(config);
         }

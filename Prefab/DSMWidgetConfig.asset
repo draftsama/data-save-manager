@@ -24,3 +24,5 @@ MonoBehaviour:
   _dropdownWidget: {fileID: 5984540770162914593, guid: 921b0a8cc07ac6548b4e2a0aaebec188, type: 3}
   _headerRow: {fileID: 1642771853125953046, guid: 9a7ab80ed6e604b929575268e51d7775, type: 3}
   _commandRow: {fileID: 1546040937156989555, guid: a1763b7cd75e94c90b7f52aaaaac2167, type: 3}
+  _entryActionBar: {fileID: 8402560122782342182, guid: 216f156bbaacf4049bf2b003fa132355, type: 3}
+  _entryActionError: {fileID: 7607119267856810817, guid: 7705da30fbeb34670aa81d2a9f06e459, type: 3}

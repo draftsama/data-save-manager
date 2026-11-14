@@ -7,7 +7,7 @@ using UnityEngine;
 
 namespace DataSaveManager.Editor
 {
-    /// <summary>Warns after every script reload about [DSMCommand] methods that Register would skip, so the mistake shows before Play mode.</summary>
+    /// <summary>Warns after every script reload about [DSMCommand] and [DSMEntryAction] methods that Register would skip, so the mistake shows before Play mode.</summary>
     [InitializeOnLoad]
     internal static class DSMCommandSignatureCheck
     {
@@ -18,6 +18,13 @@ namespace DataSaveManager.Editor
                 var error = DSMCommandSignature.Validate(method);
                 if (error != null && !IsTestAssembly(method.DeclaringType?.Assembly))
                     Debug.LogWarning($"DSM: [DSMCommand] {method.DeclaringType?.FullName}.{method.Name} will be skipped: {error}");
+            }
+
+            foreach (var method in TypeCache.GetMethodsWithAttribute<DSMEntryActionAttribute>())
+            {
+                var error = DSMEntryActionSignature.Validate(method, out _);
+                if (error != null && !IsTestAssembly(method.DeclaringType?.Assembly))
+                    Debug.LogWarning($"DSM: [DSMEntryAction] {method.DeclaringType?.FullName}.{method.Name} will be skipped: {error}");
             }
         }
 

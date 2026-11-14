@@ -208,6 +208,8 @@ apply to the open panel immediately.
 - **Header Font Size**, **Header Spacing** — font size of Entry headers and the extra space above each one.
 - **Tab Height**, **Command Description Font Size**, **Command Button Width** — the Settings / Commands
   tabs, and the Description, error line and Run button of each Command row.
+- **Entry Action Button Width**, **Entry Action Error Font Size** — each Entry Action button beside a
+  widget (longer Titles end in an ellipsis) and the error line under a row whose Entry Action failed.
 
 ### Headers
 
@@ -298,6 +300,49 @@ public sealed class Projector : MonoBehaviour
 `[DSMCommand]` derives from Unity's `PreserveAttribute`, so IL2CPP code stripping keeps the methods.
 The Widget Config's **Command Row** slot takes a prefab with a `DSMCommandRow` component; prefabs built
 before 2.3 have no tab bar — regenerate them with **DSM › Build Runtime Panel Prefabs**.
+
+### Entry Actions
+
+An Entry Action is a button beside one Exposed Entry whose result becomes that Entry's Value — browse
+for a folder, fetch a token. It registers with the same `DSM.Commands.Register(this)` call as Commands:
+
+```csharp
+public sealed class ContentFolders : MonoBehaviour
+{
+    void OnEnable()  => DSM.Commands.Register(this);
+    void OnDisable() => DSM.Commands.Unregister(this);
+
+    [DSMEntryAction("contentFolderPath", "Browse…")]
+    UniTask<string> Browse(string current, CancellationToken ct) => MyFileDialog.PickFolder(current, ct);
+
+    [DSMEntryAction("apiToken", "Fetch", Confirm = true)]
+    async UniTask<string> Fetch(CancellationToken ct)
+    {
+        using var request = UnityWebRequest.Get(DSM.Get<string>("apiUrl") + "/token");
+        await request.SendWebRequest().WithCancellation(ct);
+        if (request.result != UnityWebRequest.Result.Success)
+            throw new InvalidOperationException(request.error);
+        return request.downloadHandler.text.Trim();
+    }
+}
+```
+
+- **Signature** — takes nothing, a `CancellationToken`, the current Value, or the current Value then a
+  token; returns the new Value as `T` or `UniTask<T>`. `T` must match the Entry's Data Type (int, float,
+  bool, string, Vector2, Vector3, Color), or `Register` logs an error and skips it.
+- **Leave the Value alone** — throw `OperationCanceledException` (e.g. the operator closed the dialog).
+- **Result** — set exactly as if the operator typed it: an Override at once, saved by the usual rules.
+  It is set even if the Value changed while the action ran (last write wins).
+- **Where it shows** — wherever its Entry shows; it has no Audiences or Header of its own. An unknown
+  Key or a non-Exposed Entry is warned about at `Register`.
+- **While running** — the whole row is locked (input and its other actions) and the button reads
+  `Running…`. A failure shows its message on a line under the row.
+- **From code** — `DSM.Commands.Register<string>(owner, "contentFolderPath", "Browse…", (current, ct) => ..., new DSMEntryActionOptions { Confirm = true, Order = 1 })`.
+- **Order**, **Confirm**, **Same Title twice** — as for Commands.
+
+The Widget Config's **Entry Action Bar** and **Entry Action Error** slots take prefabs with
+`DSMEntryActionBar` and `DSMEntryActionError` components; regenerate prefabs built before 2.4 with
+**DSM › Build Runtime Panel Prefabs**.
 
 ## Binding
 

@@ -79,6 +79,12 @@ namespace DataSaveManager
         [SerializeField, Tooltip("Width of a Command's Run button.")]
         private float _commandButtonWidth = 140f;
 
+        [SerializeField, Tooltip("Width of each Entry Action button beside a widget; longer Titles end in an ellipsis.")]
+        private float _entryActionButtonWidth = 120f;
+
+        [SerializeField, Tooltip("Font size of the error line under a row whose Entry Action failed.")]
+        private float _entryActionErrorFontSize = 16f;
+
         public float LabelWidth => _labelWidth;
         public float RowHeight => _rowHeight;
         public float RowSpacing => _rowSpacing;
@@ -96,5 +102,7 @@ namespace DataSaveManager
         public float TabHeight => _tabHeight;
         public float CommandDescriptionFontSize => _commandDescriptionFontSize;
         public float CommandButtonWidth => _commandButtonWidth;
+        public float EntryActionButtonWidth => _entryActionButtonWidth;
+        public float EntryActionErrorFontSize => _entryActionErrorFontSize;
     }
 }
