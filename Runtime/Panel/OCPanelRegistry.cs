@@ -105,12 +105,9 @@ namespace OperatorConsole
             foreach (var definition in config.Panels)
             {
                 if (!definition.Enabled) continue;
-                if (definition.Prefab == null)
-                {
-                    Debug.LogError($"OC: Panel Definition '{definition.Name}' has no prefab, so no Runtime Panel was created for it.");
-                    continue;
-                }
-                _panels.Add(Spawn(definition));
+                var panel = Spawn(definition);
+                if (panel == null) continue;
+                _panels.Add(panel);
                 spawnedAny = true;
             }
 
@@ -120,12 +117,17 @@ namespace OperatorConsole
             SceneManager.sceneLoaded += OnSceneLoaded;
         }
 
-        private static OCRuntimePanel Spawn(OCPanelDefinition definition)
+        private static OCRuntimePanel? Spawn(OCPanelDefinition definition)
         {
-            // Parented under an inactive holder so Awake waits until the panel has its Panel Definition.
+            // Built under an inactive holder so Awake waits until the panel has its Panel Definition.
             var holder = new GameObject("OC Panel Holder");
             holder.SetActive(false);
-            var panel = Object.Instantiate(definition.Prefab!, holder.transform);
+            var panel = OCPanelFactory.Create(holder.transform);
+            if (panel == null)
+            {
+                Object.Destroy(holder);
+                return null;
+            }
             panel.name = $"OC Panel ({definition.Name})";
             panel.Initialize(definition);
             panel.transform.SetParent(null, false);

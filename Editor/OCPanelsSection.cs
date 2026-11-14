@@ -38,7 +38,7 @@ namespace OperatorConsole.Editor
                 using (new EditorGUILayout.HorizontalScope())
                 {
                     if (GUILayout.Button("+ Add Panel", GUILayout.Width(110)))
-                        _deferred = () => AddDefinition(panelsProp, UniqueName(panelsProp, "Panel"), null);
+                        _deferred = () => AddDefinition(panelsProp, UniqueName(panelsProp, "Panel"));
                     if (GUILayout.Button(new GUIContent("Import Scene Panels", "Create a Panel Definition from each Runtime Panel placed in the open scenes."), GUILayout.Width(150)))
                         _deferred = () => ShowImportResult(ImportScenePanels(panelsProp));
                 }
@@ -91,10 +91,6 @@ namespace OperatorConsole.Editor
                     EditorGUILayout.HelpBox("Another Panel Definition has this name; OC.Panels.Get returns only the first.", MessageType.Error);
 
                 EditorGUILayout.PropertyField(enabledProp, new GUIContent("Enabled", "Disabled Panel Definitions create no Runtime Panel."));
-                var prefabProp = definition.FindPropertyRelative("_prefab");
-                EditorGUILayout.PropertyField(prefabProp, new GUIContent("Prefab"));
-                if (prefabProp.objectReferenceValue == null)
-                    EditorGUILayout.HelpBox("No prefab: no Runtime Panel is created for this Panel Definition.", MessageType.Error);
                 EditorGUILayout.PropertyField(definition.FindPropertyRelative("_sortOrder"), new GUIContent("Sort Order"));
 
                 DrawAudiences(definition.FindPropertyRelative("_audienceIds"), config, audienceNames);
@@ -122,7 +118,7 @@ namespace OperatorConsole.Editor
                 EditorGUILayout.Space(4);
                 EditorGUILayout.LabelField("Panel Lock", EditorStyles.boldLabel);
                 var newPasscode = _newPasscodes[index];
-                OCPasscodeEditing.Draw(definition.FindPropertyRelative("_passcode"), ref newPasscode, HasLockScreen(prefabProp.objectReferenceValue));
+                OCPasscodeEditing.Draw(definition.FindPropertyRelative("_passcode"), ref newPasscode);
                 _newPasscodes[index] = newPasscode;
 
                 EditorGUILayout.Space(4);
@@ -140,13 +136,6 @@ namespace OperatorConsole.Editor
             OCAudienceEditing.DrawMaskField(rect, AudiencesLabel, idsProp, config, audienceNames);
             if (idsProp.arraySize == 0)
                 EditorGUILayout.HelpBox("This Panel serves no Audience, so it shows every Exposed Entry, including ones meant for other Audiences.", MessageType.Warning);
-        }
-
-        private static bool HasLockScreen(Object? prefab)
-        {
-            if (prefab == null) return false;
-            using var so = new SerializedObject(prefab);
-            return so.FindProperty("_lockScreen")?.objectReferenceValue != null;
         }
 
         private static List<string> TriggerConflicts(OCConfig config, int index, bool lockedOnly)
@@ -196,7 +185,7 @@ namespace OperatorConsole.Editor
                 if (!names.Contains($"{baseName} {n}")) return $"{baseName} {n}";
         }
 
-        private static SerializedProperty AddDefinition(SerializedProperty panelsProp, string name, OCRuntimePanel? prefab)
+        private static SerializedProperty AddDefinition(SerializedProperty panelsProp, string name)
         {
             var index = panelsProp.arraySize;
             panelsProp.InsertArrayElementAtIndex(index);
@@ -204,14 +193,7 @@ namespace OperatorConsole.Editor
             // InsertArrayElementAtIndex copies the previous element, so every field is set here.
             definition.boxedValue = new OCPanelDefinition();
             definition.FindPropertyRelative("_name").stringValue = name;
-            definition.FindPropertyRelative("_prefab").objectReferenceValue = prefab != null ? prefab : DefaultPrefab();
             return definition;
-        }
-
-        private static OCRuntimePanel? DefaultPrefab()
-        {
-            var folder = OCPanelPrefabBuilder.ResolvePrefabFolder();
-            return folder == null ? null : AssetDatabase.LoadAssetAtPath<OCRuntimePanel>($"{folder}/OCRuntimePanel.prefab");
         }
 
         /// <summary>Appends one Panel Definition per Runtime Panel placed in the open scenes; returns a line per panel imported. The scenes are not changed.</summary>
@@ -222,8 +204,7 @@ namespace OperatorConsole.Editor
             foreach (var panel in panels)
             {
                 if (!panel.gameObject.scene.IsValid()) continue;
-                var source = PrefabUtility.GetCorrespondingObjectFromOriginalSource(panel);
-                var definition = AddDefinition(panelsProp, UniqueName(panelsProp, panel.gameObject.name), source);
+                var definition = AddDefinition(panelsProp, UniqueName(panelsProp, panel.gameObject.name));
 
                 using var panelSo = new SerializedObject(panel);
                 Copy(panelSo, "_legacyAudienceIds", definition, "_audienceIds");

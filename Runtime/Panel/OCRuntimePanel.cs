@@ -22,7 +22,6 @@ namespace OperatorConsole
     /// <summary>The in-game UI where an operator views and edits Exposed Entries and runs Commands and Entry Actions while the app runs. Created from a Panel Definition; see <see cref="OC.Panels"/>.</summary>
     public sealed class OCRuntimePanel : MonoBehaviour
     {
-        [SerializeField] private OCWidgetConfig? _widgetConfig;
         [SerializeField] private GameObject? _root;
         [SerializeField] private Transform? _container;
         [SerializeField] private Button? _saveButton;
@@ -55,6 +54,7 @@ namespace OperatorConsole
 #pragma warning restore CS0414
 
         private OCPanelDefinition? _definition;
+        private OCWidgetTemplates? _templates;
         private bool _countedOpen;
         private static int s_openCount;
 
@@ -347,15 +347,15 @@ namespace OperatorConsole
         {
             var registry = OC.Commands;
             var actions = registry.EntryActionsFor(key);
-            if (actions.Count == 0 || _widgetConfig == null || _container == null) return;
+            if (actions.Count == 0 || _templates == null || _container == null) return;
 
-            var barPrefab = _widgetConfig.EntryActionBar;
-            if (barPrefab == null)
+            var barTemplate = _templates.EntryActionBar;
+            if (barTemplate == null)
             {
                 if (!_warnedMissingEntryActionBar)
                 {
                     _warnedMissingEntryActionBar = true;
-                    Debug.LogWarning($"OCRuntimePanel on '{gameObject.name}': Entry Actions are skipped because the Widget Config has no Entry Action Bar prefab.", this);
+                    Debug.LogWarning($"OCRuntimePanel on '{gameObject.name}': Entry Actions are skipped because there is no Entry Action Bar template.", this);
                 }
                 return;
             }
@@ -363,15 +363,15 @@ namespace OperatorConsole
             var rowGroup = widgetRow.TryGetComponent<CanvasGroup>(out var group) ? group : widgetRow.AddComponent<CanvasGroup>();
 
             OCEntryActionError? error = null;
-            var errorPrefab = _widgetConfig.EntryActionError;
-            if (errorPrefab != null)
+            var errorTemplate = _templates.EntryActionError;
+            if (errorTemplate != null)
             {
-                error = Instantiate(errorPrefab, _container);
+                error = Instantiate(errorTemplate, _container);
                 error.transform.SetSiblingIndex(widgetRow.transform.GetSiblingIndex() + 1);
                 error.ApplyLayout(Layout);
             }
 
-            var bar = Instantiate(barPrefab, widgetRow.transform);
+            var bar = Instantiate(barTemplate, widgetRow.transform);
             bar.Setup(actions, registry.DisplayTitle, OnEntryActionClicked, rowGroup, error);
         }
 
@@ -531,9 +531,9 @@ namespace OperatorConsole
             foreach (Transform child in _container)
                 Destroy(child.gameObject);
 
-            if (_widgetConfig == null)
+            if (_templates == null)
             {
-                Debug.LogError($"OCRuntimePanel on '{gameObject.name}': _widgetConfig is not assigned in the Inspector.", this);
+                Debug.LogError($"OCRuntimePanel on '{gameObject.name}' has no row templates; Runtime Panels are built by OC.Panels.", this);
                 return;
             }
 
@@ -553,34 +553,34 @@ namespace OperatorConsole
                 if (presentation.OptionsMessage != null)
                     Debug.LogWarning($"OCRuntimePanel on '{gameObject.name}': entry '{entry.Key}': {presentation.OptionsMessage}", this);
 
-                var widgetPrefab = _widgetConfig.GetWidgetPrefab(presentation.Widget, entry.Type);
-                if (widgetPrefab == null)
+                var widgetTemplate = _templates.GetWidget(presentation.Widget, entry.Type);
+                if (widgetTemplate == null)
                 {
-                    Debug.LogError($"OCRuntimePanel on '{gameObject.name}': no widget prefab configured for '{entry.Key}' ({entry.Type}).", this);
+                    Debug.LogError($"OCRuntimePanel on '{gameObject.name}': no widget template for '{entry.Key}' ({entry.Type}).", this);
                     continue;
                 }
 
                 if (presentation.Header != null)
                 {
-                    var headerPrefab = _widgetConfig.HeaderRow;
-                    if (headerPrefab != null)
+                    var headerTemplate = _templates.HeaderRow;
+                    if (headerTemplate != null)
                     {
-                        var headerRow = Instantiate(headerPrefab, _container);
+                        var headerRow = Instantiate(headerTemplate, _container);
                         headerRow.SetText(presentation.Header);
                         headerRow.ApplyLayout(Layout);
                     }
                     else if (!warnedMissingHeaderRow)
                     {
                         warnedMissingHeaderRow = true;
-                        Debug.LogWarning($"OCRuntimePanel on '{gameObject.name}': headers are skipped because the Widget Config has no Header Row prefab.", this);
+                        Debug.LogWarning($"OCRuntimePanel on '{gameObject.name}': headers are skipped because there is no Header Row template.", this);
                     }
                 }
 
-                var go = Instantiate(widgetPrefab.gameObject, _container);
+                var go = Instantiate(widgetTemplate.gameObject, _container);
                 var widget = go.GetComponent<IOCWidget>();
                 if (widget == null)
                 {
-                    Debug.LogError($"OCRuntimePanel on '{gameObject.name}': widget prefab for '{entry.Key}' has no IOCWidget component.", this);
+                    Debug.LogError($"OCRuntimePanel on '{gameObject.name}': widget template for '{entry.Key}' has no IOCWidget component.", this);
                     continue;
                 }
                 widget.Setup(entry, store);
@@ -604,33 +604,33 @@ namespace OperatorConsole
             foreach (Transform child in _commandContainer)
                 Destroy(child.gameObject);
 
-            if (_shownCommands.Count == 0 || _widgetConfig == null) return;
+            if (_shownCommands.Count == 0 || _templates == null) return;
 
-            var rowPrefab = _widgetConfig.CommandRow;
-            if (rowPrefab == null)
+            var rowTemplate = _templates.CommandRow;
+            if (rowTemplate == null)
             {
                 if (!_warnedMissingCommandRow)
                 {
                     _warnedMissingCommandRow = true;
-                    Debug.LogWarning($"OCRuntimePanel on '{gameObject.name}': Commands are skipped because the Widget Config has no Command Row prefab.", this);
+                    Debug.LogWarning($"OCRuntimePanel on '{gameObject.name}': Commands are skipped because there is no Command Row template.", this);
                 }
                 return;
             }
 
-            var headerPrefab = _widgetConfig.HeaderRow;
+            var headerTemplate = _templates.HeaderRow;
             string? previousHeader = null;
             foreach (var command in _shownCommands)
             {
                 var startsGroup = command.Header != null && !string.Equals(command.Header, previousHeader, StringComparison.Ordinal);
                 previousHeader = command.Header;
-                if (startsGroup && headerPrefab != null)
+                if (startsGroup && headerTemplate != null)
                 {
-                    var headerRow = Instantiate(headerPrefab, _commandContainer);
+                    var headerRow = Instantiate(headerTemplate, _commandContainer);
                     headerRow.SetText(command.Header);
                     headerRow.ApplyLayout(Layout);
                 }
 
-                var row = Instantiate(rowPrefab, _commandContainer);
+                var row = Instantiate(rowTemplate, _commandContainer);
                 row.Setup(command, registry.DisplayTitle(command), OnRunClicked);
                 row.ApplyLayout(Layout);
             }
