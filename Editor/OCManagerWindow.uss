@@ -261,12 +261,20 @@
 .oc-section-title { -unity-font-style: bold; font-size: 13px; margin: 6px 0 4px 2px; }
 .oc-section-description { margin: 0 0 6px 2px; }
 .oc-form { margin-bottom: 16px; }
-.oc-actions { margin-top: 6px; }
+.oc-actions { margin-top: 6px; align-self: flex-start; }
 .oc-actions > Button { margin-right: 8px; }
 .oc-panel-card { padding: 8px 12px 12px 12px; }
 .oc-panel-card__foldout > .unity-foldout__toggle { -unity-font-style: bold; font-size: 13px; margin-right: 32px; }
 .oc-card__remove { position: absolute; top: 8px; right: 10px; }
 .oc-subheading { -unity-font-style: bold; color: var(--oc-muted); margin: 10px 0 2px 0; font-size: 11px; }
+.oc-panel-card__summary { color: var(--oc-muted); -unity-font-style: normal; font-size: 12px; margin-left: 12px; flex-shrink: 1; overflow: hidden; text-overflow: ellipsis; }
+.oc-panel-card--disabled > .unity-foldout__toggle .unity-toggle__text { color: var(--oc-muted); }
+.oc-panel-section { margin-top: 12px; padding-top: 8px; border-top-width: 1px; border-color: var(--oc-border); }
+.oc-panel-section__title { -unity-font-style: bold; font-size: 12px; color: var(--oc-accent); margin: 0 0 4px 2px; }
+.oc-panel-section__indent { margin-left: 15px; }
+.oc-panel-section--foldout > .unity-foldout__toggle { margin-left: 0; }
+.oc-panel-section--foldout > .unity-foldout__toggle .unity-toggle__text { -unity-font-style: bold; font-size: 12px; color: var(--oc-accent); }
+.oc-panel-section--foldout > .unity-foldout__content { margin-left: 0; }
 
 /* Empty state */
 .oc-empty { flex-grow: 1; align-items: center; justify-content: center; padding: 40px; }
