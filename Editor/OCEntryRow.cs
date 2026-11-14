@@ -94,9 +94,18 @@ namespace OperatorConsole.Editor
             _key.AddToClassList("oc-mono");
             _sub = new Label();
             _sub.AddToClassList("oc-muted");
+            var exposedMark = new VisualElement();
+            exposedMark.AddToClassList("oc-exposed-mark");
+            if (Prop("_exposed").boolValue)
+            {
+                exposedMark.tooltip = "Exposed: shown in the Runtime Panel.";
+                var icon = EditorGUIUtility.IconContent(EditorGUIUtility.isProSkin ? "d_scenevis_visible_hover" : "scenevis_visible_hover").image;
+                exposedMark.style.backgroundImage = new StyleBackground((UnityEngine.Texture2D)icon);
+            }
             texts.Add(_key);
             texts.Add(_sub);
             keyBlock.Add(caret);
+            keyBlock.Add(exposedMark);
             keyBlock.Add(texts);
             keyBlock.RegisterCallback<ClickEvent>(_ => _toggleExpanded(_index));
             main.Add(Cell("oc-col-key", keyBlock));
