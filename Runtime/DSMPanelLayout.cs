@@ -70,6 +70,15 @@ namespace DataSaveManager
         [SerializeField, Tooltip("Extra space above each Entry header.")]
         private float _headerSpacing = 12f;
 
+        [SerializeField, Tooltip("Height of the Settings / Commands tabs.")]
+        private float _tabHeight = 44f;
+
+        [SerializeField, Tooltip("Font size of a Command's Description and error line.")]
+        private float _commandDescriptionFontSize = 16f;
+
+        [SerializeField, Tooltip("Width of a Command's Run button.")]
+        private float _commandButtonWidth = 140f;
+
         public float LabelWidth => _labelWidth;
         public float RowHeight => _rowHeight;
         public float RowSpacing => _rowSpacing;
@@ -84,5 +93,8 @@ namespace DataSaveManager
         public float ScrollSensitivity => _scrollSensitivity;
         public float HeaderFontSize => _headerFontSize;
         public float HeaderSpacing => _headerSpacing;
+        public float TabHeight => _tabHeight;
+        public float CommandDescriptionFontSize => _commandDescriptionFontSize;
+        public float CommandButtonWidth => _commandButtonWidth;
     }
 }

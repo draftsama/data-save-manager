@@ -149,6 +149,8 @@ Example Save File — a flat JSON object of only the Overrides that have been se
 - **Entries** — one card per Entry Definition: key, type, label, exposed toggle, default value,
   current value, Reset, and remove. Exposed Int/Float Entries add a Range line. Duplicate keys are highlighted and reported. Drag a card by
   its handle to reorder it — that order is the Runtime Panel order.
+- **Commands** — in Play mode, every Registered Command with its status and a Run button (it asks first
+  when the Command has `Confirm`). **View as** dims the Commands that Audience's Runtime Panel would not show.
 - **Add Entry** — key and type for a new Entry Definition.
 - **Footer** — Reset All Values, and a live count of current Overrides.
 
@@ -204,6 +206,8 @@ apply to the open panel immediately.
 - **Scrollbar Width**, **Scroll Sensitivity** — width of the vertical scrollbar and mouse-wheel speed.
   The scrollbar hides itself when all rows fit; the list scrolls with the wheel or by dragging.
 - **Header Font Size**, **Header Spacing** — font size of Entry headers and the extra space above each one.
+- **Tab Height**, **Command Description Font Size**, **Command Button Width** — the Settings / Commands
+  tabs, and the Description, error line and Run button of each Command row.
 
 ### Headers
 
@@ -243,6 +247,57 @@ Float Slider Widget slots are used for Int and Float Entries that have a valid R
 is empty, those Entries fall back to the plain Int or Float widget. The **Header Row** slot takes a
 prefab with a `DSMHeaderRow` component (a root with a `VerticalLayoutGroup` and a text assigned to its
 `_text` field); it is spawned above Entries that have a Header.
+
+### Commands
+
+A Command is an action an operator runs from the panel's **Commands** tab, such as reconnecting a
+device or clearing a cache. Mark a method with `[DSMCommand]` and have its owner register while it is
+enabled:
+
+```csharp
+using System.Threading;
+using Cysharp.Threading.Tasks;
+using DataSaveManager;
+using UnityEngine;
+
+public sealed class Projector : MonoBehaviour
+{
+    void OnEnable()  => DSM.Commands.Register(this);
+    void OnDisable() => DSM.Commands.Unregister(this);
+
+    [DSMCommand("Reconnect", Description = "Drops the link and opens it again.", Header = "Projectors")]
+    private async UniTask Reconnect(CancellationToken ct) { /* ... */ }
+
+    [DSMCommand("Show test pattern", Confirm = true, Audiences = new[] { "Technician" }, Order = 10)]
+    private void ShowTestPattern() { /* ... */ }
+}
+```
+
+- **Signature** — no parameters, or a single `CancellationToken`; returns `void` or `UniTask`. Any
+  access level. Other methods are skipped with an error at `Register`, and the Editor warns about them
+  after each script reload.
+- **Static methods** — `DSM.Commands.Register(typeof(Maintenance))` / `Unregister(typeof(Maintenance))`.
+  `Register(this)` reads instance methods only.
+- **From code** — `DSM.Commands.Register(owner, "Title", ct => ..., new DSMCommandOptions { ... })`;
+  `Unregister(owner)` removes it too.
+- **Running** — a dot beside the Run button turns amber while it runs (the button reads `Running…` and is
+  disabled), then green, or red with the exception message under the Description; the exception is also logged. The outcome stays with the Command, so it is still
+  there when the panel reopens. A Command keeps running when the panel closes. `Unregister` cancels the
+  token; a cancelled run isn't a failure.
+- **Header** — starts a visual group; consecutive Commands with the same Header show it once.
+- **Same Title twice** — two owners that register the same Title (two projectors) show as
+  `Reconnect (Projector L)` and `Reconnect (Projector R)`, from the owners' GameObject names.
+- **Audiences** — named by **name** (not id) because an attribute can't hold an id. Renaming an Audience
+  in the Config drops it from Commands that named the old name; an unknown name is warned about at
+  `Register` and matches no Runtime Panel. Same rule as Entries otherwise.
+- **Confirm** — reuses the panel's confirm popup (`Run "<Title>"?`).
+- **Tabs** — the tab bar appears only when the panel has a Command to show, so a project without
+  Commands sees no change. The panel always opens on Settings, or on Commands when it shows no Exposed
+  Entry.
+
+`[DSMCommand]` derives from Unity's `PreserveAttribute`, so IL2CPP code stripping keeps the methods.
+The Widget Config's **Command Row** slot takes a prefab with a `DSMCommandRow` component; prefabs built
+before 2.3 have no tab bar — regenerate them with **DSM › Build Runtime Panel Prefabs**.
 
 ## Binding
 

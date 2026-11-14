@@ -30,6 +30,18 @@ namespace DataSaveManager
             return false;
         }
 
+        public bool TryGetAudienceByName(string name, out DSMAudience audience)
+        {
+            foreach (var a in _audiences)
+            {
+                if (!string.Equals(a.Name, name, System.StringComparison.Ordinal)) continue;
+                audience = a;
+                return true;
+            }
+            audience = null!;
+            return false;
+        }
+
         public bool AutoSave => _autoSave;
         public float AutoSaveDebounce => _autoSaveDebounce;
         public string SaveDirectory => _saveDirectory;
@@ -60,6 +72,8 @@ namespace DataSaveManager
         }
 
         public bool RemoveEntry(string key) => _entries.RemoveAll(e => e.Key == key) > 0;
+
+        internal void AddAudienceForTests(DSMAudience audience) => _audiences.Add(audience);
 
         internal void SetForTests(bool autoSave, float debounce, string saveDirectory, string fileName)
         {

@@ -1,7 +1,8 @@
 # DataSaveManager
 
 A small persistence layer for tweakable settings of an installed app (e.g. values an on-site
-technician adjusts). One save per app; human-readable and hand-editable.
+technician adjusts), plus the on-site actions that technician runs. One save per app;
+human-readable and hand-editable.
 
 ## Language
 
@@ -42,7 +43,7 @@ An optional title on an **Exposed Entry**, shown on the **Runtime Panel** direct
 _Avoid_: section, category, group
 
 **Audience**:
-A named kind of operator (e.g. Technician, Admin) that an **Exposed Entry** is meant for. An **Entry** may name several **Audiences**; one naming none is meant for every **Audience**. Every **Audience** is declared once in the **Config**.
+A named kind of operator (e.g. Technician, Admin) that an **Exposed Entry** or a **Command** is meant for. An **Entry** may name several **Audiences**; one naming none is meant for every **Audience**. Every **Audience** is declared once in the **Config**.
 _Avoid_: tag, group, app, category
 
 **Presentation Hint**:
@@ -50,8 +51,16 @@ A **Range**, set of **Options**, **Header**, or set of **Audiences** on an **Exp
 _Avoid_: widget setting, UI option
 
 **Runtime Panel**:
-The in-game UI where an operator views and edits **Exposed Entries** while the app runs. An app may have more than one, each serving its own **Audiences**.
+The in-game UI where an operator views and edits **Exposed Entries** and runs **Commands** while the app runs. An app may have more than one, each serving its own **Audiences**.
 _Avoid_: config canvas
+
+**Command**:
+A named action an operator runs from the **Runtime Panel**, with a **Title** and an optional **Description**. It takes no input; a **Command** that needs input reads it from **Entries**. It is code, not data: it is never saved and has no **Entry Definition**.
+_Avoid_: action, button, function
+
+**Registered Command**:
+A **Command** that is live right now because the object that owns it has registered it. The **Runtime Panel** lists only **Registered Commands**; a **Command** whose owner is gone or disabled is not shown.
+_Avoid_: available command
 
 **Watch**:
 Subscribing to an **Entry** to receive its **Value** now and every time it changes, whatever the cause (set, load, reset).
@@ -86,6 +95,14 @@ The .NET composite format string on a **Link** (e.g. `Speed: {0:0.0}`) that turn
 - **Audiences** decide only where an **Entry** is shown. An **Entry** a **Runtime Panel** does not show still exists in that app: code can read and set it, and **Bindings** still follow it.
 - Apps built from one **Config** share **Entry Definitions**, not **Values**: each app has its own **Save File**, so the same **Entry** can hold a different **Value** in each app.
 - A **Reset** from a **Runtime Panel** covers only the **Exposed Entries** that **Runtime Panel** shows, and only after the operator confirms; **Overrides** of every other **Entry** and of _ad-hoc keys_ survive it.
+- A **Command** names zero or more **Audiences** and is shown by the same rule as an **Exposed Entry**. Unlike an **Entry**, it names them by name, so renaming an **Audience** drops it from **Commands** that named the old name.
+- A **Command** may require confirmation; the operator then confirms before it runs.
+- Each owner registers its own **Commands**, so two owners of the same kind give two **Registered Commands** with the same **Title**; the **Runtime Panel** tells them apart by owner.
+- A **Command** keeps running when the **Runtime Panel** closes. It is stopped when its owner unregisters. While it runs it cannot be run again; other **Commands** can.
+- A **Command**'s last outcome (running, succeeded, failed) belongs to the **Registered Command**, not to the **Runtime Panel**, and is shown again when the **Runtime Panel** reopens.
+- A **Command** shows a **Header** above it to start a visual group, as an **Exposed Entry** does; when the **Command** listed just before it has the same **Header**, the **Header** is shown once for both.
+- A **Runtime Panel** with no **Command** to show has no Commands tab and looks as it did before **Commands** existed.
+- A **Command** never changes a **Value** by being run through the **Runtime Panel**; anything it changes, it changes through code like any other caller.
 - A **Binding** has one or more **Links**. A **Link** whose member takes the **Entry**'s own **Data Type** receives the **Value** as-is; only when no such member exists does a text member receive it through the **Format**.
 - A **Key** used in code without an **Entry Definition** is an _ad-hoc key_: it works and persists like any **Override**, but is never added to the **Config** automatically.
 
