@@ -19,8 +19,10 @@ namespace DataSaveManager
         [SerializeField] private FloatSliderWidget? _floatSliderWidget;
         [SerializeField] private DropdownWidget? _dropdownWidget;
         [SerializeField] private DSMHeaderRow? _headerRow;
+        [SerializeField] private DSMCommandRow? _commandRow;
 
         public DSMHeaderRow? HeaderRow => _headerRow;
+        public DSMCommandRow? CommandRow => _commandRow;
 
         public MonoBehaviour? GetWidgetPrefab(DSMDataType type) => type switch
         {

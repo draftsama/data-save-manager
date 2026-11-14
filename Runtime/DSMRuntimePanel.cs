@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.Serialization;
 using UnityEngine.UI;
@@ -18,7 +19,7 @@ namespace DataSaveManager
         Never
     }
 
-    /// <summary>The in-game UI where an operator views and edits Exposed Entries while the app runs. Toggled with a hotkey.</summary>
+    /// <summary>The in-game UI where an operator views and edits Exposed Entries and runs Commands while the app runs. Toggled with a hotkey.</summary>
     public sealed class DSMRuntimePanel : MonoBehaviour
     {
         [SerializeField] private DSMWidgetConfig? _widgetConfig;
@@ -36,6 +37,22 @@ namespace DataSaveManager
         [SerializeField] private bool _startVisible;
         [SerializeField] private DSMPanelLayout _layout = new();
         [SerializeField] private List<string> _audienceIds = new();
+        [SerializeField] private GameObject? _tabBar;
+        [SerializeField] private DSMPanelTab? _settingsTab;
+        [SerializeField] private DSMPanelTab? _commandsTab;
+        [SerializeField] private GameObject? _settingsView;
+        [SerializeField] private GameObject? _commandsView;
+        [SerializeField] private Transform? _commandContainer;
+        [SerializeField] private TMP_Text? _confirmMessage;
+        [SerializeField] private TMP_Text? _confirmButtonLabel;
+
+        private readonly List<DSMRegisteredCommand> _shownCommands = new();
+        private int _shownEntryCount;
+        private bool _commandsSelected;
+        private Action? _pendingConfirm;
+        private string _resetConfirmMessage = string.Empty;
+        private string _resetConfirmButtonText = string.Empty;
+        private bool _warnedMissingCommandRow;
 
 #if ENABLE_INPUT_SYSTEM
         private Key _inputSystemToggleKey;
@@ -62,7 +79,11 @@ namespace DataSaveManager
             if (_resetButton != null) _resetButton.onClick.AddListener(OnResetClicked);
             if (_closeButton != null) _closeButton.onClick.AddListener(Hide);
             if (_confirmCancelButton != null) _confirmCancelButton.onClick.AddListener(CloseConfirmDialog);
-            if (_confirmResetButton != null) _confirmResetButton.onClick.AddListener(OnConfirmResetClicked);
+            if (_confirmResetButton != null) _confirmResetButton.onClick.AddListener(OnConfirmClicked);
+            if (_settingsTab != null && _settingsTab.Button != null) _settingsTab.Button.onClick.AddListener(SelectSettings);
+            if (_commandsTab != null && _commandsTab.Button != null) _commandsTab.Button.onClick.AddListener(SelectCommands);
+            if (_confirmMessage != null) _resetConfirmMessage = _confirmMessage.text;
+            if (_confirmButtonLabel != null) _resetConfirmButtonText = _confirmButtonLabel.text;
 
 #if ENABLE_INPUT_SYSTEM
             // Parsed once here instead of every frame in Update.
@@ -75,6 +96,10 @@ namespace DataSaveManager
             if (_startVisible) Show();
             else if (_root != null) _root.SetActive(false);
         }
+
+        private void OnEnable() => DSM.Commands.Changed += OnCommandsChanged;
+
+        private void OnDisable() => DSM.Commands.Changed -= OnCommandsChanged;
 
         private void Update()
         {
@@ -92,8 +117,10 @@ namespace DataSaveManager
         public void Show()
         {
             CloseConfirmDialog();
-            ApplySaveButtonMode();
             Rebuild();
+            RebuildCommands();
+            _commandsSelected = _shownEntryCount == 0 && _shownCommands.Count > 0;
+            ApplyTabs();
             if (_root != null) _root.SetActive(true);
             SetOpen(true);
         }
@@ -106,25 +133,86 @@ namespace DataSaveManager
             SetOpen(false);
         }
 
+        public void SelectSettings() => SelectTab(false);
+
+        public void SelectCommands() => SelectTab(true);
+
+        private void SelectTab(bool commands)
+        {
+            if (commands && _shownCommands.Count == 0) return;
+            CloseConfirmDialog();
+            _commandsSelected = commands;
+            ApplyTabs();
+        }
+
+        private void ApplyTabs()
+        {
+            if (_shownCommands.Count == 0) _commandsSelected = false;
+
+            if (_tabBar != null) _tabBar.SetActive(_shownCommands.Count > 0);
+            if (_settingsTab != null) _settingsTab.SetSelected(!_commandsSelected);
+            if (_commandsTab != null) _commandsTab.SetSelected(_commandsSelected);
+            if (_settingsView != null) _settingsView.SetActive(!_commandsSelected);
+            if (_commandsView != null) _commandsView.SetActive(_commandsSelected);
+            if (_resetButton != null) _resetButton.gameObject.SetActive(!_commandsSelected);
+            ApplySaveButtonMode();
+        }
+
+        private void OnCommandsChanged()
+        {
+            if (!IsVisible) return;
+            RebuildCommands();
+            ApplyTabs();
+        }
+
         private void OnResetClicked()
         {
             if (_confirmDialog == null)
             {
                 Debug.LogWarning($"DSMRuntimePanel on '{gameObject.name}': no confirm dialog assigned; resetting without confirmation.", this);
-                Store.ResetExposedEntries(_audienceIds);
+                ResetShownEntries();
                 return;
             }
+            OpenConfirmDialog(_resetConfirmMessage, _resetConfirmButtonText, ResetShownEntries);
+        }
+
+        private void ResetShownEntries() => Store.ResetExposedEntries(_audienceIds);
+
+        private void OnRunClicked(DSMRegisteredCommand command)
+        {
+            if (!command.Confirm)
+            {
+                command.Run();
+                return;
+            }
+            if (_confirmDialog == null)
+            {
+                Debug.LogWarning($"DSMRuntimePanel on '{gameObject.name}': no confirm dialog assigned; running '{command.Title}' without confirmation.", this);
+                command.Run();
+                return;
+            }
+            OpenConfirmDialog($"Run \u201C{DSM.Commands.DisplayTitle(command)}\u201D?", "Run", command.Run);
+        }
+
+        private void OpenConfirmDialog(string message, string buttonText, Action onConfirm)
+        {
+            if (_confirmDialog == null) return;
+            if (_confirmMessage != null) _confirmMessage.text = message;
+            if (_confirmButtonLabel != null) _confirmButtonLabel.text = buttonText;
+            _pendingConfirm = onConfirm;
             _confirmDialog.SetActive(true);
         }
 
-        private void OnConfirmResetClicked()
+        private void OnConfirmClicked()
         {
+            var onConfirm = _pendingConfirm;
             CloseConfirmDialog();
-            Store.ResetExposedEntries(_audienceIds);
+            onConfirm?.Invoke();
         }
 
         private void CloseConfirmDialog()
         {
+            _pendingConfirm = null;
             if (_confirmDialog != null) _confirmDialog.SetActive(false);
         }
 
@@ -138,7 +226,7 @@ namespace DataSaveManager
                 DSMSaveButtonMode.Never  => false,
                 _                        => !Store.Config.AutoSave
             };
-            _saveButton.gameObject.SetActive(active);
+            _saveButton.gameObject.SetActive(active && !_commandsSelected);
         }
 
         private void OnDestroy() => SetOpen(false);
@@ -164,6 +252,9 @@ namespace DataSaveManager
             ApplySaveButtonMode();
             foreach (var row in _container.GetComponentsInChildren<IDSMLayoutAware>(true))
                 row.ApplyLayout(_layout);
+            if (_commandContainer != null)
+                foreach (var row in _commandContainer.GetComponentsInChildren<IDSMLayoutAware>(true))
+                    row.ApplyLayout(_layout);
         }
 
         private void ApplyPanelLayout()
@@ -183,10 +274,20 @@ namespace DataSaveManager
             if (_root.TryGetComponent<Image>(out var background))
                 background.color = _layout.BackgroundColor;
 
-            if (_container != null && _container.TryGetComponent<VerticalLayoutGroup>(out var group))
+            ApplyContainerLayout(_container);
+            ApplyContainerLayout(_commandContainer);
+            if (_settingsTab != null) _settingsTab.ApplyLayout(_layout);
+            if (_commandsTab != null) _commandsTab.ApplyLayout(_layout);
+        }
+
+        private void ApplyContainerLayout(Transform? container)
+        {
+            if (container == null) return;
+
+            if (container.TryGetComponent<VerticalLayoutGroup>(out var group))
                 group.spacing = _layout.RowSpacing;
 
-            var scrollRect = _container != null ? _container.GetComponentInParent<ScrollRect>(true) : null;
+            var scrollRect = container.GetComponentInParent<ScrollRect>(true);
             if (scrollRect != null)
             {
                 scrollRect.scrollSensitivity = _layout.ScrollSensitivity;
@@ -216,6 +317,7 @@ namespace DataSaveManager
         public void Rebuild()
         {
             ApplyPanelLayout();
+            _shownEntryCount = 0;
 
             if (_container == null) return;
 
@@ -234,6 +336,7 @@ namespace DataSaveManager
             foreach (var entry in store.Config.Entries)
             {
                 if (!DSMAudienceFilter.Shows(entry, _audienceIds)) continue;
+                _shownEntryCount++;
 
                 var presentation = DSMPresentation.Present(DSMHintSettings.From(entry));
 
@@ -275,6 +378,49 @@ namespace DataSaveManager
                 }
                 widget.Setup(entry, store);
                 if (widget is IDSMLayoutAware layoutAware) layoutAware.ApplyLayout(_layout);
+            }
+        }
+
+        /// <summary>Lists the Registered Commands this Panel shows on its Commands tab.</summary>
+        public void RebuildCommands()
+        {
+            _shownCommands.Clear();
+            var registry = DSM.Commands;
+            var config = Store.Config;
+            foreach (var command in registry.Commands)
+                if (DSMAudienceFilter.Shows(command, _audienceIds, config)) _shownCommands.Add(command);
+
+            if (_commandContainer == null) return;
+
+            foreach (Transform child in _commandContainer)
+                Destroy(child.gameObject);
+
+            if (_shownCommands.Count == 0 || _widgetConfig == null) return;
+
+            var rowPrefab = _widgetConfig.CommandRow;
+            if (rowPrefab == null)
+            {
+                if (!_warnedMissingCommandRow)
+                {
+                    _warnedMissingCommandRow = true;
+                    Debug.LogWarning($"DSMRuntimePanel on '{gameObject.name}': Commands are skipped because the Widget Config has no Command Row prefab.", this);
+                }
+                return;
+            }
+
+            var headerPrefab = _widgetConfig.HeaderRow;
+            foreach (var command in _shownCommands)
+            {
+                if (command.Header != null && headerPrefab != null)
+                {
+                    var headerRow = Instantiate(headerPrefab, _commandContainer);
+                    headerRow.SetText(command.Header);
+                    headerRow.ApplyLayout(_layout);
+                }
+
+                var row = Instantiate(rowPrefab, _commandContainer);
+                row.Setup(command, registry.DisplayTitle(command), OnRunClicked);
+                row.ApplyLayout(_layout);
             }
         }
     }
