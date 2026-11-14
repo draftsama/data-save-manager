@@ -19,7 +19,7 @@ namespace DataSaveManager
         Never
     }
 
-    /// <summary>The in-game UI where an operator views and edits Exposed Entries and runs Commands while the app runs. Toggled with a hotkey.</summary>
+    /// <summary>The in-game UI where an operator views and edits Exposed Entries and runs Commands and Entry Actions while the app runs. Toggled with a hotkey.</summary>
     public sealed class DSMRuntimePanel : MonoBehaviour
     {
         [SerializeField] private DSMWidgetConfig? _widgetConfig;
@@ -53,6 +53,7 @@ namespace DataSaveManager
         private string _resetConfirmMessage = string.Empty;
         private string _resetConfirmButtonText = string.Empty;
         private bool _warnedMissingCommandRow;
+        private bool _warnedMissingEntryActionBar;
 
 #if ENABLE_INPUT_SYSTEM
         private Key _inputSystemToggleKey;
@@ -161,6 +162,7 @@ namespace DataSaveManager
         private void OnCommandsChanged()
         {
             if (!IsVisible) return;
+            Rebuild();
             RebuildCommands();
             ApplyTabs();
         }
@@ -192,6 +194,56 @@ namespace DataSaveManager
                 return;
             }
             OpenConfirmDialog($"Run \u201C{DSM.Commands.DisplayTitle(command)}\u201D?", "Run", command.Run);
+        }
+
+        private void OnEntryActionClicked(DSMRegisteredEntryAction action)
+        {
+            void Run() => action.Run(Store);
+
+            if (!action.Confirm)
+            {
+                Run();
+                return;
+            }
+            if (_confirmDialog == null)
+            {
+                Debug.LogWarning($"DSMRuntimePanel on '{gameObject.name}': no confirm dialog assigned; running '{action.Title}' without confirmation.", this);
+                Run();
+                return;
+            }
+            OpenConfirmDialog($"Run \u201C{DSM.Commands.DisplayTitle(action)}\u201D?", "Run", Run);
+        }
+
+        private void AddEntryActions(GameObject widgetRow, string key)
+        {
+            var registry = DSM.Commands;
+            var actions = registry.EntryActionsFor(key);
+            if (actions.Count == 0 || _widgetConfig == null || _container == null) return;
+
+            var barPrefab = _widgetConfig.EntryActionBar;
+            if (barPrefab == null)
+            {
+                if (!_warnedMissingEntryActionBar)
+                {
+                    _warnedMissingEntryActionBar = true;
+                    Debug.LogWarning($"DSMRuntimePanel on '{gameObject.name}': Entry Actions are skipped because the Widget Config has no Entry Action Bar prefab.", this);
+                }
+                return;
+            }
+
+            var rowGroup = widgetRow.TryGetComponent<CanvasGroup>(out var group) ? group : widgetRow.AddComponent<CanvasGroup>();
+
+            DSMEntryActionError? error = null;
+            var errorPrefab = _widgetConfig.EntryActionError;
+            if (errorPrefab != null)
+            {
+                error = Instantiate(errorPrefab, _container);
+                error.transform.SetSiblingIndex(widgetRow.transform.GetSiblingIndex() + 1);
+                error.ApplyLayout(_layout);
+            }
+
+            var bar = Instantiate(barPrefab, widgetRow.transform);
+            bar.Setup(actions, registry.DisplayTitle, OnEntryActionClicked, rowGroup, error);
         }
 
         private void OpenConfirmDialog(string message, string buttonText, Action onConfirm)
@@ -377,7 +429,9 @@ namespace DataSaveManager
                     continue;
                 }
                 widget.Setup(entry, store);
+                AddEntryActions(go, entry.Key);
                 if (widget is IDSMLayoutAware layoutAware) layoutAware.ApplyLayout(_layout);
+                foreach (var bar in go.GetComponentsInChildren<DSMEntryActionBar>(true)) bar.ApplyLayout(_layout);
             }
         }
 
