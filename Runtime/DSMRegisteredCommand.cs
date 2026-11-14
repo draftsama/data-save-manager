@@ -90,7 +90,7 @@ namespace DataSaveManager
             StatusChanged?.Invoke(this);
         }
 
-        private static string NameOf(object owner) => owner switch
+        internal static string NameOf(object owner) => owner switch
         {
             Component component => component.gameObject.name,
             Object unityObject => unityObject.name,
