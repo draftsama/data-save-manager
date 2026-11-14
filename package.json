@@ -1,6 +1,6 @@
 {
   "name": "com.draftsama.datasavemanager",
-  "version": "2.5.0",
+  "version": "3.0.0",
   "displayName": "DataSaveManager",
   "description": "A small settings store for Unity: Entries with typed defaults in a Config asset, a single hand-editable JSON save file holding only overrides, live change watching via UniTask, an Editor manager window, and an in-game settings panel with operator Commands.",
   "unity": "6000.0",
