@@ -302,6 +302,23 @@ namespace OperatorConsole.Tests
             store.Dispose();
         }
 
+        [Test]
+        public void Dispose_WithLiveWatchers_DoesNotThrow()
+        {
+            var config = NewConfig(IntEntry());
+            var store = NewStore(config);
+            store.Load();
+            var first = store.WatchAsync<int>("intKey").GetAsyncEnumerator();
+            var second = store.WatchAsync<int>("intKey").GetAsyncEnumerator();
+            first.MoveNextAsync();
+            first.MoveNextAsync();
+            second.MoveNextAsync();
+            second.MoveNextAsync();
+
+            Assert.DoesNotThrow(store.Dispose);
+            Assert.DoesNotThrow(store.Dispose);
+        }
+
         // 9. Set with an equal value does not set IsDirty (after a Save cleared it).
         [Test]
         public void Set_WithEqualValue_DoesNotMarkDirty()

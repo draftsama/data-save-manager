@@ -11,6 +11,8 @@ public static class OC
     private static OCStore? s_store;
     private static OCCommandRegistry? s_commands;
     private static OCPanelRegistry? s_panels;
+    private static OCLog? s_log;
+    private static OCPerformance? s_performance;
     private static bool s_quittingHooked;
 
     /// <summary>The active store, created lazily from the Resources config on first access.</summary>
@@ -21,6 +23,12 @@ public static class OC
 
     /// <summary>The Runtime Panels created from the Config's Panel Definitions when the app started.</summary>
     public static OCPanelRegistry Panels => s_panels ??= new OCPanelRegistry();
+
+    /// <summary>The messages the app wrote to Unity's log, kept from app start when an enabled Panel Definition shows the Log tab.</summary>
+    public static OCLog Log => s_log ??= new OCLog();
+
+    /// <summary>Live frame rate, frame time and memory, measured when an enabled Panel Definition shows the Performance tab.</summary>
+    public static OCPerformance Performance => s_performance ??= new OCPerformance();
 
     /// <summary>Overrides the active config: saves and disposes any existing store, then loads a new one.</summary>
     public static void Configure(OCConfig config)
@@ -35,7 +43,12 @@ public static class OC
         s_store.Load();
         HookQuitting();
 
-        if (s_panels != null && s_panels.HasSpawned) s_panels.Respawn(config);
+        OCDiagnostics.ApplyLogCapture(config, Log);
+        if (s_panels != null && s_panels.HasSpawned)
+        {
+            OCDiagnostics.StartTicking(config, Log, Performance);
+            s_panels.Respawn(config);
+        }
     }
 
     /// <summary>Returns the value for <paramref name="key"/>, or the Entry's Default if never overridden.</summary>
@@ -115,11 +128,19 @@ public static class OC
         s_commands = null;
         s_panels?.Clear();
         s_panels = null;
+        OCDiagnostics.Shutdown(s_log, s_performance);
+        s_log = null;
+        s_performance = null;
     }
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+    private static void StartLogCapture() => OCDiagnostics.ApplyLogCapture(Store.Config, Log);
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void SpawnPanels()
     {
-        if (!Panels.HasSpawned) Panels.SpawnAll(Store.Config);
+        if (Panels.HasSpawned) return;
+        OCDiagnostics.StartTicking(Store.Config, Log, Performance);
+        Panels.SpawnAll(Store.Config);
     }
 }

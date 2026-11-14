@@ -25,6 +25,7 @@ namespace OperatorConsole
 
         private Dictionary<string, JToken> _overrides = new();
         private int _autoSaveRequestVersion;
+        private bool _disposed;
         private bool _autoSaveLoopRunning;
 
         /// <summary>Raised whenever a key's effective value changes, for deterministic test assertions without a PlayerLoop.</summary>
@@ -213,12 +214,16 @@ namespace OperatorConsole
 
         public void Dispose()
         {
+            if (_disposed) return;
+            _disposed = true;
             _lifetime.Cancel();
             _lifetime.Dispose();
-            foreach (var writers in _watchers.Values)
-                foreach (var writer in writers)
-                    writer.TryComplete();
+
+            // Completing a writer can end its watcher at once, and the watcher then unregisters itself.
+            var writers = new List<ChannelWriter<JToken>>();
+            foreach (var list in _watchers.Values) writers.AddRange(list);
             _watchers.Clear();
+            foreach (var writer in writers) writer.TryComplete();
         }
 
         private bool TryResolve<T>(string key, out T value)

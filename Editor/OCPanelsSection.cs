@@ -174,6 +174,11 @@ namespace OperatorConsole.Editor
             Heading(content, "Behaviour");
             content.Add(Field(definition, "_startVisible", "Start Visible", null));
             content.Add(Field(definition, "_saveButtonMode", "Save Button Mode", null));
+
+            Heading(content, "Diagnostics");
+            content.Add(Field(definition, "_showLog", "Show Log", "Show the Log tab. The Log is kept from app start only when an enabled panel shows it; that is decided when the app starts."));
+            content.Add(Field(definition, "_showPerformance", "Show Performance", "Show the Performance tab. Performance is measured only when an enabled panel shows it; that is decided when the app starts."));
+
             content.Add(Field(definition, "_layout", "Layout", null));
 
             _shown.Add(card);

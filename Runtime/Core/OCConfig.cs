@@ -16,6 +16,8 @@ namespace OperatorConsole
         [SerializeField] private List<OCEntryDefinition> _entries = new();
         [SerializeField] private List<OCAudience> _audiences = new();
         [SerializeField] private List<OCPanelDefinition> _panels = new();
+        [SerializeField, Min(1), Tooltip("Log Entries kept for the Runtime Panel's Log tab; the oldest is dropped when full.")]
+        private int _logCapacity = OCLog.DefaultCapacity;
 
         public IReadOnlyList<OCAudience> Audiences => _audiences;
 
@@ -50,6 +52,7 @@ namespace OperatorConsole
         public float AutoSaveDebounce => _autoSaveDebounce;
         public string SaveDirectory => _saveDirectory;
         public string FileName => _fileName;
+        public int LogCapacity => Mathf.Max(1, _logCapacity);
         public IReadOnlyList<OCEntryDefinition> Entries => _entries;
 
         public bool TryGetEntry(string key, out OCEntryDefinition entry)

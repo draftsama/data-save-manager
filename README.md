@@ -89,6 +89,8 @@ All members are synchronous and must be called from the main thread.
 | `OC.WatchAsync<T>(string key)` | Returns an `IUniTaskAsyncEnumerable<T>` that emits the current Value immediately, then again on every subsequent change. |
 | `OC.Config` | The active `OCConfig`. |
 | `OC.SaveFilePath` | The resolved absolute path of the Save File. |
+| `OC.Log` | The Log the Runtime Panel's Log tab shows. See [Log and Performance](#log-and-performance). |
+| `OC.Performance` | The measurements the Performance tab shows. See [Log and Performance](#log-and-performance). |
 
 ## Supported types
 
@@ -113,6 +115,7 @@ Set on the `OCConfig` asset (`Assets/Resources/DSMConfig.asset`), either in the 
 | Auto Save Debounce | `1` second | Delay after the last change before AutoSave writes the Save File. |
 | Save Directory | empty | See path resolution below. |
 | File Name | `save.json` | Name of the Save File. |
+| Log Capacity | `1000` | Log Entries kept for the Runtime Panel's Log tab. |
 
 Saving also happens once on `Application.quitting` if there are unsaved changes, regardless of
 AutoSave.
@@ -255,6 +258,10 @@ open panel immediately.
   Alpha** — the Lock Screen keypad, its passcode dots, and how much of the app shows through behind it.
 - **Entry Action Button Width**, **Entry Action Error Font Size** — each Entry Action button beside a
   widget (longer Titles end in an ellipsis) and the error line under a row whose Entry Action failed.
+- **Log Preview Lines** — the most lines of a Log Entry's message a row shows before it is expanded.
+- **Log Stack Trace Font Size** — the full message and stack trace of an expanded Log Entry.
+- **Performance Graph Height**, **Frame Budget (ms)** — the frame time graph on the Performance tab, and
+  the dashed budget line drawn on it (16.67 ms is 60 fps). Frames over the budget are drawn in amber.
 
 ### Headers
 
@@ -328,9 +335,10 @@ public sealed class Projector : MonoBehaviour
   in the Config drops it from Commands that named the old name; an unknown name is warned about at
   `Register` and matches no Runtime Panel. Same rule as Entries otherwise.
 - **Confirm** — reuses the panel's confirm popup (`Run "<Title>"?`).
-- **Tabs** — the tab bar appears only when the panel has a Command to show, so a project without
-  Commands sees no change. The panel always opens on Settings, or on Commands when it shows no Exposed
-  Entry.
+- **Tabs** — the tab bar appears only when the panel has a tab besides Settings (Commands to show, or
+  the Log or Performance tab), so a project without them sees no change. The panel first opens on
+  Settings, or on the first other tab when it shows no Exposed Entry, and after that on the tab it was
+  last closed on.
 
 `[OCCommand]` derives from Unity's `PreserveAttribute`, so IL2CPP code stripping keeps the methods.
 
@@ -372,6 +380,48 @@ public sealed class ContentFolders : MonoBehaviour
   `Running…`. A failure shows its message on a line under the row.
 - **From code** — `OC.Commands.Register<string>(owner, "contentFolderPath", "Browse…", (current, ct) => ..., new OCEntryActionOptions { Confirm = true, Order = 1 })`.
 - **Order**, **Confirm**, **Same Title twice** — as for Commands.
+
+### Log and Performance
+
+Two optional tabs for on-site diagnostics. Turn them on per Panel Definition with **Show Log** and
+**Show Performance** (under **Diagnostics**). See [ADR 0009](docs/adr/0009-log-and-performance-on-the-runtime-panel.md).
+
+- **When it runs** — the Log is kept from app start, and Performance is measured from the first scene,
+  but only when an enabled Panel Definition shows that tab. That is decided when the app starts (and on
+  `OC.Configure`), so turning a tab on in Play mode shows it but keeps nothing until the next run.
+- **Builds** — both work in release builds.
+
+**Log tab** — every message written to Unity's log (`Debug.Log*`, exceptions, from any thread):
+
+- Search, type filters with counts (Info, Warning, Error), **Collapse**, **Copy all** and **Clear**.
+- **Collapse** shows identical messages logged back to back as one row with a `×N` count. Identical
+  messages further apart stay separate, so the order is kept.
+- **Search** matches messages and stack traces, ignoring case, and marks every match. A row that
+  matches only in its stack trace carries an `in stack trace` tag.
+- Each row shows the first lines of its message (**Log Preview Lines**, default 3).
+- Click a row to show its full message and stack trace under it, with **Copy entry**.
+- **Clear** empties the one Log every panel shares.
+- The tab shows a red count of errors logged since its operator last looked at the Log.
+- **Log Capacity** (Config, default 1000) is how many Log Entries are kept; the oldest is dropped when
+  full.
+- Release builds record no stack trace for Log and Warning messages by default; those rows say so.
+  Change it in **Player Settings › Other Settings › Stack Trace**. Exceptions always have one.
+
+**Performance tab** — frame rate (current, average and 1% low over the last 300 frames, worst frame
+since the last **Reset min/max**), a frame time graph, and Metrics:
+
+- **Frame** — frame time, CPU main thread, GPU, GC alloc per frame.
+- **Memory** — total allocated of reserved, Mono heap used, and **Force GC**.
+- **Rendering** — batches, SetPass calls, triangles.
+
+A Metric the build can't measure shows `n/a`. GPU and the most accurate main-thread time come from
+`FrameTimingManager`, which needs **Player Settings › Other Settings › Frame Timing Stats** outside the
+Editor. **Pause** freezes the tab's display; measuring goes on.
+
+From code: `OC.Log` (`CopyTo`, `InfoCount` / `WarningCount` / `ErrorCount`, `Clear()`, and `Changed`,
+raised on the main thread) and `OC.Performance` (`CurrentFps`, `AverageFps`, `OnePercentLowFps`,
+`LatestFrameMs`, memory and render counters). `OCRuntimePanel.SelectLog()` / `SelectPerformance()` /
+`SelectTab(OCPanelTab)` switch tabs. A panel remembers its last tab while the app runs.
 
 ## Binding
 
