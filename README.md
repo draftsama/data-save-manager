@@ -170,16 +170,38 @@ An in-game UI for an operator to view and edit Exposed Entries while the app run
 
 The Color widget takes a hex code (`#RGB`, `#RRGGBB`, or `#RRGGBBAA`; the leading `#` is optional).
 
-1. Drag `Prefab/DSMRuntimePanel.prefab` into a scene.
-2. Make sure the scene has an `EventSystem` (not included in the prefab).
-3. Mark the Entries you want visible as **Exposed** in the DSM Manager window.
-4. Press the toggle key (default `F1`, via the Input System if installed, otherwise the legacy
+1. In the DSM Manager window, open **Runtime Panels** and press **+ Add Panel**. Each enabled
+   **Panel Definition** becomes one Runtime Panel when the app starts; nothing goes in a scene.
+2. Mark the Entries you want visible as **Exposed**.
+3. Press the toggle key (default `F1`, via the Input System if installed, otherwise the legacy
    Input Manager) to show/hide the panel. The footer has Save, Reset to Defaults, and Close buttons.
+
+A Runtime Panel is created after the first scene loads and lives until the app quits, across scene
+loads. It brings its own Canvas (**Sort Order**, default 1000) and adds an `EventSystem` to any scene
+that has none. Several Panel Definitions give several panels, e.g. an open Technician panel on `F1`
+beside a locked Admin panel on a Corner Tap; two that share an Open Trigger both open on it (the
+Manager warns). **Enabled** off keeps a Panel Definition, Passcode included, without creating its panel.
+**Prefab** picks the panel prefab (default `Prefab/DSMRuntimePanel.prefab`). See
+[ADR 0005](docs/adr/0005-runtime-panels-from-panel-definitions.md).
+
+Code finds a panel by its Panel Definition's **Name**: `DSM.Panels.Get("Admin")` (null and one
+warning when no panel has that name), `DSM.Panels.TryGet`, `DSM.Panels.All`, `DSM.Panels.HideAll()`.
+Renaming a Panel Definition breaks code that used the old name. `DSMRuntimePanel.IsOpen` is true while
+any panel or its Lock Screen is open.
+
+Panel Definition edits made in the Manager during Play mode apply at once and, because the Config is
+an asset, are kept after Play mode ends. Adding or removing a Panel Definition or changing its
+Prefab takes effect the next time Play mode starts.
+
+**Moving from a scene-placed panel:** a `DSMRuntimePanel` placed in a scene now stays hidden and logs
+a warning. Open its scene, press **Import Scene Panels** under Runtime Panels to turn each one into a
+Panel Definition (Audiences, Open Triggers, Passcode, Layout and sort order carry over), then remove
+the panel from the scene and save it. Replace Inspector references to the panel with `DSM.Panels`.
 
 - **Reset to Defaults** asks for confirmation in a popup, then resets only the Exposed Entries.
   Overrides of non-exposed Entries and of ad-hoc keys (keys used in code without an Entry Definition)
   are left alone. Code gets the same Reset from `DSM.ResetExposedEntries()`; `DSM.ResetAll()` still clears every Override.
-- **Save Button Mode** (on the `DSMRuntimePanel` component) controls the Save button: `Auto` shows it only
+- **Save Button Mode** (on the Panel Definition) controls the Save button: `Auto` shows it only
   when AutoSave is off, `Always` always shows it, `Never` hides it.
 - **Close** (and the toggle key) cancels an open reset confirmation. With AutoSave on, it also saves any
   pending changes immediately instead of waiting for the debounce; with AutoSave off it does not save.
@@ -189,7 +211,7 @@ Defaults resets immediately and logs a warning. Regenerate the prefab to get the
 
 ### Open Triggers and Panel Lock
 
-An operator opens the panel by hand with its **Open Triggers**, set on the `DSMRuntimePanel` component:
+An operator opens the panel by hand with its **Open Triggers**, set on its Panel Definition:
 
 - **Hotkey Enabled** + **Toggle Key** — the key opens and closes the panel.
 - **Corner Tap** — tapping (or clicking) one screen **Corner** **Tap Count** times, each within
@@ -201,23 +223,23 @@ Both can be on at once. Under **Panel Lock**, type 4–8 digits into **New Passc
 Passcode** to lock the panel: every Open Trigger then shows the full-screen **Lock Screen** keypad first.
 The panel opens as soon as the right digits are entered; a wrong code shakes, shows "Wrong passcode",
 and can be retried. Cancel, Esc, or the hotkey closes the Lock Screen. The keyboard's digit keys and
-Backspace work too. Only a salted hash of the Passcode is stored, on the component, so changing it
+Backspace work too. Only a salted hash of the Passcode is stored, in the Config, so changing it
 needs a new build. See [ADR 0004](docs/adr/0004-passcode-is-build-time-per-panel.md).
 
 Code chooses whether to ask: `RequestOpen()` and `Toggle()` go through the Lock Screen, `Show()`
-opens at once. `IsOpen` is true while the Lock Screen is up.
+opens at once. `IsOpen` is true while a Lock Screen is up.
 
 A prefab built before the Lock Screen existed has none, and a locked panel without one refuses to
 open (it logs an error). Add one in place with **DSM › Add Lock Screen to Runtime Panel Prefab**,
-which keeps the rest of the prefab and the overrides scenes made on it.
+which keeps the rest of the prefab.
 
 Regenerate or restyle the default widget prefabs with **DSM › Build Runtime Panel Prefabs** — this
 overwrites the existing prefabs and the `DSMWidgetConfig` asset under `Prefab/`.
 
 ### Layout
 
-The `DSMRuntimePanel` component has a **Layout** group. Changes made in the Inspector during Play mode
-apply to the open panel immediately.
+Each Panel Definition has a **Layout** group. Changes made in the Manager during Play mode apply to the
+open panel immediately.
 
 - **Label Width**, **Row Height**, **Row Spacing**, **Font Size** — row metrics; the font size applies to
   every text in a row.
@@ -272,7 +294,7 @@ numbers; float sliders round committed values to **Float Decimals**.
   before the first `Show`. A widget that implements only `IDSMWidget` can add `IDSMLayoutAware` itself.
 
 Either way, assign your widget's prefab to the matching type slot on a `DSMWidgetConfig` asset,
-and assign that asset to the `DSMRuntimePanel`'s Widget Config field. The Int Slider Widget and
+and assign that asset to the Widget Config field of the panel prefab a Panel Definition uses. The Int Slider Widget and
 Float Slider Widget slots are used for Int and Float Entries that have a valid Range; if a slider slot
 is empty, those Entries fall back to the plain Int or Float widget. The **Header Row** slot takes a
 prefab with a `DSMHeaderRow` component (a root with a `VerticalLayoutGroup` and a text assigned to its

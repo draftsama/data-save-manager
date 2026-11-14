@@ -121,7 +121,7 @@ namespace DataSaveManager.Editor
         }
 
         /// <summary>Package root is this script's grandparent folder (script -> Editor -> package root), so this works wherever the package is installed.</summary>
-        private static string? ResolvePrefabFolder()
+        internal static string? ResolvePrefabFolder()
         {
             var guids = AssetDatabase.FindAssets("t:Script DSMPanelPrefabBuilder");
             if (guids.Length == 0) return null;
