@@ -54,6 +54,26 @@ _Avoid_: widget setting, UI option
 The in-game UI where an operator views and edits **Exposed Entries** and runs **Commands** and **Entry Actions** while the app runs. An app may have more than one, each serving its own **Audiences**.
 _Avoid_: config canvas
 
+**Open Trigger**:
+A way an operator opens a **Runtime Panel** by hand: a hotkey or a **Corner Tap**. Each **Runtime Panel** has its own **Open Triggers**; several can be on at once.
+_Avoid_: toggle, shortcut, gesture
+
+**Corner Tap**:
+An **Open Trigger**: tapping or clicking one chosen corner of the screen a set number of times in quick succession. It only opens; it never closes the **Runtime Panel**.
+_Avoid_: secret tap, hidden button
+
+**Panel Lock**:
+A **Runtime Panel** that asks for its **Passcode** every time an **Open Trigger** opens it.
+_Avoid_: password protection, login
+
+**Passcode**:
+The numeric code of a **Panel Lock**, entered on an on-screen keypad. It belongs to one **Runtime Panel** and is set when the app is built; it is never an **Entry** and never in the **Save File**.
+_Avoid_: password, PIN
+
+**Lock Screen**:
+The full-screen keypad a **Panel Lock** shows before its **Runtime Panel** opens. It checks the **Passcode** as soon as enough digits are entered; a wrong one is cleared for another try, and Cancel or the hotkey leaves the **Runtime Panel** closed.
+_Avoid_: password dialog, login screen
+
 **Command**:
 A named action an operator runs from the **Runtime Panel**, with a **Title** and an optional **Description**. It takes no input; a **Command** that needs input reads it from **Entries**. It is code, not data: it is never saved and has no **Entry Definition**.
 _Avoid_: action, button, function
@@ -99,6 +119,9 @@ The .NET composite format string on a **Link** (e.g. `Speed: {0:0.0}`) that turn
 - **Audiences** decide only where an **Entry** is shown. An **Entry** a **Runtime Panel** does not show still exists in that app: code can read and set it, and **Bindings** still follow it.
 - Apps built from one **Config** share **Entry Definitions**, not **Values**: each app has its own **Save File**, so the same **Entry** can hold a different **Value** in each app.
 - A **Reset** from a **Runtime Panel** covers only the **Exposed Entries** that **Runtime Panel** shows, and only after the operator confirms; **Overrides** of every other **Entry** and of _ad-hoc keys_ survive it.
+- A **Panel Lock** guards only the **Open Triggers**; code that opens a **Runtime Panel** directly is not asked for the **Passcode**. A wrong **Passcode** can be retried without limit. A **Runtime Panel** with a **Panel Lock** but no **Lock Screen** refuses to open from its **Open Triggers**.
+- While its **Lock Screen** is up, a **Runtime Panel** counts as open to the rest of the app, as it does once unlocked.
+- A **Runtime Panel** with a **Panel Lock** and one without can serve different **Audiences** in the same app (e.g. a locked Admin panel beside an open Technician panel).
 - A **Command** names zero or more **Audiences** and is shown by the same rule as an **Exposed Entry**. Unlike an **Entry**, it names them by name, so renaming an **Audience** drops it from **Commands** that named the old name.
 - A **Command** may require confirmation; the operator then confirms before it runs.
 - Each owner registers its own **Commands**, so two owners of the same kind give two **Registered Commands** with the same **Title**; the **Runtime Panel** tells them apart by owner.
