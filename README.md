@@ -76,7 +76,7 @@ All members are synchronous and must be called from the main thread.
 | Member | Description |
 |---|---|
 | `DSM.Store` | The active `DSMStore`, created lazily from `Resources/DSMConfig.asset` on first access. |
-| `DSM.Configure(DSMConfig config)` | Saves and disposes the current store (if dirty), then creates and loads a new store for `config`. |
+| `DSM.Configure(DSMConfig config)` | Saves and disposes the current store (if dirty), then creates and loads a new store for `config`. Runtime Panels already created are destroyed and created again from `config`. |
 | `DSM.Get<T>(string key)` | Returns the Value for `key`, or `default(T)` if there is neither an Override nor a usable Default. |
 | `DSM.Get<T>(string key, T fallback)` | Returns the Value for `key`, or `fallback` if there is neither an Override nor a usable Default. |
 | `DSM.Set<T>(string key, T value)` | Sets an Override for `key`. Triggers the AutoSave debounce if AutoSave is enabled. |
@@ -179,8 +179,8 @@ The Color widget takes a hex code (`#RGB`, `#RRGGBB`, or `#RRGGBBAA`; the leadin
 A Runtime Panel is created after the first scene loads and lives until the app quits, across scene
 loads. It brings its own Canvas (**Sort Order**, default 1000) and adds an `EventSystem` to any scene
 that has none. Several Panel Definitions give several panels, e.g. an open Technician panel on `F1`
-beside a locked Admin panel on a Corner Tap; two that share an Open Trigger both open on it (the
-Manager warns). **Enabled** off keeps a Panel Definition, Passcode included, without creating its panel.
+beside a locked Admin panel on a Corner Tap; two that share an Open Trigger both open on it, but only one Lock Screen shows at a time: of
+the locked ones, only the first in the Manager's list opens (the Manager warns). **Enabled** off keeps a Panel Definition, Passcode included, without creating its panel.
 **Prefab** picks the panel prefab (default `Prefab/DSMRuntimePanel.prefab`). See
 [ADR 0005](docs/adr/0005-runtime-panels-from-panel-definitions.md).
 

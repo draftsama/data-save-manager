@@ -106,13 +106,21 @@ namespace DataSaveManager.Editor
                 EditorGUILayout.Space(4);
                 EditorGUILayout.LabelField("Open Triggers", EditorStyles.boldLabel);
                 EditorGUILayout.PropertyField(definition.FindPropertyRelative("_hotkeyEnabled"), new GUIContent("Hotkey Enabled"));
-                EditorGUILayout.PropertyField(definition.FindPropertyRelative("_toggleKey"), new GUIContent("Toggle Key"));
+                var toggleKeyProp = definition.FindPropertyRelative("_toggleKey");
+                EditorGUILayout.PropertyField(toggleKeyProp, new GUIContent("Toggle Key"));
+#if ENABLE_INPUT_SYSTEM
+                if (!DSMKeyMap.TryGetKey((KeyCode)toggleKeyProp.intValue, out _))
+                    EditorGUILayout.HelpBox("Not a keyboard key: the hotkey does nothing with the Input System.", MessageType.Error);
+#endif
                 EditorGUILayout.PropertyField(definition.FindPropertyRelative("_cornerTap"), new GUIContent("Corner Tap"), true);
                 if (index < config.Panels.Count)
                 {
-                    var conflicts = TriggerConflicts(config, index);
+                    var conflicts = TriggerConflicts(config, index, false);
                     if (conflicts.Count > 0)
                         EditorGUILayout.HelpBox($"Shares an Open Trigger with {string.Join(", ", conflicts)}: one use opens both panels.", MessageType.Warning);
+                    var lockedConflicts = TriggerConflicts(config, index, true);
+                    if (lockedConflicts.Count > 0)
+                        EditorGUILayout.HelpBox($"Has a Panel Lock and shares an Open Trigger with {string.Join(", ", lockedConflicts)}, which also has one: only one Lock Screen shows at a time, so that use opens only the first of them in this list.", MessageType.Warning);
                 }
 
                 EditorGUILayout.Space(4);
@@ -145,16 +153,16 @@ namespace DataSaveManager.Editor
             return so.FindProperty("_lockScreen")?.objectReferenceValue != null;
         }
 
-        private static List<string> TriggerConflicts(DSMConfig config, int index)
+        private static List<string> TriggerConflicts(DSMConfig config, int index, bool lockedOnly)
         {
             var conflicts = new List<string>();
             var self = config.Panels[index];
-            if (!self.Enabled) return conflicts;
+            if (!self.Enabled || (lockedOnly && !self.Passcode.IsSet)) return conflicts;
             for (var i = 0; i < config.Panels.Count; i++)
             {
                 if (i == index) continue;
                 var other = config.Panels[i];
-                if (!other.Enabled) continue;
+                if (!other.Enabled || (lockedOnly && !other.Passcode.IsSet)) continue;
                 var sameKey = self.HotkeyEnabled && other.HotkeyEnabled && self.ToggleKey == other.ToggleKey;
                 var sameCorner = self.CornerTap.Enabled && other.CornerTap.Enabled && self.CornerTap.Corner == other.CornerTap.Corner;
                 if (sameKey || sameCorner) conflicts.Add($"'{other.Name}'");

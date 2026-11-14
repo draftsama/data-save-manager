@@ -25,6 +25,15 @@ namespace DataSaveManager
         [SerializeField] private bool _startVisible;
         [SerializeField] private DSMPanelLayout _layout = new();
 
+        public DSMPanelDefinition() { }
+
+        internal DSMPanelDefinition(string name, DSMRuntimePanel prefab)
+        {
+            _name = name;
+            _prefab = prefab;
+            _hotkeyEnabled = false;
+        }
+
         public string Name => _name;
         public bool Enabled => _enabled;
         public DSMRuntimePanel? Prefab => _prefab;
