@@ -1,28 +1,19 @@
 #nullable enable
 
-using System.Globalization;
-using TMPro;
-using UnityEngine;
+using UnityEngine.UIElements;
 
 namespace OperatorConsole
 {
-    public sealed class FloatWidget : OCWidget<float>
+    internal sealed class FloatWidget : OCWidget<float>
     {
-        [SerializeField] private TMP_InputField? _input;
+        private readonly FloatField _input = new() { isDelayed = true };
 
-        private void Awake()
+        public FloatWidget()
         {
-            if (_input != null) _input.onEndEdit.AddListener(OnEndEdit);
+            _input.RegisterValueChangedCallback(e => Commit(e.newValue));
+            Field.Add(Grow(_input));
         }
 
-        protected override void Show(float value) => _input?.SetTextWithoutNotify(value.ToString(CultureInfo.InvariantCulture));
-
-        private void OnEndEdit(string text)
-        {
-            if (float.TryParse(text, NumberStyles.Any, CultureInfo.InvariantCulture, out var value))
-                Commit(value);
-            else
-                Show(Store.Get(Key, 0f));
-        }
+        protected override void Show(float value) => _input.SetValueWithoutNotify(value);
     }
 }

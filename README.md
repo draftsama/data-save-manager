@@ -18,7 +18,8 @@ Dependencies (installed automatically, see `package.json`):
 - [UniTask](https://github.com/Cysharp/UniTask) — async/await and `IUniTaskAsyncEnumerable`
 - [Newtonsoft Json for Unity](https://docs.unity3d.com/Packages/com.unity.nuget.newtonsoft-json@3.0/manual/index.html) (`com.unity.nuget.newtonsoft-json`)
 
-The Runtime Panel needs TextMeshPro and uGUI (`com.unity.ugui`) in the project. The Input System
+The Runtime Panel is drawn with UI Toolkit (`com.unity.modules.uielements`). It still uses uGUI's
+`EventSystem` (`com.unity.ugui`) to receive input. The Input System
 package is optional — OC falls back to the legacy Input Manager, or to no hotkey at all, if it
 isn't installed.
 
@@ -177,13 +178,15 @@ The Color widget takes a hex code (`#RGB`, `#RRGGBB`, or `#RRGGBBAA`; the leadin
    Input Manager) to show/hide the panel. The footer has Save, Reset to Defaults, and Close buttons.
 
 A Runtime Panel is created after the first scene loads and lives until the app quits, across scene
-loads. It brings its own Canvas (**Sort Order**, default 1000) and adds an `EventSystem` to any scene
-that has none. Several Panel Definitions give several panels, e.g. an open Technician panel on `F1`
+loads. It brings its own UI Toolkit panel (**Sort Order**, default 1000, drawn over the app's
+Screen Space Overlay canvases in this project), scales from a 1920×1080 reference like a
+`CanvasScaler`, and adds an `EventSystem` to any scene that has none. Several Panel Definitions give several panels, e.g. an open Technician panel on `F1`
 beside a locked Admin panel on a Corner Tap; two that share an Open Trigger both open on it, but only one Lock Screen shows at a time: of
 the locked ones, only the first in the Manager's list opens (the Manager warns). **Enabled** off keeps a Panel Definition, Passcode included, without creating its panel.
 The panel's UI is built in code when the panel is created, so there is no prefab to assign or
-rebuild. See [ADR 0005](docs/adr/0005-runtime-panels-from-panel-definitions.md) and
-[ADR 0007](docs/adr/0007-runtime-panel-ui-built-in-code.md).
+rebuild. Its look lives in `Runtime/Resources/OperatorConsole/OCRuntimePanel.uss`, loaded through the
+`OCRuntimeTheme.tss` theme next to it. See [ADR 0005](docs/adr/0005-runtime-panels-from-panel-definitions.md) and
+[ADR 0008](docs/adr/0008-runtime-panel-in-ui-toolkit.md).
 
 Code finds a panel by its Panel Definition's **Name**: `OC.Panels.Get("Admin")` (null and one
 warning when no panel has that name), `OC.Panels.TryGet`, `OC.Panels.All`, `OC.Panels.HideAll()`.
@@ -244,7 +247,8 @@ open panel immediately.
 - **Float Decimals** (0-6) — decimals shown by float sliders and used to round slider commits.
 - **Scrollbar Width**, **Scroll Sensitivity** — width of the vertical scrollbar and mouse-wheel speed.
   The scrollbar hides itself when all rows fit; the list scrolls with the wheel or by dragging.
-- **Header Font Size**, **Header Spacing** — font size of Entry headers and the extra space above each one.
+- **Header Font Size**, **Header Spacing** — size of Entry headers (shown in small capitals at 62% of it)
+  and the extra space above each one.
 - **Tab Height**, **Command Description Font Size**, **Command Button Width** — the Settings / Commands
   tabs, and the Description, error line and Run button of each Command row.
 - **Lock Key Size**, **Lock Key Spacing**, **Lock Key Font Size**, **Lock Dot Size**, **Lock Background
@@ -270,13 +274,16 @@ A Range is a presentation hint only and never clamps the Value: the slider handl
 position, while the input box shows the real Value and accepts anything typed. Int sliders step in whole
 numbers; float sliders round committed values to **Float Decimals**.
 
+Number, text and Color inputs commit on Enter or when they lose focus. Close blurs the focused input
+first, so an edit still being typed is kept.
+
 ### Widgets
 
 The panel builds one row per Exposed Entry from its built-in widgets: one per Data Type, plus Int and
-Float sliders for Entries with a valid Range and a dropdown for Entries with Options. They derive from
-`OCWidget<T>` (`Show(T value)` renders, `Commit(value)` writes) and implement `IOCLayoutAware` to follow
-the Layout settings. Since the UI is built in code, a project can no longer swap in its own widget
-prefab; restyle through **Layout**, or change `OCPanelFactory` in this package.
+Float sliders for Entries with a valid Range and a dropdown for Entries with Options. Bool shows as a
+switch. The widgets are internal UI Toolkit elements (`OCWidget<T>`: `Show(T value)` renders,
+`Commit(value)` writes), so a project can't swap in its own; restyle through **Layout**, or change the
+USS in this package.
 
 ### Commands
 

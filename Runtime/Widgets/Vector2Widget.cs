@@ -1,37 +1,31 @@
 #nullable enable
 
-using System.Globalization;
-using TMPro;
 using UnityEngine;
+using UnityEngine.UIElements;
 
 namespace OperatorConsole
 {
-    public sealed class Vector2Widget : OCWidget<Vector2>
+    internal sealed class Vector2Widget : OCWidget<Vector2>
     {
-        [SerializeField] private TMP_InputField? _xInput;
-        [SerializeField] private TMP_InputField? _yInput;
+        private readonly FloatField _x = new() { isDelayed = true };
+        private readonly FloatField _y = new() { isDelayed = true };
 
-        private void Awake()
+        public Vector2Widget()
         {
-            if (_xInput != null) _xInput.onEndEdit.AddListener(_ => Apply());
-            if (_yInput != null) _yInput.onEndEdit.AddListener(_ => Apply());
+            _x.RegisterValueChangedCallback(_ => Apply());
+            _y.RegisterValueChangedCallback(_ => Apply());
+            Field.Add(Axis("X"));
+            Field.Add(Grow(_x));
+            Field.Add(Axis("Y"));
+            Field.Add(Grow(_y));
         }
 
         protected override void Show(Vector2 value)
         {
-            _xInput?.SetTextWithoutNotify(value.x.ToString(CultureInfo.InvariantCulture));
-            _yInput?.SetTextWithoutNotify(value.y.ToString(CultureInfo.InvariantCulture));
+            _x.SetValueWithoutNotify(value.x);
+            _y.SetValueWithoutNotify(value.y);
         }
 
-        private void Apply()
-        {
-            var xOk = TryParse(_xInput, out var x);
-            var yOk = TryParse(_yInput, out var y);
-            if (xOk && yOk) Commit(new Vector2(x, y));
-            else Show(Store.Get(Key, Vector2.zero));
-        }
-
-        private static bool TryParse(TMP_InputField? input, out float value) =>
-            float.TryParse(input?.text, NumberStyles.Any, CultureInfo.InvariantCulture, out value);
+        private void Apply() => Commit(new Vector2(_x.value, _y.value));
     }
 }

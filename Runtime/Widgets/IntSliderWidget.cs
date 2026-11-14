@@ -1,53 +1,39 @@
 #nullable enable
 
-using System.Globalization;
-using TMPro;
 using UnityEngine;
-using UnityEngine.UI;
+using UnityEngine.UIElements;
 
 namespace OperatorConsole
 {
-    public sealed class IntSliderWidget : OCWidget<int>
+    internal sealed class IntSliderWidget : OCWidget<int>
     {
-        [SerializeField] private Slider? _slider;
-        [SerializeField] private TMP_InputField? _input;
+        private readonly SliderInt _slider = new();
+        private readonly IntegerField _input = new() { isDelayed = true };
 
-        private void Awake()
+        public IntSliderWidget()
         {
-            if (_input != null) _input.onEndEdit.AddListener(OnEndEdit);
+            _input.AddToClassList("ocp-slider-value");
+            _input.RegisterValueChangedCallback(e => Commit(e.newValue));
+            Field.Add(Grow(_slider));
+            Field.Add(_input);
         }
 
+        // Listened to only after the range is set: the range setters re-clamp the value with callbacks on.
         protected override void OnSetup(OCEntryDefinition entry)
         {
-            if (_slider == null) return;
-            _slider.wholeNumbers = true;
-            _slider.minValue = Mathf.Ceil(entry.RangeMin);
-            _slider.maxValue = Mathf.Floor(entry.RangeMax);
-            ListenToSlider();
+            _slider.UnregisterValueChangedCallback(OnSliderChanged);
+            _slider.lowValue = Mathf.CeilToInt(entry.RangeMin);
+            _slider.highValue = Mathf.FloorToInt(entry.RangeMax);
+            _slider.RegisterValueChangedCallback(OnSliderChanged);
         }
 
+        // The slider clamps its position to the Range; the input keeps the real Value.
         protected override void Show(int value)
         {
-            // The slider clamps its position to the Range; the input keeps the real Value.
-            if (_slider != null) _slider.SetValueWithoutNotify(value);
-            _input?.SetTextWithoutNotify(value.ToString(CultureInfo.InvariantCulture));
+            _slider.SetValueWithoutNotify(value);
+            _input.SetValueWithoutNotify(value);
         }
 
-        // Registered only after min/max are set: those setters re-clamp the value with the callback on.
-        private void ListenToSlider()
-        {
-            _slider!.onValueChanged.RemoveListener(OnSliderChanged);
-            _slider.onValueChanged.AddListener(OnSliderChanged);
-        }
-
-        private void OnSliderChanged(float value) => Commit(Mathf.RoundToInt(value));
-
-        private void OnEndEdit(string text)
-        {
-            if (int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value))
-                Commit(value);
-            else
-                Show(Store.Get(Key, 0));
-        }
+        private void OnSliderChanged(ChangeEvent<int> e) => Commit(e.newValue);
     }
 }

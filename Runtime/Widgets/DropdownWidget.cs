@@ -1,68 +1,59 @@
 #nullable enable
 
 using System.Collections.Generic;
-using TMPro;
-using UnityEngine;
+using UnityEngine.UIElements;
 
 namespace OperatorConsole
 {
-    public sealed class DropdownWidget : OCWidget<int>
+    internal sealed class DropdownWidget : OCWidget<int>
     {
-        [SerializeField] private TMP_Dropdown? _dropdown;
-
+        private readonly DropdownField _dropdown = new();
+        private readonly List<string> _choices = new();
         private readonly List<int> _values = new();
         private bool _hasUnknownItem;
 
-        private void Awake()
+        public DropdownWidget()
         {
-            if (_dropdown != null) _dropdown.onValueChanged.AddListener(OnSelected);
+            _dropdown.choices = _choices;
+            _dropdown.RegisterValueChangedCallback(_ => OnSelected(_dropdown.index));
+            Field.Add(Grow(_dropdown));
         }
 
         protected override void OnSetup(OCEntryDefinition entry)
         {
-            if (_dropdown == null) return;
-
             _values.Clear();
-            _dropdown.ClearOptions();
+            _choices.Clear();
             _hasUnknownItem = false;
-
             foreach (var option in entry.Options)
             {
                 _values.Add(option.Value);
-                _dropdown.options.Add(new TMP_Dropdown.OptionData(option.Label));
+                _choices.Add(option.Label);
             }
         }
 
         protected override void Show(int value)
         {
-            if (_dropdown == null) return;
-
             var index = _values.IndexOf(value);
             if (index >= 0)
             {
                 if (_hasUnknownItem)
                 {
-                    _dropdown.options.RemoveAt(_dropdown.options.Count - 1);
+                    _choices.RemoveAt(_choices.Count - 1);
                     _hasUnknownItem = false;
                 }
-                _dropdown.SetValueWithoutNotify(index);
-                _dropdown.RefreshShownValue();
+                _dropdown.SetValueWithoutNotify(_choices[index]);
                 return;
             }
 
-            // A Value matching no Option is kept as-is; the dropdown shows it as an extra, unselectable-by-intent item.
+            // A Value matching no Option is kept as-is; the dropdown shows it as an extra item.
             var text = $"{value} (?)";
-            if (_hasUnknownItem)
-            {
-                _dropdown.options[_dropdown.options.Count - 1].text = text;
-            }
+            if (_hasUnknownItem) _choices[_choices.Count - 1] = text;
             else
             {
-                _dropdown.options.Add(new TMP_Dropdown.OptionData(text));
+                _choices.Add(text);
                 _hasUnknownItem = true;
             }
-            _dropdown.SetValueWithoutNotify(_values.Count);
-            _dropdown.RefreshShownValue();
+            _dropdown.SetValueWithoutNotify(text);
         }
 
         private void OnSelected(int index)

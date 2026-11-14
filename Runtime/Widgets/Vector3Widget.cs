@@ -1,41 +1,36 @@
 #nullable enable
 
-using System.Globalization;
-using TMPro;
 using UnityEngine;
+using UnityEngine.UIElements;
 
 namespace OperatorConsole
 {
-    public sealed class Vector3Widget : OCWidget<Vector3>
+    internal sealed class Vector3Widget : OCWidget<Vector3>
     {
-        [SerializeField] private TMP_InputField? _xInput;
-        [SerializeField] private TMP_InputField? _yInput;
-        [SerializeField] private TMP_InputField? _zInput;
+        private readonly FloatField _x = new() { isDelayed = true };
+        private readonly FloatField _y = new() { isDelayed = true };
+        private readonly FloatField _z = new() { isDelayed = true };
 
-        private void Awake()
+        public Vector3Widget()
         {
-            if (_xInput != null) _xInput.onEndEdit.AddListener(_ => Apply());
-            if (_yInput != null) _yInput.onEndEdit.AddListener(_ => Apply());
-            if (_zInput != null) _zInput.onEndEdit.AddListener(_ => Apply());
+            _x.RegisterValueChangedCallback(_ => Apply());
+            _y.RegisterValueChangedCallback(_ => Apply());
+            _z.RegisterValueChangedCallback(_ => Apply());
+            Field.Add(Axis("X"));
+            Field.Add(Grow(_x));
+            Field.Add(Axis("Y"));
+            Field.Add(Grow(_y));
+            Field.Add(Axis("Z"));
+            Field.Add(Grow(_z));
         }
 
         protected override void Show(Vector3 value)
         {
-            _xInput?.SetTextWithoutNotify(value.x.ToString(CultureInfo.InvariantCulture));
-            _yInput?.SetTextWithoutNotify(value.y.ToString(CultureInfo.InvariantCulture));
-            _zInput?.SetTextWithoutNotify(value.z.ToString(CultureInfo.InvariantCulture));
+            _x.SetValueWithoutNotify(value.x);
+            _y.SetValueWithoutNotify(value.y);
+            _z.SetValueWithoutNotify(value.z);
         }
 
-        private void Apply()
-        {
-            var xOk = TryParse(_xInput, out var x);
-            var yOk = TryParse(_yInput, out var y);
-            var zOk = TryParse(_zInput, out var z);
-            if (xOk && yOk && zOk) Commit(new Vector3(x, y, z));
-            else Show(Store.Get(Key, Vector3.zero));
-        }
-
-        private static bool TryParse(TMP_InputField? input, out float value) =>
-            float.TryParse(input?.text, NumberStyles.Any, CultureInfo.InvariantCulture, out value);
+        private void Apply() => Commit(new Vector3(_x.value, _y.value, _z.value));
     }
 }
