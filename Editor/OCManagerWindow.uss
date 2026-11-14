@@ -187,14 +187,8 @@
 .oc-col-key { overflow: hidden; }
 .oc-entry__key-block .oc-grow { min-width: 0; flex-shrink: 1; overflow: hidden; }
 .oc-entry__key-block Label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.oc-exposed-mark {
-    width: 16px;
-    height: 16px;
-    margin-right: 6px;
-    flex-shrink: 0;
-    -unity-background-scale-mode: scale-to-fit;
-    -unity-background-image-tint-color: var(--oc-live);
-}
+.oc-exposed-mark { width: 8px; height: 8px; border-radius: 4px; margin: 0 8px 0 2px; flex-shrink: 0; }
+.oc-exposed-mark--on { background-color: var(--oc-live); }
 
 .oc-chip {
     align-self: flex-start;

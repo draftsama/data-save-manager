@@ -99,8 +99,7 @@ namespace OperatorConsole.Editor
             if (Prop("_exposed").boolValue)
             {
                 exposedMark.tooltip = "Exposed: shown in the Runtime Panel.";
-                var icon = EditorGUIUtility.IconContent(EditorGUIUtility.isProSkin ? "d_scenevis_visible_hover" : "scenevis_visible_hover").image;
-                exposedMark.style.backgroundImage = new StyleBackground((UnityEngine.Texture2D)icon);
+                exposedMark.AddToClassList("oc-exposed-mark--on");
             }
             texts.Add(_key);
             texts.Add(_sub);
