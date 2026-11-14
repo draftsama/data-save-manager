@@ -1,6 +1,6 @@
 {
   "name": "com.draftsama.operatorconsole",
-  "version": "5.0.0",
+  "version": "5.1.0",
   "displayName": "Operator Console",
   "description": "On-site operator tools for an installed Unity app: Entries with typed defaults in a Config asset, a single hand-editable JSON save file holding only overrides, live change watching via UniTask, an Editor window, and in-game Runtime Panels with operator Commands.",
   "unity": "6000.0",

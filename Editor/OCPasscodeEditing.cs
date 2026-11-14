@@ -1,53 +1,71 @@
 #nullable enable
 
 using UnityEditor;
-using UnityEngine;
+using UnityEngine.UIElements;
 
 namespace OperatorConsole.Editor
 {
     /// <summary>Sets, changes and removes a Panel Lock's Passcode, writing only its salted hash.</summary>
     internal static class OCPasscodeEditing
     {
-        private static readonly GUIContent NewPasscodeLabel = new("New Passcode", "4–8 digits. Only a salted hash is stored; the digits cannot be read back.");
-
-        public static void Draw(SerializedProperty passcode, ref string newPasscode)
+        public static VisualElement Create(SerializedProperty passcode)
         {
             var length = passcode.FindPropertyRelative("_length");
             var salt = passcode.FindPropertyRelative("_salt");
             var hash = passcode.FindPropertyRelative("_hash");
-            var isSet = length.intValue > 0 && !string.IsNullOrEmpty(hash.stringValue);
 
-            EditorGUILayout.LabelField("Passcode", isSet ? $"Set ({length.intValue} digits)" : "None — Open Triggers open the panel directly");
+            var root = new VisualElement();
+            var status = new Label();
+            status.AddToClassList("oc-muted");
+            root.Add(status);
 
-            newPasscode = EditorGUILayout.TextField(NewPasscodeLabel, newPasscode);
-            using (new EditorGUILayout.HorizontalScope())
+            var row = new VisualElement();
+            row.AddToClassList("oc-row");
+            var input = new TextField("New Passcode") { maxLength = OCPasscode.MaxLength, tooltip = "4–8 digits. Only a salted hash is stored; the digits cannot be read back." };
+            input.AddToClassList("oc-grow");
+            var set = new Button();
+            var remove = new Button { text = "Remove" };
+            row.Add(input);
+            row.Add(set);
+            row.Add(remove);
+            root.Add(row);
+
+            var hint = new Label($"A Passcode is {OCPasscode.MinLength}–{OCPasscode.MaxLength} digits.");
+            hint.AddToClassList("oc-error-text");
+            root.Add(hint);
+
+            void Refresh()
             {
-                GUILayout.FlexibleSpace();
-                using (new EditorGUI.DisabledScope(!OCPasscode.IsValid(newPasscode)))
-                {
-                    if (GUILayout.Button(isSet ? "Change Passcode" : "Set Passcode", GUILayout.Width(140f)))
-                    {
-                        var newSalt = OCPasscode.NewSalt();
-                        salt.stringValue = newSalt;
-                        hash.stringValue = OCPasscode.Hash(newPasscode, newSalt);
-                        length.intValue = newPasscode.Length;
-                        newPasscode = string.Empty;
-                        GUI.FocusControl(null);
-                    }
-                }
-                using (new EditorGUI.DisabledScope(!isSet))
-                {
-                    if (GUILayout.Button("Remove", GUILayout.Width(80f)))
-                    {
-                        salt.stringValue = string.Empty;
-                        hash.stringValue = string.Empty;
-                        length.intValue = 0;
-                    }
-                }
+                var isSet = length.intValue > 0 && !string.IsNullOrEmpty(hash.stringValue);
+                status.text = isSet ? $"Passcode set ({length.intValue} digits)" : "No Passcode: Open Triggers open the panel directly";
+                set.text = isSet ? "Change Passcode" : "Set Passcode";
+                set.SetEnabled(OCPasscode.IsValid(input.value));
+                remove.SetEnabled(isSet);
+                hint.style.display = input.value.Length > 0 && !OCPasscode.IsValid(input.value) ? DisplayStyle.Flex : DisplayStyle.None;
             }
 
-            if (newPasscode.Length > 0 && !OCPasscode.IsValid(newPasscode))
-                EditorGUILayout.HelpBox($"A Passcode is {OCPasscode.MinLength}–{OCPasscode.MaxLength} digits.", MessageType.None);
+            input.RegisterValueChangedCallback(_ => Refresh());
+            set.clicked += () =>
+            {
+                var newSalt = OCPasscode.NewSalt();
+                salt.stringValue = newSalt;
+                hash.stringValue = OCPasscode.Hash(input.value, newSalt);
+                length.intValue = input.value.Length;
+                passcode.serializedObject.ApplyModifiedProperties();
+                input.SetValueWithoutNotify(string.Empty);
+                Refresh();
+            };
+            remove.clicked += () =>
+            {
+                salt.stringValue = string.Empty;
+                hash.stringValue = string.Empty;
+                length.intValue = 0;
+                passcode.serializedObject.ApplyModifiedProperties();
+                Refresh();
+            };
+
+            Refresh();
+            return root;
         }
     }
 }

@@ -2,1000 +2,315 @@
 
 using System;
 using System.Collections.Generic;
-using System.Globalization;
-using System.IO;
-using System.Linq;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using UnityEditor;
-using UnityEditorInternal;
+using UnityEditor.UIElements;
 using UnityEngine;
+using UnityEngine.UIElements;
 
 namespace OperatorConsole.Editor
 {
     /// <summary>Edits an OCConfig's entry definitions and, through <see cref="OC"/>, the live store's values.</summary>
     internal sealed class OCManagerWindow : EditorWindow
     {
-        private static readonly Color DuplicateKeyColor = new(0.65f, 0.28f, 0.28f);
-        private static readonly Color DuplicateLabelColor = new(0.75f, 0.6f, 0.2f);
-
-        // Option add/remove/move change the card height, so they run after the list has finished drawing.
-        private static Action? _deferred;
-
-        private const float TypeWidth = 90f;
-        private const float PrefixWidth = 58f;
-        private const float ToggleWidth = 18f;
-        private const float OverrideMarkWidth = 14f;
-        private const float ResetWidth = 50f;
-        private const float RemoveWidth = 24f;
-        private const float CardPadding = 4f;
-        private const float FieldSpacing = 4f;
-        private const float InlineLabelWidth = 40f;
-
-        private static readonly GUIContent KeyHeader = new("Key", "Identifier used in code: OC.Get<T>(key).");
-        private static readonly GUIContent TypeHeader = new("Type");
-        private static readonly GUIContent LabelHeader = new("Label", "Display name in the Runtime Panel. Falls back to the key when empty.");
-        private static readonly GUIContent ExposedHeader = new("Exposed", "Exposed: shown in the Runtime Panel.");
-        private static readonly GUIContent DefaultHeader = new("Default", "Value used when there is no Override. Stored in the Config.");
-        private static readonly GUIContent RangeHeader = new("Range", "Show this Entry as a slider in the Runtime Panel. A presentation hint only: the Value is never clamped.");
-        private static readonly GUIContent RangeMinHeader = new("Min");
-        private static readonly GUIContent RangeMaxHeader = new("Max");
-        private static readonly GUIContent OptionsHeader = new("Options", "Show this Int Entry as a dropdown in the Runtime Panel. Each Option stores its own int. A presentation hint only: the Value is never clamped.");
-        private static readonly GUIContent HeaderHeader = new("Header", "Show a title above this Entry in the Runtime Panel.");
-        private static readonly GUIContent AudiencesHeader = new("Audience", "Runtime Panels serving any of these Audiences show this Entry. None selected: every Runtime Panel shows it.");
-        private static readonly GUIContent ViewAsLabel = new("View as", "Grey out the Entries a Runtime Panel serving this Audience would not show.");
-        private const float DimmedAlpha = 0.4f;
-        private static readonly GUIContent ValueHeader = new("Value", "Current value. \u25cf marks an Override stored in the Save File.");
-        private static readonly GUIContent OverrideMark = new("\u25cf", "Overridden: this value is stored in the Save File. Reset returns it to the Default.");
-
-        private OCConfig? _config;
-        private SerializedObject? _configSo;
-        private ReorderableList? _entriesList;
-        private string _search = string.Empty;
+        private const long RefreshIntervalMs = 150;
         private enum Tab { Entries, Panels, Commands, Settings }
 
         [SerializeField] private Tab _tab;
-        private readonly Vector2[] _tabScrolls = new Vector2[4];
-        private string _newKey = string.Empty;
-        private OCDataType _newType = OCDataType.String;
-        private string[] _audienceNames = Array.Empty<string>();
-        private int _viewAsIndex = -1;
-        private Action? _pendingAudienceEdit;
-        private readonly OCPanelsSection _panelsSection = new();
-        private OCRegisteredCommand? _pendingCommandRun;
-        private GUIStyle? _commandErrorStyle;
-        private static readonly GUIContent CommandsHeader = new("Commands", "Registered Commands, listed while in Play mode. Run them here without opening the Runtime Panel.");
+
+        private OCConfig? _config;
+        private SerializedObject? _configSo;
+        private OCManagerContext? _context;
+        private readonly Dictionary<Tab, Button> _navButtons = new();
+        private readonly Dictionary<Tab, Label> _navCounts = new();
+        private VisualElement? _content;
+        private VisualElement? _filterBar;
+        private ToolbarSearchField? _search;
+        private PopupField<string>? _viewAs;
+        private HelpBox? _storeMismatch;
+        private Label? _modeLabel;
+        private VisualElement? _modeDot;
+        private OCEntriesTab? _entriesTab;
+        private OCPanelsSection? _panelsTab;
+        private OCCommandsTab? _commandsTab;
+        private OCSettingsTab? _settingsTab;
+        private string _shownAudiences = string.Empty;
 
         [MenuItem("Draft/Operator Console/Open Manager")]
         internal static void Open()
         {
             var window = GetWindow<OCManagerWindow>("Operator Console");
-            window.minSize = new Vector2(640, 480);
+            window.minSize = new Vector2(720, 480);
             window.Show();
         }
 
-        private void OnEnable()
+        private void OnEnable() => Undo.undoRedoPerformed += OnUndoRedo;
+
+        private void OnDisable() => Undo.undoRedoPerformed -= OnUndoRedo;
+
+        private void OnUndoRedo() => Rebuild();
+
+        private void CreateGUI()
         {
-            EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
-            Reload(fromDisk: false);
+            var root = rootVisualElement;
+            var sheet = LoadStyleSheet();
+            if (sheet != null) root.styleSheets.Add(sheet);
+            root.AddToClassList("oc-root");
+            root.AddToClassList(EditorGUIUtility.isProSkin ? "oc-dark" : "oc-light");
+            Load(fromDisk: false);
+            root.schedule.Execute(Tick).Every(RefreshIntervalMs);
         }
 
-        private void OnDisable() => EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
-
-        private void OnPlayModeStateChanged(PlayModeStateChange _) => Repaint();
-
-        // Values live on OC.Store, which changes outside this window's own GUI events (Play mode, other code) —
-        // the default ~10 Hz OnInspectorUpdate tick keeps the window in sync without a bespoke poller.
-        private void OnInspectorUpdate() => Repaint();
-
         // Opening the window must not discard unsaved in-memory values (e.g. mid Play mode); only the
-        // explicit Reload button re-reads the Save File.
-        private void Reload(bool fromDisk)
+        // Reload button re-reads the Save File.
+        private void Load(bool fromDisk)
         {
             _config = Resources.Load<OCConfig>("DSMConfig");
             _configSo = _config != null ? new SerializedObject(_config) : null;
-            _entriesList = null; // Rebuilt lazily against the fresh SerializedObject in DrawEntries.
             if (_config != null && fromDisk) OC.Load();
+            Rebuild();
         }
 
-        private void OnGUI()
+        private void Rebuild()
         {
-            if (_config != null) _audienceNames = OCAudienceEditing.Names(_config);
-            if (_viewAsIndex >= _audienceNames.Length) _viewAsIndex = -1;
+            var root = rootVisualElement;
+            root.Clear();
+            _navButtons.Clear();
+            _navCounts.Clear();
+            _entriesTab = null;
+            _panelsTab = null;
+            _commandsTab = null;
+            _settingsTab = null;
 
-            DrawToolbar();
+            root.Add(BuildToolbar());
 
             if (_config == null || _configSo == null)
             {
-                DrawNoConfig();
+                _context = null;
+                root.Add(BuildNoConfig());
                 return;
             }
 
             _configSo.Update();
+            _context = new OCManagerContext(_config, _configSo) { AudienceNames = OCAudienceEditing.Names(_config) };
+            _shownAudiences = string.Join("\n", _context.AudienceNames);
 
-            var duplicates = OCEntryRules.DuplicateKeys(_config);
-            var valuesEditable = OC.Store.Config == _config;
+            var body = new VisualElement();
+            body.AddToClassList("oc-body");
+            body.Add(BuildNav());
 
-            using (new EditorGUI.DisabledScope(true))
-                EditorGUILayout.ObjectField("Config", _config, typeof(OCConfig), false);
+            var main = new VisualElement();
+            main.AddToClassList("oc-main");
+            _filterBar = BuildFilterBar();
+            main.Add(_filterBar);
+            _storeMismatch = new HelpBox(
+                "OC.Store is configured with a different OCConfig asset. This window only edits the Resources config's values, so the Value column is disabled.",
+                HelpBoxMessageType.Warning);
+            _storeMismatch.AddToClassList("oc-banner");
+            main.Add(_storeMismatch);
+            _content = new VisualElement();
+            _content.AddToClassList("oc-content");
+            main.Add(_content);
+            body.Add(main);
+            root.Add(body);
 
-            if (!valuesEditable)
-                EditorGUILayout.HelpBox(
-                    "OC.Store is configured with a different OCConfig asset. This window only edits the Resources config's values, so the Value column is disabled.",
-                    MessageType.Warning);
-
-            DrawTabBar(duplicates.Count > 0);
-
-            var panelsChanged = false;
-            using (var scroll = new EditorGUILayout.ScrollViewScope(_tabScrolls[(int)_tab]))
-            {
-                _tabScrolls[(int)_tab] = scroll.scrollPosition;
-                switch (_tab)
-                {
-                    case Tab.Entries:
-                        if (duplicates.Count > 0)
-                            EditorGUILayout.HelpBox($"Duplicate keys: {string.Join(", ", duplicates)}", MessageType.Error);
-                        DrawEntries(duplicates, valuesEditable);
-                        EditorGUILayout.Space();
-                        DrawAddEntry();
-                        EditorGUILayout.Space();
-                        DrawFooter();
-                        break;
-                    case Tab.Panels:
-                        panelsChanged = _panelsSection.Draw(_configSo, _config, _audienceNames);
-                        break;
-                    case Tab.Commands:
-                        DrawCommands(_config);
-                        break;
-                    case Tab.Settings:
-                        DrawSettings();
-                        break;
-                }
-            }
-
-            if (_pendingCommandRun != null)
-            {
-                var command = _pendingCommandRun;
-                _pendingCommandRun = null;
-                RunCommand(command);
-            }
-
-            if (_pendingAudienceEdit != null)
-            {
-                var edit = _pendingAudienceEdit;
-                _pendingAudienceEdit = null;
-                edit();
-                Repaint();
-            }
-
-            if (_panelsSection.RunDeferred())
-            {
-                panelsChanged = true;
-                Repaint();
-            }
-
-            _configSo.ApplyModifiedProperties();
-
-            // A Runtime Panel holds its Panel Definition from the Config, so most edits reach it at once; the layout needs applying again.
-            if (panelsChanged && EditorApplication.isPlaying)
-                foreach (var panel in OC.Panels.All)
-                    if (panel != null) panel.ApplySettings();
+            ShowTab(_tab);
         }
 
-        private void DrawTabBar(bool hasDuplicateKeys)
+        private VisualElement BuildToolbar()
         {
-            var commandCount = EditorApplication.isPlaying ? OC.Commands.Commands.Count : 0;
-            var labels = new[]
+            var bar = new VisualElement();
+            bar.AddToClassList("oc-toolbar");
+
+            var title = new Label("Operator Console");
+            title.AddToClassList("oc-toolbar__title");
+            bar.Add(title);
+
+            if (_config != null)
             {
-                new GUIContent(hasDuplicateKeys ? "Entries ⚠" : "Entries", hasDuplicateKeys ? "Some Entries share a Key." : null),
-                OCPanelsSection.TabLabel,
-                new GUIContent(commandCount > 0 ? $"Commands ({commandCount})" : "Commands", CommandsHeader.tooltip),
-                new GUIContent("Settings", "Save File location and behaviour, and the Config's Audiences.")
+                var config = _config;
+                var pill = new Button(() =>
+                {
+                    EditorGUIUtility.PingObject(config);
+                    Selection.activeObject = config;
+                }) { text = config.name, tooltip = "Select the Config asset" };
+                pill.AddToClassList("oc-pill");
+                bar.Add(pill);
+            }
+
+            var spacer = new VisualElement();
+            spacer.AddToClassList("oc-grow");
+            bar.Add(spacer);
+
+            var mode = new VisualElement();
+            mode.AddToClassList("oc-row");
+            mode.AddToClassList("oc-mode");
+            _modeDot = new VisualElement();
+            _modeDot.AddToClassList("oc-mode__dot");
+            _modeLabel = new Label();
+            mode.Add(_modeDot);
+            mode.Add(_modeLabel);
+            bar.Add(mode);
+
+            var reload = new Button(() => Load(fromDisk: true)) { text = "Reload", tooltip = "Re-read the Config and the Save File." };
+            bar.Add(reload);
+            UpdateMode();
+            return bar;
+        }
+
+        private VisualElement BuildNav()
+        {
+            var nav = new VisualElement();
+            nav.AddToClassList("oc-nav");
+            AddNavItem(nav, Tab.Entries, "Entries", "The Config's Entry Definitions and their current values.");
+            AddNavItem(nav, Tab.Panels, "Runtime Panels", "Each enabled Panel Definition becomes one Runtime Panel when the app starts.");
+            AddNavItem(nav, Tab.Commands, "Commands", "Registered Commands, listed while in Play mode. Run them here without opening the Runtime Panel.");
+            AddNavItem(nav, Tab.Settings, "Settings", "Save File location and behaviour, and the Config's Audiences.");
+            return nav;
+        }
+
+        private void AddNavItem(VisualElement nav, Tab tab, string text, string tooltip)
+        {
+            var button = new Button(() => ShowTab(tab)) { tooltip = tooltip };
+            button.AddToClassList("oc-nav__item");
+            var label = new Label(text);
+            label.AddToClassList("oc-grow");
+            var count = new Label();
+            count.AddToClassList("oc-nav__count");
+            button.Add(label);
+            button.Add(count);
+            nav.Add(button);
+            _navButtons[tab] = button;
+            _navCounts[tab] = count;
+        }
+
+        private VisualElement BuildFilterBar()
+        {
+            var bar = new VisualElement();
+            bar.AddToClassList("oc-filter-bar");
+
+            _search = new ToolbarSearchField { tooltip = "Search Entries by key or label" };
+            _search.AddToClassList("oc-search");
+            _search.SetValueWithoutNotify(_context!.Search);
+            _search.RegisterValueChangedCallback(e =>
+            {
+                _context!.Search = e.newValue;
+                _entriesTab?.Rebuild();
+            });
+            bar.Add(_search);
+
+            var choices = new List<string> { "All audiences" };
+            choices.AddRange(_context.AudienceNames);
+            if (_context.ViewAsIndex >= _context.AudienceNames.Length) _context.ViewAsIndex = -1;
+            _viewAs = new PopupField<string>("View as", choices, _context.ViewAsIndex + 1)
+            {
+                tooltip = "Grey out the Entries and Commands a Runtime Panel serving this Audience would not show."
             };
-
-            EditorGUILayout.Space(2);
-            _tab = (Tab)GUILayout.Toolbar((int)_tab, labels, GUILayout.Height(24));
-            EditorGUILayout.Space(2);
+            _viewAs.AddToClassList("oc-view-as");
+            _viewAs.RegisterValueChangedCallback(_ => _context!.ViewAsIndex = _viewAs.index - 1);
+            _viewAs.style.display = _context.AudienceNames.Length > 0 ? DisplayStyle.Flex : DisplayStyle.None;
+            bar.Add(_viewAs);
+            return bar;
         }
 
-        private void DrawToolbar()
+        private VisualElement BuildNoConfig()
         {
-            using (new EditorGUILayout.HorizontalScope(EditorStyles.toolbar))
-            {
-                if (GUILayout.Button("Reload", EditorStyles.toolbarButton, GUILayout.Width(60)))
-                    Reload(fromDisk: true);
-
-                GUILayout.FlexibleSpace();
-
-                var hasConfig = _config != null;
-                if (hasConfig && _audienceNames.Length > 0 && _tab is Tab.Entries or Tab.Commands)
-                {
-                    GUILayout.Label(ViewAsLabel, EditorStyles.miniLabel);
-                    var choices = new string[_audienceNames.Length + 1];
-                    choices[0] = "All";
-                    Array.Copy(_audienceNames, 0, choices, 1, _audienceNames.Length);
-                    _viewAsIndex = EditorGUILayout.Popup(_viewAsIndex + 1, choices, EditorStyles.toolbarPopup, GUILayout.Width(110)) - 1;
-                }
-
-                if (hasConfig && _tab == Tab.Entries)
-                    _search = EditorGUILayout.TextField(_search, EditorStyles.toolbarSearchField, GUILayout.Width(180));
-            }
-        }
-
-        private void DrawCommands(OCConfig config)
-        {
-            if (!EditorApplication.isPlaying)
-            {
-                EditorGUILayout.HelpBox("Commands register while the app runs. Enter Play mode to see and run them.", MessageType.None);
-                return;
-            }
-
-            var registry = OC.Commands;
-            if (registry.Commands.Count == 0)
-            {
-                EditorGUILayout.HelpBox("No Commands are registered. An owner calls OC.Commands.Register(this) in OnEnable.", MessageType.None);
-                return;
-            }
-
-            _commandErrorStyle ??= new GUIStyle(EditorStyles.wordWrappedMiniLabel) { normal = { textColor = new Color(0.89f, 0.34f, 0.30f) } };
-            var viewAsIds = _viewAsIndex >= 0 ? new[] { config.Audiences[_viewAsIndex].Id } : null;
-
-            foreach (var command in registry.Commands)
-            {
-                var dimmed = viewAsIds != null && !OCAudienceFilter.Shows(command, viewAsIds, config);
-                var previousColor = GUI.color;
-                if (dimmed) GUI.color = new Color(previousColor.r, previousColor.g, previousColor.b, DimmedAlpha);
-
-                using (new EditorGUILayout.HorizontalScope(EditorStyles.helpBox))
-                {
-                    using (new EditorGUILayout.VerticalScope())
-                    {
-                        EditorGUILayout.LabelField(registry.DisplayTitle(command), EditorStyles.boldLabel);
-                        if (command.Description != null)
-                            EditorGUILayout.LabelField(command.Description, EditorStyles.wordWrappedMiniLabel);
-                        if (command.Status == OCCommandStatus.Failed && command.LastError != null)
-                            EditorGUILayout.LabelField(command.LastError, _commandErrorStyle);
-                    }
-
-                    GUILayout.Label(StatusMark(command.Status), GUILayout.Width(18));
-                    using (new EditorGUI.DisabledScope(command.IsRunning))
-                    {
-                        if (GUILayout.Button(command.IsRunning ? "Running\u2026" : "Run", GUILayout.Width(80), GUILayout.Height(22)))
-                            _pendingCommandRun = command;
-                    }
-                }
-
-                GUI.color = previousColor;
-            }
-        }
-
-        private static string StatusMark(OCCommandStatus status) => status switch
-        {
-            OCCommandStatus.Running   => "\u25CC",
-            OCCommandStatus.Succeeded => "\u2713",
-            OCCommandStatus.Failed    => "\u2717",
-            _                          => string.Empty
-        };
-
-        private static void RunCommand(OCRegisteredCommand command)
-        {
-            if (command.Confirm
-                && !EditorUtility.DisplayDialog("Run Command", $"Run \u201C{OC.Commands.DisplayTitle(command)}\u201D?", "Run", "Cancel"))
-                return;
-            command.Run();
-        }
-
-        private void DrawNoConfig()
-        {
-            EditorGUILayout.HelpBox("No OCConfig named DSMConfig found in Resources. Create one to begin.", MessageType.Warning);
-            if (GUILayout.Button("Create Config Asset", GUILayout.Height(26)))
+            var empty = new VisualElement();
+            empty.AddToClassList("oc-empty");
+            var title = new Label("No DSMConfig in Resources");
+            title.AddToClassList("oc-empty__title");
+            var text = new Label("Create a Config asset to start adding Entries and Runtime Panels.");
+            text.AddToClassList("oc-muted");
+            var create = new Button(() =>
             {
                 OCMenu.CreateConfigAsset();
-                Reload(fromDisk: false);
-            }
+                Load(fromDisk: false);
+            }) { text = "Create Config Asset" };
+            create.AddToClassList("oc-button--primary");
+            empty.Add(title);
+            empty.Add(text);
+            empty.Add(create);
+            return empty;
         }
 
-        private void DrawSettings()
+        private void ShowTab(Tab tab)
         {
-            EditorGUILayout.LabelField("Save File", EditorStyles.boldLabel);
-            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
+            _tab = tab;
+            if (_context == null || _content == null) return;
+
+            foreach (var (key, button) in _navButtons)
+                button.EnableInClassList("oc-nav__item--selected", key == tab);
+            var hasAudiences = _context.AudienceNames.Length > 0;
+            if (_filterBar != null)
+                _filterBar.style.display = tab == Tab.Entries || (tab == Tab.Commands && hasAudiences) ? DisplayStyle.Flex : DisplayStyle.None;
+            if (_search != null)
+                _search.style.display = tab == Tab.Entries ? DisplayStyle.Flex : DisplayStyle.None;
+
+            _content.Clear();
+            _entriesTab = null;
+            _panelsTab = null;
+            _commandsTab = null;
+            _settingsTab = null;
+            switch (tab)
             {
-                EditorGUILayout.PropertyField(_configSo!.FindProperty("_autoSave"), new GUIContent("AutoSave"));
-                EditorGUILayout.PropertyField(_configSo.FindProperty("_autoSaveDebounce"), new GUIContent("AutoSave Debounce"));
-                EditorGUILayout.PropertyField(_configSo.FindProperty("_saveDirectory"), new GUIContent("Save Directory"));
-                EditorGUILayout.PropertyField(_configSo.FindProperty("_fileName"), new GUIContent("File Name"));
-
-                EditorGUILayout.Space(4);
-                var path = OCPaths.ResolveSaveFilePath(_config!);
-                EditorGUILayout.SelectableLabel(path, EditorStyles.textField, GUILayout.Height(18));
-
-                using (new EditorGUILayout.HorizontalScope())
-                {
-                    if (GUILayout.Button("Open Folder", GUILayout.Width(100)))
-                    {
-                        var dir = Path.GetDirectoryName(path);
-                        if (!string.IsNullOrEmpty(dir))
-                        {
-                            Directory.CreateDirectory(dir);
-                            EditorUtility.RevealInFinder(dir);
-                        }
-                    }
-
-                    if (GUILayout.Button("Delete Save File", GUILayout.Width(120)))
-                    {
-                        if (EditorUtility.DisplayDialog("Delete Save File", $"Delete '{path}'? This cannot be undone.", "Delete", "Cancel"))
-                        {
-                            if (File.Exists(path)) File.Delete(path);
-                            OC.Load();
-                        }
-                    }
-                }
-
+                case Tab.Entries: _content.Add(_entriesTab = new OCEntriesTab(_context)); break;
+                case Tab.Panels: _content.Add(_panelsTab = new OCPanelsSection(_context)); break;
+                case Tab.Commands: _content.Add(_commandsTab = new OCCommandsTab(_context)); break;
+                case Tab.Settings: _content.Add(_settingsTab = new OCSettingsTab(_context)); break;
             }
-
-            EditorGUILayout.Space();
-            EditorGUILayout.LabelField(new GUIContent("Audiences", "Kinds of operator an Exposed Entry is meant for. Each Runtime Panel picks the Audiences it serves."), EditorStyles.boldLabel);
-            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
-                DrawAudiences();
+            Tick();
         }
 
-        private void DrawAudiences()
+        // Values live on OC.Store, which changes outside this window (Play mode, other code), so the window polls it.
+        private void Tick()
         {
-            var audiencesProp = _configSo!.FindProperty("_audiences");
-            for (var i = 0; i < audiencesProp.arraySize; i++)
+            UpdateMode();
+            if (_context == null)
             {
-                var audienceProp = audiencesProp.GetArrayElementAtIndex(i);
-                var nameProp = audienceProp.FindPropertyRelative("_name");
-                var id = audienceProp.FindPropertyRelative("_id").stringValue;
-
-                using (new EditorGUILayout.HorizontalScope())
-                {
-                    nameProp.stringValue = EditorGUILayout.TextField(nameProp.stringValue);
-                    if (GUILayout.Button("✕", GUILayout.Width(RemoveWidth)))
-                    {
-                        var index = i;
-                        var name = nameProp.stringValue;
-                        _pendingAudienceEdit = () => TryRemoveAudience(audiencesProp, index, id, name);
-                    }
-                }
-            }
-
-            using (new EditorGUI.DisabledScope(audiencesProp.arraySize >= OCAudienceEditing.MaxAudiences))
-            {
-                if (GUILayout.Button("+ Add Audience", GUILayout.Width(120)))
-                {
-                    _pendingAudienceEdit = () =>
-                    {
-                        var index = audiencesProp.arraySize;
-                        audiencesProp.InsertArrayElementAtIndex(index);
-                        var added = audiencesProp.GetArrayElementAtIndex(index);
-                        added.FindPropertyRelative("_id").stringValue = OCAudience.NewId();
-                        added.FindPropertyRelative("_name").stringValue = $"Audience {index + 1}";
-                    };
-                }
-            }
-        }
-
-        private void TryRemoveAudience(SerializedProperty audiencesProp, int index, string id, string name)
-        {
-            // Users are found against saved data, so pending edits in this window must land first.
-            _configSo!.ApplyModifiedProperties();
-            var users = OCAudienceEditing.FindUsers(_config!, id);
-            if (users.Count > 0)
-            {
-                EditorUtility.DisplayDialog(
-                    "Audience in use",
-                    $"'{name}' can't be removed while it is still named by:\n\n- {string.Join("\n- ", users)}\n\nRemove it from these first.",
-                    "OK");
+                if (Resources.Load<OCConfig>("DSMConfig") != null) Load(fromDisk: false);
                 return;
             }
 
-            if (EditorUtility.DisplayDialog("Remove Audience", $"Remove Audience '{name}'?", "Remove", "Cancel"))
-                audiencesProp.DeleteArrayElementAtIndex(index);
-        }
-
-        private void DrawEntries(IReadOnlyCollection<string> duplicates, bool valuesEditable)
-        {
-            var entriesProp = _configSo!.FindProperty("_entries");
-            var filter = _search.Trim();
-            var pendingRemoveIndex = -1;
-
-            var list = GetOrCreateEntriesList(entriesProp);
-            list.draggable = filter.Length == 0;
-
-            bool Matches(int index)
+            if (_config == null)
             {
-                if (filter.Length == 0) return true;
-                var element = entriesProp.GetArrayElementAtIndex(index);
-                var key = element.FindPropertyRelative("_key").stringValue;
-                var label = element.FindPropertyRelative("_label").stringValue;
-                return key.IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0 ||
-                       label.IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0;
-            }
-
-            var config = _config!;
-            var audienceNames = _audienceNames;
-            var hasAudiences = audienceNames.Length > 0;
-            var viewAsIds = _viewAsIndex >= 0 ? new[] { config.Audiences[_viewAsIndex].Id } : null;
-
-            list.elementHeightCallback = index =>
-            {
-                if (!Matches(index)) return 0f;
-                var element = entriesProp.GetArrayElementAtIndex(index);
-                return CardHeight(ShowsRangeLine(element), OptionsLineCount(element), ShowsHeaderLine(element), ShowsAudienceLine(element, hasAudiences));
-            };
-
-            list.drawElementBackgroundCallback = (rect, index, isActive, isFocused) =>
-            {
-                ReorderableList.defaultBehaviours.DrawElementBackground(rect, index, isActive, isFocused, true);
-                if (index < 0 || index >= entriesProp.arraySize || !Matches(index)) return;
-
-                var type = (OCDataType)entriesProp.GetArrayElementAtIndex(index)
-                    .FindPropertyRelative("_type").enumValueIndex;
-                DrawTypeTint(rect, type);
-            };
-
-            list.drawElementCallback = (rect, index, isActive, isFocused) =>
-            {
-                if (!Matches(index)) return;
-
-                var element = entriesProp.GetArrayElementAtIndex(index);
-                var keyProp = element.FindPropertyRelative("_key");
-                var key = keyProp.stringValue;
-                var isDuplicate = duplicates.Contains(key);
-
-                var dimmed = viewAsIds != null && index < config.Entries.Count && !OCAudienceFilter.Shows(config.Entries[index], viewAsIds);
-                var priorColor = GUI.color;
-                if (dimmed) GUI.color = new Color(priorColor.r, priorColor.g, priorColor.b, priorColor.a * DimmedAlpha);
-
-                if (DrawEntryCard(rect, element, isDuplicate, valuesEditable, config, audienceNames))
-                    pendingRemoveIndex = index;
-
-                GUI.color = priorColor;
-            };
-
-            list.DoLayoutList();
-
-            if (pendingRemoveIndex >= 0)
-                entriesProp.DeleteArrayElementAtIndex(pendingRemoveIndex);
-
-            if (_deferred != null)
-            {
-                var action = _deferred;
-                _deferred = null;
-                action();
-                Repaint();
-            }
-        }
-
-        private ReorderableList GetOrCreateEntriesList(SerializedProperty entriesProp)
-        {
-            if (_entriesList != null && _entriesList.serializedProperty.serializedObject == _configSo)
-            {
-                _entriesList.serializedProperty = entriesProp;
-                return _entriesList;
-            }
-
-            _entriesList = new ReorderableList(_configSo, entriesProp, true, true, false, false)
-            {
-                headerHeight = EditorGUIUtility.singleLineHeight + 4f,
-                footerHeight = 0f
-            };
-            _entriesList.drawHeaderCallback = rect =>
-                EditorGUI.LabelField(rect, "Entries — drag ≡ to reorder (this is the Runtime Panel order)");
-
-            return _entriesList;
-        }
-
-        private const float TypeStripeWidth = 4f;
-        private const float TypeTintAlpha = 0.12f;
-
-        private static Color TypeColor(OCDataType type) => type switch
-        {
-            OCDataType.Int => new Color(0.30f, 0.60f, 1.00f),
-            OCDataType.Float => new Color(0.25f, 0.80f, 0.85f),
-            OCDataType.Bool => new Color(1.00f, 0.60f, 0.20f),
-            OCDataType.String => new Color(0.45f, 0.85f, 0.35f),
-            OCDataType.Vector2 => new Color(0.75f, 0.45f, 1.00f),
-            OCDataType.Vector3 => new Color(1.00f, 0.40f, 0.75f),
-            OCDataType.Color => new Color(1.00f, 0.85f, 0.25f),
-            _ => Color.gray
-        };
-
-        private static void DrawTypeTint(Rect rect, OCDataType type)
-        {
-            var color = TypeColor(type);
-            EditorGUI.DrawRect(rect, new Color(color.r, color.g, color.b, TypeTintAlpha));
-            EditorGUI.DrawRect(new Rect(rect.x, rect.y, TypeStripeWidth, rect.height), color);
-        }
-
-        private static float CardHeight(bool withRangeLine, int optionsLines, bool withHeaderLine, bool withAudienceLine)
-        {
-            var lines = 4 + (withRangeLine ? 1 : 0) + optionsLines + (withHeaderLine ? 1 : 0) + (withAudienceLine ? 1 : 0);
-            return CardPadding * 2f +
-                   EditorGUIUtility.singleLineHeight * lines +
-                   EditorGUIUtility.standardVerticalSpacing * (lines - 1);
-        }
-
-        private static bool ShowsRangeLine(SerializedProperty elementProp) =>
-            elementProp.FindPropertyRelative("_exposed").boolValue &&
-            OCPresentation.AllowsRange((OCDataType)elementProp.FindPropertyRelative("_type").enumValueIndex);
-
-        private static bool ShowsOptionsToggle(SerializedProperty elementProp) =>
-            elementProp.FindPropertyRelative("_exposed").boolValue &&
-            OCPresentation.AllowsOptions((OCDataType)elementProp.FindPropertyRelative("_type").enumValueIndex);
-
-        // Toggle line, plus (when on) one line per Option and an add line.
-        private static int OptionsLineCount(SerializedProperty elementProp)
-        {
-            if (!ShowsOptionsToggle(elementProp)) return 0;
-            if (!elementProp.FindPropertyRelative("_hasOptions").boolValue) return 1;
-            return 2 + elementProp.FindPropertyRelative("_options").arraySize;
-        }
-
-        private static bool ShowsHeaderLine(SerializedProperty elementProp) =>
-            elementProp.FindPropertyRelative("_exposed").boolValue;
-
-        private static bool ShowsAudienceLine(SerializedProperty elementProp, bool hasAudiences) =>
-            hasAudiences && elementProp.FindPropertyRelative("_exposed").boolValue;
-
-        private static OCHintSettings ReadHints(SerializedProperty elementProp)
-        {
-            var optionsProp = elementProp.FindPropertyRelative("_options");
-            var options = new List<OCOption>(optionsProp.arraySize);
-            for (var i = 0; i < optionsProp.arraySize; i++)
-            {
-                var option = optionsProp.GetArrayElementAtIndex(i);
-                options.Add(new OCOption(option.FindPropertyRelative("_label").stringValue, option.FindPropertyRelative("_value").intValue));
-            }
-
-            return new OCHintSettings
-            {
-                Type = (OCDataType)elementProp.FindPropertyRelative("_type").enumValueIndex,
-                DefaultJson = elementProp.FindPropertyRelative("_defaultJson").stringValue,
-                HasRange = elementProp.FindPropertyRelative("_hasRange").boolValue,
-                RangeMin = elementProp.FindPropertyRelative("_rangeMin").floatValue,
-                RangeMax = elementProp.FindPropertyRelative("_rangeMax").floatValue,
-                HasOptions = elementProp.FindPropertyRelative("_hasOptions").boolValue,
-                Options = options,
-                HasHeader = elementProp.FindPropertyRelative("_hasHeader").boolValue,
-                Header = elementProp.FindPropertyRelative("_header").stringValue
-            };
-        }
-
-        // Options are written separately (and deferred by callers) because resizing the array
-        // mid-draw would outgrow the card height the list already reserved.
-        private static void WriteHintScalars(SerializedProperty elementProp, in OCHintSettings hints)
-        {
-            elementProp.FindPropertyRelative("_type").enumValueIndex = (int)hints.Type;
-            elementProp.FindPropertyRelative("_defaultJson").stringValue = hints.DefaultJson;
-            elementProp.FindPropertyRelative("_hasRange").boolValue = hints.HasRange;
-            elementProp.FindPropertyRelative("_rangeMin").floatValue = hints.RangeMin;
-            elementProp.FindPropertyRelative("_rangeMax").floatValue = hints.RangeMax;
-            elementProp.FindPropertyRelative("_hasOptions").boolValue = hints.HasOptions;
-        }
-
-        private static void WriteOptions(SerializedProperty optionsProp, IReadOnlyList<OCOption> options)
-        {
-            optionsProp.arraySize = options.Count;
-            for (var i = 0; i < options.Count; i++)
-            {
-                var option = optionsProp.GetArrayElementAtIndex(i);
-                option.FindPropertyRelative("_label").stringValue = options[i].Label;
-                option.FindPropertyRelative("_value").intValue = options[i].Value;
-            }
-        }
-
-        private static void Tooltip(Rect rect, string? text)
-        {
-            if (text != null) GUI.Label(rect, new GUIContent(string.Empty, text));
-        }
-
-        // Every line shares one prefix column (label + override-mark slot) so all fields start at the same x.
-        private static float FieldStart(Rect line) => line.x + PrefixWidth + OverrideMarkWidth;
-
-        // Returns true when the row's remove button was clicked; the caller defers the actual
-        // DeleteArrayElementAtIndex until after the list has finished drawing.
-        private static bool DrawEntryCard(Rect rect, SerializedProperty elementProp, bool isDuplicate, bool valuesEditable, OCConfig config, string[] audienceNames)
-        {
-            var keyProp = elementProp.FindPropertyRelative("_key");
-            var typeProp = elementProp.FindPropertyRelative("_type");
-            var labelProp = elementProp.FindPropertyRelative("_label");
-            var exposedProp = elementProp.FindPropertyRelative("_exposed");
-            var defaultJsonProp = elementProp.FindPropertyRelative("_defaultJson");
-            var hasRangeProp = elementProp.FindPropertyRelative("_hasRange");
-            var rangeMinProp = elementProp.FindPropertyRelative("_rangeMin");
-            var rangeMaxProp = elementProp.FindPropertyRelative("_rangeMax");
-            var hasHeaderProp = elementProp.FindPropertyRelative("_hasHeader");
-            var headerProp = elementProp.FindPropertyRelative("_header");
-            var hasOptionsProp = elementProp.FindPropertyRelative("_hasOptions");
-            var optionsProp = elementProp.FindPropertyRelative("_options");
-            var key = keyProp.stringValue;
-            var type = (OCDataType)typeProp.enumValueIndex;
-            // Decided before drawing so it matches the height the list already reserved for this card.
-            var showRange = ShowsRangeLine(elementProp);
-            var showOptions = ShowsOptionsToggle(elementProp);
-            var showHeader = ShowsHeaderLine(elementProp);
-            var showAudiences = ShowsAudienceLine(elementProp, audienceNames.Length > 0);
-
-            var lineH = EditorGUIUtility.singleLineHeight;
-            var vSpace = EditorGUIUtility.standardVerticalSpacing;
-            var y = rect.y + CardPadding;
-            Rect NextLine()
-            {
-                var line = new Rect(rect.x, y, rect.width, lineH);
-                y = line.yMax + vSpace;
-                return line;
-            }
-
-            var priorLabelWidth = EditorGUIUtility.labelWidth;
-            EditorGUIUtility.labelWidth = InlineLabelWidth;
-
-            var removeClicked = DrawKeyLine(NextLine(), elementProp, keyProp, isDuplicate, ref type);
-            DrawExposedLine(NextLine(), exposedProp, labelProp);
-            DrawDefaultField(NextLine(), defaultJsonProp, type, hasOptionsProp, optionsProp);
-            DrawValueLine(NextLine(), key, type, valuesEditable);
-            if (showRange && OCPresentation.AllowsRange(type))
-                DrawRangeLine(NextLine(), elementProp, hasRangeProp, rangeMinProp, rangeMaxProp, type);
-            if (showOptions)
-                DrawOptionsLines(NextLine, elementProp, hasOptionsProp, optionsProp);
-            if (showHeader)
-                DrawHeaderLine(NextLine(), hasHeaderProp, headerProp);
-            if (showAudiences)
-                DrawAudienceLine(NextLine(), elementProp.FindPropertyRelative("_audienceIds"), config, audienceNames);
-
-            EditorGUIUtility.labelWidth = priorLabelWidth;
-            return removeClicked && TryRemoveEntry(key);
-        }
-
-        private static bool DrawKeyLine(
-            Rect rect,
-            SerializedProperty elementProp,
-            SerializedProperty keyProp,
-            bool isDuplicate,
-            ref OCDataType type)
-        {
-            var removeRect = new Rect(rect.xMax - RemoveWidth, rect.y, RemoveWidth, rect.height);
-            var typeRect = new Rect(removeRect.x - FieldSpacing - TypeWidth, rect.y, TypeWidth, rect.height);
-            var fieldX = FieldStart(rect);
-            var keyRect = new Rect(fieldX, rect.y, Mathf.Max(60f, typeRect.x - FieldSpacing - fieldX), rect.height);
-
-            EditorGUI.LabelField(new Rect(rect.x, rect.y, PrefixWidth, rect.height), KeyHeader);
-            var priorColor = GUI.backgroundColor;
-            if (isDuplicate) GUI.backgroundColor = DuplicateKeyColor;
-            keyProp.stringValue = EditorGUI.TextField(keyRect, keyProp.stringValue);
-            GUI.backgroundColor = priorColor;
-
-            var newType = (OCDataType)EditorGUI.EnumPopup(typeRect, TypeHeader, type);
-            if (newType != type)
-            {
-                WriteHintScalars(elementProp, OCPresentation.ChangeType(ReadHints(elementProp), newType));
-                type = newType;
-            }
-
-            return GUI.Button(removeRect, "✕");
-        }
-
-        private static void DrawExposedLine(Rect rect, SerializedProperty exposedProp, SerializedProperty labelProp)
-        {
-            var fieldX = FieldStart(rect);
-            EditorGUI.LabelField(new Rect(rect.x, rect.y, PrefixWidth, rect.height), ExposedHeader);
-            var toggleRect = new Rect(fieldX, rect.y, ToggleWidth, rect.height);
-            exposedProp.boolValue = EditorGUI.Toggle(toggleRect, exposedProp.boolValue);
-
-            if (!exposedProp.boolValue) return;
-
-            var labelX = toggleRect.xMax + FieldSpacing;
-            var labelRect = new Rect(labelX, rect.y, rect.xMax - RemoveWidth - FieldSpacing - labelX, rect.height);
-            labelProp.stringValue = EditorGUI.TextField(labelRect, LabelHeader, labelProp.stringValue);
-        }
-
-        private static void DrawRangeLine(
-            Rect rect,
-            SerializedProperty elementProp,
-            SerializedProperty hasRangeProp,
-            SerializedProperty minProp,
-            SerializedProperty maxProp,
-            OCDataType type)
-        {
-            var fieldX = FieldStart(rect);
-            EditorGUI.LabelField(new Rect(rect.x, rect.y, PrefixWidth, rect.height), RangeHeader);
-
-            var toggleRect = new Rect(fieldX, rect.y, ToggleWidth, rect.height);
-            var wasOn = hasRangeProp.boolValue;
-            var isOn = EditorGUI.Toggle(toggleRect, wasOn);
-            if (isOn && !wasOn) WriteHintScalars(elementProp, OCPresentation.TurnRangeOn(ReadHints(elementProp)));
-            else hasRangeProp.boolValue = isOn;
-
-            if (!isOn) return;
-
-            var startX = toggleRect.xMax + FieldSpacing;
-            var fieldWidth = (rect.xMax - RemoveWidth - FieldSpacing - startX - FieldSpacing) * 0.5f;
-            var minRect = new Rect(startX, rect.y, fieldWidth, rect.height);
-            var maxRect = new Rect(minRect.xMax + FieldSpacing, rect.y, fieldWidth, rect.height);
-
-            var rangeMessage = OCPresentation.Present(ReadHints(elementProp)).RangeMessage;
-            var priorColor = GUI.backgroundColor;
-            if (rangeMessage != null) GUI.backgroundColor = DuplicateKeyColor;
-
-            if (type == OCDataType.Int)
-            {
-                minProp.floatValue = EditorGUI.IntField(minRect, RangeMinHeader, Mathf.RoundToInt(minProp.floatValue));
-                maxProp.floatValue = EditorGUI.IntField(maxRect, RangeMaxHeader, Mathf.RoundToInt(maxProp.floatValue));
-            }
-            else
-            {
-                minProp.floatValue = EditorGUI.FloatField(minRect, RangeMinHeader, minProp.floatValue);
-                maxProp.floatValue = EditorGUI.FloatField(maxRect, RangeMaxHeader, maxProp.floatValue);
-            }
-
-            GUI.backgroundColor = priorColor;
-            Tooltip(minRect, rangeMessage);
-            Tooltip(maxRect, rangeMessage);
-        }
-
-        private static void DrawHeaderLine(Rect rect, SerializedProperty hasHeaderProp, SerializedProperty headerProp)
-        {
-            var fieldX = FieldStart(rect);
-            EditorGUI.LabelField(new Rect(rect.x, rect.y, PrefixWidth, rect.height), HeaderHeader);
-
-            var toggleRect = new Rect(fieldX, rect.y, ToggleWidth, rect.height);
-            hasHeaderProp.boolValue = EditorGUI.Toggle(toggleRect, hasHeaderProp.boolValue);
-
-            var textX = toggleRect.xMax + FieldSpacing;
-            var textRect = new Rect(textX, rect.y, rect.xMax - RemoveWidth - FieldSpacing - textX, rect.height);
-            using (new EditorGUI.DisabledScope(!hasHeaderProp.boolValue))
-                headerProp.stringValue = EditorGUI.TextField(textRect, headerProp.stringValue);
-        }
-
-        private static void DrawAudienceLine(Rect rect, SerializedProperty audienceIdsProp, OCConfig config, string[] audienceNames)
-        {
-            var fieldX = FieldStart(rect);
-            EditorGUI.LabelField(new Rect(rect.x, rect.y, PrefixWidth, rect.height), AudiencesHeader);
-            var fieldRect = new Rect(fieldX, rect.y, rect.xMax - RemoveWidth - FieldSpacing - fieldX, rect.height);
-            OCAudienceEditing.DrawMaskField(fieldRect, GUIContent.none, audienceIdsProp, config, audienceNames);
-        }
-
-        private static void DrawOptionsLines(
-            Func<Rect> nextLine,
-            SerializedProperty elementProp,
-            SerializedProperty hasOptionsProp,
-            SerializedProperty optionsProp)
-        {
-            var rect = nextLine();
-            var fieldX = FieldStart(rect);
-            EditorGUI.LabelField(new Rect(rect.x, rect.y, PrefixWidth, rect.height), OptionsHeader);
-
-            var toggleRect = new Rect(fieldX, rect.y, ToggleWidth, rect.height);
-            var wasOn = hasOptionsProp.boolValue;
-            var isOn = EditorGUI.Toggle(toggleRect, wasOn);
-
-            if (isOn && !wasOn)
-            {
-                var before = ReadHints(elementProp);
-                var turnedOn = OCPresentation.TurnOptionsOn(before);
-                WriteHintScalars(elementProp, turnedOn);
-                if (turnedOn.Options.Count != before.Options.Count)
-                    _deferred = () => WriteOptions(optionsProp, turnedOn.Options);
-            }
-            else
-            {
-                hasOptionsProp.boolValue = isOn;
-            }
-
-            if (!isOn) return;
-
-            var hints = ReadHints(elementProp);
-            var issues = OCPresentation.CheckOptions(hints.Options);
-
-            const float valueWidth = 80f;
-            const float buttonWidth = 22f;
-
-            for (var i = 0; i < optionsProp.arraySize; i++)
-            {
-                var row = nextLine();
-                var option = optionsProp.GetArrayElementAtIndex(i);
-                var labelProp = option.FindPropertyRelative("_label");
-                var valueProp = option.FindPropertyRelative("_value");
-
-                var removeRect = new Rect(row.xMax - RemoveWidth, row.y, RemoveWidth, row.height);
-                var downRect = new Rect(removeRect.x - FieldSpacing - buttonWidth, row.y, buttonWidth, row.height);
-                var upRect = new Rect(downRect.x - buttonWidth, row.y, buttonWidth, row.height);
-                var valueRect = new Rect(upRect.x - FieldSpacing - valueWidth, row.y, valueWidth, row.height);
-                var labelRect = new Rect(fieldX, row.y, Mathf.Max(40f, valueRect.x - FieldSpacing - fieldX), row.height);
-
-                var issue = issues[i];
-                var priorColor = GUI.backgroundColor;
-                if ((issue & OCOptionIssue.BlankLabel) != 0) GUI.backgroundColor = DuplicateKeyColor;
-                else if ((issue & OCOptionIssue.DuplicateLabel) != 0) GUI.backgroundColor = DuplicateLabelColor;
-                labelProp.stringValue = EditorGUI.TextField(labelRect, labelProp.stringValue);
-
-                GUI.backgroundColor = (issue & OCOptionIssue.DuplicateValue) != 0 ? DuplicateKeyColor : priorColor;
-                valueProp.intValue = EditorGUI.IntField(valueRect, GUIContent.none, valueProp.intValue);
-                GUI.backgroundColor = priorColor;
-                Tooltip(labelRect, OCPresentation.DescribeLabelIssue(issue));
-                Tooltip(valueRect, OCPresentation.DescribeValueIssue(issue));
-
-                var index = i;
-                using (new EditorGUI.DisabledScope(i == 0))
-                    if (GUI.Button(upRect, "▲")) _deferred = () => optionsProp.MoveArrayElement(index, index - 1);
-                using (new EditorGUI.DisabledScope(i == optionsProp.arraySize - 1))
-                    if (GUI.Button(downRect, "▼")) _deferred = () => optionsProp.MoveArrayElement(index, index + 1);
-                if (GUI.Button(removeRect, "✕")) _deferred = () => optionsProp.DeleteArrayElementAtIndex(index);
-            }
-
-            var addRow = nextLine();
-            var addRect = new Rect(fieldX, addRow.y, 110f, addRow.height);
-            if (GUI.Button(addRect, "+ Add Option"))
-            {
-                var added = OCPresentation.AddOption(hints);
-                _deferred = () => WriteOptions(optionsProp, added.Options);
-            }
-
-            if (optionsProp.arraySize == 0)
-                EditorGUI.LabelField(new Rect(addRect.xMax + FieldSpacing, addRow.y, addRow.xMax - addRect.xMax - FieldSpacing - RemoveWidth, addRow.height),
-                    "At least one Option is required.", EditorStyles.miniLabel);
-        }
-
-        private static void DrawDefaultField(
-            Rect rect,
-            SerializedProperty defaultJsonProp,
-            OCDataType type,
-            SerializedProperty hasOptionsProp,
-            SerializedProperty optionsProp)
-        {
-            var fieldX = FieldStart(rect);
-            var fieldRect = new Rect(fieldX, rect.y, rect.xMax - ResetWidth - FieldSpacing - fieldX, rect.height);
-            EditorGUI.LabelField(new Rect(rect.x, rect.y, PrefixWidth, rect.height), DefaultHeader);
-
-            if (OCPresentation.AllowsOptions(type) && hasOptionsProp.boolValue && optionsProp.arraySize > 0)
-            {
-                DrawOptionDefaultPopup(fieldRect, defaultJsonProp, optionsProp);
+                Load(fromDisk: false);
                 return;
             }
 
-            JToken? defaultToken;
-            try { defaultToken = JToken.Parse(defaultJsonProp.stringValue); }
-            catch { defaultToken = null; }
-
-            var newDefaultToken = OCValueField.DrawField(fieldRect, GUIContent.none, type, defaultToken, out var changed);
-            if (changed)
-                defaultJsonProp.stringValue = newDefaultToken.ToString(Formatting.None);
-        }
-
-        private static void DrawOptionDefaultPopup(Rect fieldRect, SerializedProperty defaultJsonProp, SerializedProperty optionsProp)
-        {
-            var options = new OCOption[optionsProp.arraySize];
-            var labels = new string[options.Length];
-            for (var i = 0; i < options.Length; i++)
+            _context.So.UpdateIfRequiredOrScript();
+            var audiences = OCAudienceEditing.Names(_config);
+            if (string.Join("\n", audiences) != _shownAudiences)
             {
-                var option = optionsProp.GetArrayElementAtIndex(i);
-                options[i] = new OCOption(option.FindPropertyRelative("_label").stringValue, option.FindPropertyRelative("_value").intValue);
-                labels[i] = $"{options[i].Label} ({options[i].Value})";
+                Rebuild();
+                return;
             }
 
-            var selected = int.TryParse(defaultJsonProp.stringValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var current)
-                ? OCPresentation.IndexOfOption(options, current)
-                : -1;
+            _context.DuplicateKeys = OCEntryRules.DuplicateKeys(_config);
+            if (_storeMismatch != null)
+                _storeMismatch.style.display = _context.ValuesEditable ? DisplayStyle.None : DisplayStyle.Flex;
 
-            var next = EditorGUI.Popup(fieldRect, selected, labels);
-            if (next >= 0 && next != selected)
-                defaultJsonProp.stringValue = options[next].Value.ToString(CultureInfo.InvariantCulture);
+            _navCounts[Tab.Entries].text = _context.DuplicateKeys.Count > 0 ? $"⚠ {_config.Entries.Count}" : _config.Entries.Count.ToString();
+            _navCounts[Tab.Panels].text = _config.Panels.Count.ToString();
+            _navCounts[Tab.Commands].text = EditorApplication.isPlaying ? OC.Commands.Commands.Count.ToString() : string.Empty;
+
+            _entriesTab?.Refresh();
+            _panelsTab?.Refresh();
+            _commandsTab?.Refresh();
+            _settingsTab?.Refresh();
         }
 
-        private static void DrawValueLine(Rect rect, string key, OCDataType type, bool valuesEditable)
+        private void UpdateMode()
         {
-            var hasOverride = valuesEditable && OC.Store.HasOverride(key);
-
-            var resetRect = new Rect(rect.xMax - ResetWidth, rect.y, ResetWidth, rect.height);
-            var labelRect = new Rect(rect.x, rect.y, PrefixWidth, rect.height);
-            var markRect = new Rect(labelRect.xMax, rect.y, OverrideMarkWidth, rect.height);
-            var fieldX = FieldStart(rect);
-            var fieldRect = new Rect(fieldX, rect.y, resetRect.x - FieldSpacing - fieldX, rect.height);
-
-            EditorGUI.LabelField(labelRect, ValueHeader);
-            GUI.Label(markRect, hasOverride ? OverrideMark : GUIContent.none, hasOverride ? EditorStyles.boldLabel : EditorStyles.label);
-
-            using (new EditorGUI.DisabledScope(!valuesEditable))
-            {
-                var valueToken = valuesEditable ? OC.Store.GetEffectiveToken(key) : null;
-                var newValueToken = OCValueField.DrawField(fieldRect, GUIContent.none, type, valueToken, out var changed);
-                if (valuesEditable && changed)
-                {
-                    OC.Store.SetToken(key, newValueToken);
-                    if (!EditorApplication.isPlaying) OC.Save();
-                }
-            }
-
-            using (new EditorGUI.DisabledScope(!valuesEditable || !OC.Store.HasOverride(key)))
-            {
-                if (GUI.Button(resetRect, "Reset"))
-                {
-                    OC.Reset(key);
-                    if (!EditorApplication.isPlaying) OC.Save();
-                }
-            }
+            if (_modeLabel == null || _modeDot == null) return;
+            var playing = EditorApplication.isPlaying;
+            _modeLabel.text = playing ? "Live · Play mode" : "Edit mode";
+            _modeDot.EnableInClassList("oc-mode__dot--live", playing);
         }
 
-        // Returns true when the user confirmed removal; the caller still owns deleting the
-        // array element, deferred until after the list has finished drawing.
-        private static bool TryRemoveEntry(string key)
+        private StyleSheet? LoadStyleSheet()
         {
-            if (!EditorUtility.DisplayDialog("Remove Entry", $"Remove entry '{key}' from the config?", "Remove", "Cancel"))
-                return false;
-
-            if (EditorUtility.DisplayDialog("Reset Value", $"Also reset the current value for '{key}'?", "Reset", "Keep"))
-            {
-                OC.Reset(key);
-                if (!EditorApplication.isPlaying) OC.Save();
-            }
-
-            return true;
-        }
-
-        private void DrawAddEntry()
-        {
-            EditorGUILayout.LabelField("Add Entry", EditorStyles.boldLabel);
-
-            var error = OCEntryRules.ValidateNewKey(_config!, _newKey);
-
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                _newKey = EditorGUILayout.TextField(_newKey, GUILayout.Width(150));
-                _newType = (OCDataType)EditorGUILayout.EnumPopup(_newType, GUILayout.Width(90));
-
-                using (new EditorGUI.DisabledScope(error != null))
-                {
-                    if (GUILayout.Button("Add", GUILayout.Width(60)))
-                    {
-                        AddEntry(_newKey.Trim(), _newType);
-                        _newKey = string.Empty;
-                    }
-                }
-            }
-
-            if (_newKey.Length > 0 && error != null)
-                EditorGUILayout.HelpBox(error, MessageType.Error);
-        }
-
-        private void AddEntry(string key, OCDataType type)
-        {
-            var entriesProp = _configSo!.FindProperty("_entries");
-            var index = entriesProp.arraySize;
-            entriesProp.InsertArrayElementAtIndex(index);
-
-            var element = entriesProp.GetArrayElementAtIndex(index);
-            element.FindPropertyRelative("_key").stringValue = key;
-            element.FindPropertyRelative("_type").enumValueIndex = (int)type;
-            element.FindPropertyRelative("_label").stringValue = string.Empty;
-            element.FindPropertyRelative("_exposed").boolValue = false;
-            element.FindPropertyRelative("_defaultJson").stringValue = OCEntryDefinition.DefaultJsonFor(type);
-            element.FindPropertyRelative("_hasRange").boolValue = false;
-            element.FindPropertyRelative("_rangeMin").floatValue = 0f;
-            element.FindPropertyRelative("_rangeMax").floatValue = 0f;
-            element.FindPropertyRelative("_hasHeader").boolValue = false;
-            element.FindPropertyRelative("_header").stringValue = string.Empty;
-            element.FindPropertyRelative("_hasOptions").boolValue = false;
-            element.FindPropertyRelative("_options").ClearArray();
-            element.FindPropertyRelative("_audienceIds").ClearArray();
-        }
-
-        private void DrawFooter()
-        {
-            using (new EditorGUILayout.HorizontalScope())
-            {
-                if (GUILayout.Button("Reset All Values", GUILayout.Width(140)))
-                {
-                    if (EditorUtility.DisplayDialog("Reset All Values", "Reset all overrides to their defaults?", "Reset", "Cancel"))
-                    {
-                        OC.ResetAll();
-                        if (!EditorApplication.isPlaying) OC.Save();
-                    }
-                }
-
-                GUILayout.FlexibleSpace();
-                GUILayout.Label($"Overrides: {OC.Store.OverrideKeys.Count}", EditorStyles.miniLabel);
-            }
+            var scriptPath = AssetDatabase.GetAssetPath(MonoScript.FromScriptableObject(this));
+            if (string.IsNullOrEmpty(scriptPath)) return null;
+            return AssetDatabase.LoadAssetAtPath<StyleSheet>(scriptPath[..^".cs".Length] + ".uss");
         }
     }
 }

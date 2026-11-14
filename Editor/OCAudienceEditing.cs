@@ -5,13 +5,14 @@ using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.UIElements;
 
 namespace OperatorConsole.Editor
 {
     /// <summary>Editor helpers for picking Audiences by name while storing their ids.</summary>
     internal static class OCAudienceEditing
     {
-        // EditorGUI.MaskField packs the selection into an int.
+        // MaskField packs the selection into an int.
         public const int MaxAudiences = 32;
 
         public static string[] Names(OCConfig config)
@@ -25,7 +26,8 @@ namespace OperatorConsole.Editor
             return names;
         }
 
-        public static void DrawMaskField(Rect rect, GUIContent label, SerializedProperty idsProp, OCConfig config, string[] names)
+        /// <summary>A mask field over the Config's Audiences that writes the picked Audiences' ids to <paramref name="idsProp"/> and applies them.</summary>
+        public static UnityEngine.UIElements.MaskField CreateMaskField(string? label, SerializedProperty idsProp, OCConfig config, string[] names)
         {
             var mask = 0;
             for (var i = 0; i < idsProp.arraySize; i++)
@@ -34,17 +36,19 @@ namespace OperatorConsole.Editor
                 if (index >= 0) mask |= 1 << index;
             }
 
-            EditorGUI.BeginChangeCheck();
-            var next = EditorGUI.MaskField(rect, label, mask, names);
-            if (!EditorGUI.EndChangeCheck()) return;
+            var field = new UnityEngine.UIElements.MaskField(label, new List<string>(names), mask);
+            field.RegisterValueChangedCallback(e =>
+            {
+                var ids = new List<string>();
+                for (var i = 0; i < config.Audiences.Count; i++)
+                    if ((e.newValue & (1 << i)) != 0) ids.Add(config.Audiences[i].Id);
 
-            var ids = new List<string>();
-            for (var i = 0; i < config.Audiences.Count; i++)
-                if ((next & (1 << i)) != 0) ids.Add(config.Audiences[i].Id);
-
-            idsProp.arraySize = ids.Count;
-            for (var i = 0; i < ids.Count; i++)
-                idsProp.GetArrayElementAtIndex(i).stringValue = ids[i];
+                idsProp.arraySize = ids.Count;
+                for (var i = 0; i < ids.Count; i++)
+                    idsProp.GetArrayElementAtIndex(i).stringValue = ids[i];
+                idsProp.serializedObject.ApplyModifiedProperties();
+            });
+            return field;
         }
 
         private static int IndexOf(OCConfig config, string id)
