@@ -27,6 +27,8 @@ namespace OperatorConsole.Editor
             _type = type;
             _changed = changed;
             AddToClassList("oc-value-field");
+            RegisterCallback<FocusInEvent>(_ => HasFocus = true);
+            RegisterCallback<FocusOutEvent>(e => HasFocus = e.relatedTarget is VisualElement next && Contains(next));
 
             if (type == OCDataType.Int && options is { Count: > 0 })
             {
@@ -59,7 +61,8 @@ namespace OperatorConsole.Editor
             }
         }
 
-        public bool HasFocus => focusController?.focusedElement is VisualElement focused && (focused == this || Contains(focused));
+        // FocusController.focusedElement reports the enclosing ListView, not the field, so track focus through events instead.
+        public bool HasFocus { get; private set; }
 
         /// <summary>Shows <paramref name="token"/> without raising the change callback; a field being edited keeps what the user typed.</summary>
         public void SetToken(JToken? token)
