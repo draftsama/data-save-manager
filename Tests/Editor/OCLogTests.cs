@@ -92,11 +92,30 @@ namespace OperatorConsole.Tests
         }
 
         [Test]
-        public void Preview_IsFirstLine()
+        public void Preview_KeepsAtMostTheGivenLines()
         {
             var log = new OCLog();
-            log.Add(OCLogType.Error, "NullReferenceException\r\nmore detail", null, T0);
-            Assert.AreEqual("NullReferenceException", Entries(log)[0].Preview);
+            log.Add(OCLogType.Error, "one\r\ntwo\r\nthree", null, T0);
+            var entry = Entries(log)[0];
+            Assert.AreEqual("one", entry.Preview(1));
+            Assert.AreEqual("one\ntwo", entry.Preview(2));
+            Assert.AreEqual("one\ntwo\nthree", entry.Preview(5));
+        }
+
+        [Test]
+        public void Highlight_MarksEveryMatchIgnoringCase()
+        {
+            Assert.AreEqual(
+                "<noparse>a </noparse><mark=#FFC83D99><noparse>Err</noparse></mark><noparse> b </noparse><mark=#FFC83D99><noparse>err</noparse></mark>",
+                OCLogMarkup.Highlight("a Err b err", "err"));
+        }
+
+        [Test]
+        public void Highlight_KeepsTagsInTheMessageAsText()
+        {
+            Assert.AreEqual(
+                "<noparse><b>x<\u200B/noparse></noparse>",
+                OCLogMarkup.Highlight("<b>x</noparse>", "zzz"));
         }
 
         private static List<OCLogEntry> Entries(OCLog log)

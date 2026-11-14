@@ -100,6 +100,9 @@ namespace OperatorConsole
         [SerializeField, Tooltip("Font size of a Log Entry's full message and stack trace.")]
         private float _logStackTraceFontSize = 16f;
 
+        [SerializeField, Min(1), Tooltip("Most lines of a Log Entry's message shown before it is expanded.")]
+        private int _logPreviewLines = 3;
+
         [SerializeField, Tooltip("Height of the frame time graph on the Performance tab.")]
         private float _performanceGraphHeight = 180f;
 
@@ -148,6 +151,7 @@ namespace OperatorConsole
         public float EntryActionButtonWidth => _entryActionButtonWidth;
         public float EntryActionErrorFontSize => _entryActionErrorFontSize;
         public float LogStackTraceFontSize => _logStackTraceFontSize;
+        public int LogPreviewLines => Mathf.Max(1, _logPreviewLines);
         public float PerformanceGraphHeight => _performanceGraphHeight;
         public float FrameBudgetMs => Mathf.Max(0.1f, _frameBudgetMs);
     }

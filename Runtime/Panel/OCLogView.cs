@@ -48,7 +48,7 @@ namespace OperatorConsole
             var top = new VisualElement();
             top.AddToClassList("ocp-log__toolbar");
             _search.AddToClassList("ocp-log__search");
-            _search.textEdition.placeholder = "Search log";
+            _search.textEdition.placeholder = "Search messages and stack traces";
             _search.RegisterValueChangedCallback(e =>
             {
                 _query = e.newValue ?? string.Empty;
@@ -137,7 +137,7 @@ namespace OperatorConsole
             {
                 var entry = _entries[i];
                 if (!_typeShown[(int)entry.Type]) continue;
-                if (_query.Length > 0 && entry.Message.IndexOf(_query, StringComparison.OrdinalIgnoreCase) < 0) continue;
+                if (_query.Length > 0 && !OCLogMarkup.Matches(entry.Message, _query) && !OCLogMarkup.Matches(entry.StackTrace, _query)) continue;
                 var repeats = collapse ? 1 : entry.Count;
                 for (var r = 0; r < repeats; r++) _rows.Add(i);
             }
@@ -174,7 +174,7 @@ namespace OperatorConsole
             if (_layout == null || index < 0 || index >= _rows.Count) return;
             var entry = _entries[_rows[index]];
             var firstOfEntry = index == 0 || _rows[index - 1] != _rows[index];
-            ((OCLogRow)element).Bind(entry, _collapse.value, firstOfEntry && ReferenceEquals(entry, _expanded), _layout);
+            ((OCLogRow)element).Bind(entry, _collapse.value, firstOfEntry && ReferenceEquals(entry, _expanded), _query, _layout);
         }
 
         private void ToggleExpanded(OCLogEntry entry)

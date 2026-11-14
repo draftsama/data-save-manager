@@ -677,7 +677,7 @@
 
 .ocp-log-row__main {
     flex-direction: row;
-    align-items: center;
+    align-items: flex-start;
     padding: 0 12px;
 }
 
@@ -692,7 +692,7 @@
     flex-shrink: 1;
     min-width: 0;
     margin-left: 12px;
-    white-space: nowrap;
+    white-space: normal;
     overflow: hidden;
     text-overflow: ellipsis;
 }
@@ -703,6 +703,15 @@
 
 .ocp .ocp-log-row--error .ocp-log-row__message {
     color: rgb(255, 170, 160);
+}
+
+.ocp .ocp-log-row__stack-match {
+    flex-shrink: 0;
+    margin-left: 10px;
+    padding: 1px 8px;
+    border-radius: 8px;
+    color: rgb(255, 214, 120);
+    background-color: rgba(255, 200, 61, 0.16);
 }
 
 .ocp .ocp-log-row__count {

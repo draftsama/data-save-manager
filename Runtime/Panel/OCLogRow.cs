@@ -6,13 +6,15 @@ using UnityEngine.UIElements;
 
 namespace OperatorConsole
 {
-    /// <summary>One row of the Log tab: type dot, time, first line of the message and repeat count; expanded, the full message and stack trace.</summary>
+    /// <summary>One row of the Log tab: type dot, time, the first lines of the message and repeat count; expanded, the full message and stack trace. Search matches are marked.</summary>
     internal sealed class OCLogRow : VisualElement
     {
         private const string NoStackTraceInfo = "No stack trace. This build does not record one for Log messages.";
         private const string NoStackTraceWarning = "No stack trace. This build does not record one for Warning messages.";
         private const string NoStackTraceError = "No stack trace.";
         private const float DetailMaxLines = 16f;
+        private const float LineHeight = 1.3f;
+        private const float DotSize = 10f;
 
         private readonly VisualElement _card = new();
         private readonly VisualElement _main = new();
@@ -20,6 +22,7 @@ namespace OperatorConsole
         private readonly Label _time = new();
         private readonly Label _message = new();
         private readonly Label _count = new();
+        private readonly Label _stackMatch = new("in stack trace");
         private readonly VisualElement _detail = new();
         private readonly ScrollView _detailScroll = new(ScrollViewMode.Vertical) { horizontalScrollerVisibility = ScrollerVisibility.Hidden };
         private readonly Label _fullMessage = new();
@@ -36,9 +39,11 @@ namespace OperatorConsole
             _time.AddToClassList("ocp-log-row__time");
             _message.AddToClassList("ocp-log-row__message");
             _count.AddToClassList("ocp-log-row__count");
+            _stackMatch.AddToClassList("ocp-log-row__stack-match");
             _main.Add(_dot);
             _main.Add(_time);
             _main.Add(_message);
+            _main.Add(_stackMatch);
             _main.Add(_count);
             _main.RegisterCallback<ClickEvent>(_ =>
             {
@@ -66,7 +71,7 @@ namespace OperatorConsole
 
         public OCLogEntry? Entry { get; private set; }
 
-        public void Bind(OCLogEntry entry, bool showCount, bool expanded, OCPanelLayout layout)
+        public void Bind(OCLogEntry entry, bool showCount, bool expanded, string query, OCPanelLayout layout)
         {
             Entry = entry;
             EnableInClassList("ocp-log-row--info", entry.Type == OCLogType.Info);
@@ -75,7 +80,10 @@ namespace OperatorConsole
             EnableInClassList("ocp-log-row--expanded", expanded);
 
             _time.text = entry.TimeText;
-            _message.text = entry.Preview;
+            var highlight = query.Length > 0;
+            SetText(_message, entry.Preview(layout.LogPreviewLines), query);
+            var stackOnly = highlight && !OCLogMarkup.Matches(entry.Message, query) && OCLogMarkup.Matches(entry.StackTrace, query);
+            _stackMatch.style.display = stackOnly ? DisplayStyle.Flex : DisplayStyle.None;
             var count = showCount ? entry.Count : 1;
             if (count != _shownCount)
             {
@@ -87,15 +95,24 @@ namespace OperatorConsole
             _detail.style.display = expanded ? DisplayStyle.Flex : DisplayStyle.None;
             if (expanded)
             {
-                _fullMessage.text = entry.Message;
-                _stack.text = entry.HasStackTrace ? entry.StackTrace.TrimEnd() : NoStackTrace(entry.Type);
+                SetText(_fullMessage, entry.Message, query);
+                if (entry.HasStackTrace) SetText(_stack, entry.StackTrace.TrimEnd(), query);
+                else SetText(_stack, NoStackTrace(entry.Type), string.Empty);
                 _stack.EnableInClassList("ocp-log-row__stack--none", !entry.HasStackTrace);
             }
 
             style.paddingBottom = layout.RowSpacing;
             _main.style.minHeight = layout.RowHeight;
+            var line = layout.FontSize * LineHeight;
+            var padding = Mathf.Max(0f, (layout.RowHeight - line) * 0.5f);
+            _main.style.paddingTop = padding;
+            _main.style.paddingBottom = padding;
+            _dot.style.marginTop = (line - DotSize) * 0.5f;
             _time.style.fontSize = layout.FontSize * 0.8f;
+            _time.style.marginTop = line * 0.1f;
             _message.style.fontSize = layout.FontSize;
+            _message.style.maxHeight = line * layout.LogPreviewLines;
+            _stackMatch.style.fontSize = layout.FontSize * 0.7f;
             _count.style.fontSize = layout.FontSize * 0.75f;
             _fullMessage.style.fontSize = layout.LogStackTraceFontSize;
             _stack.style.fontSize = layout.LogStackTraceFontSize;
@@ -108,6 +125,13 @@ namespace OperatorConsole
         {
             var head = $"[{entry.TimeText}] {entry.Type}: {entry.Message}";
             return entry.HasStackTrace ? head + "\n" + entry.StackTrace.TrimEnd() : head;
+        }
+
+        private static void SetText(Label label, string text, string query)
+        {
+            var highlight = query.Length > 0;
+            label.enableRichText = highlight;
+            label.text = highlight ? OCLogMarkup.Highlight(text, query) : text;
         }
 
         private static string NoStackTrace(OCLogType type) => type switch

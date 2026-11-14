@@ -258,6 +258,7 @@ open panel immediately.
   Alpha** — the Lock Screen keypad, its passcode dots, and how much of the app shows through behind it.
 - **Entry Action Button Width**, **Entry Action Error Font Size** — each Entry Action button beside a
   widget (longer Titles end in an ellipsis) and the error line under a row whose Entry Action failed.
+- **Log Preview Lines** — the most lines of a Log Entry's message a row shows before it is expanded.
 - **Log Stack Trace Font Size** — the full message and stack trace of an expanded Log Entry.
 - **Performance Graph Height**, **Frame Budget (ms)** — the frame time graph on the Performance tab, and
   the dashed budget line drawn on it (16.67 ms is 60 fps). Frames over the budget are drawn in amber.
@@ -395,6 +396,9 @@ Two optional tabs for on-site diagnostics. Turn them on per Panel Definition wit
 - Search, type filters with counts (Info, Warning, Error), **Collapse**, **Copy all** and **Clear**.
 - **Collapse** shows identical messages logged back to back as one row with a `×N` count. Identical
   messages further apart stay separate, so the order is kept.
+- **Search** matches messages and stack traces, ignoring case, and marks every match. A row that
+  matches only in its stack trace carries an `in stack trace` tag.
+- Each row shows the first lines of its message (**Log Preview Lines**, default 3).
 - Click a row to show its full message and stack trace under it, with **Copy entry**.
 - **Clear** empties the one Log every panel shares.
 - The tab shows a red count of errors logged since its operator last looked at the Log.

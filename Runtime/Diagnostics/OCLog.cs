@@ -19,6 +19,7 @@ namespace OperatorConsole
     {
         private string? _timeText;
         private string? _preview;
+        private int _previewLines;
 
         internal OCLogEntry(OCLogType type, string message, string stackTrace, DateTime time)
         {
@@ -44,15 +45,19 @@ namespace OperatorConsole
 
         internal string TimeText => _timeText ??= Time.ToString("HH:mm:ss.fff", CultureInfo.InvariantCulture);
 
-        internal string Preview
+        /// <summary>The message cut to its first <paramref name="maxLines"/> lines; cached for the last count asked.</summary>
+        internal string Preview(int maxLines)
         {
-            get
+            if (_preview != null && _previewLines == maxLines) return _preview;
+            _previewLines = maxLines;
+            var end = -1;
+            for (var line = 0; line < maxLines; line++)
             {
-                if (_preview != null) return _preview;
-                var newline = Message.IndexOf('\n');
-                _preview = newline < 0 ? Message : Message.Substring(0, newline).TrimEnd('\r');
-                return _preview;
+                end = Message.IndexOf('\n', end + 1);
+                if (end < 0) break;
             }
+            _preview = (end < 0 ? Message : Message.Substring(0, end)).Replace("\r", string.Empty);
+            return _preview;
         }
 
         internal bool IsSameAs(OCLogType type, string message, string stackTrace) =>
