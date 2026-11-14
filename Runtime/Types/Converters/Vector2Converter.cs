@@ -5,7 +5,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
 
-namespace DataSaveManager
+namespace OperatorConsole
 {
     public sealed class Vector2Converter : JsonConverter<Vector2>
     {

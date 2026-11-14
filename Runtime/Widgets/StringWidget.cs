@@ -3,9 +3,9 @@
 using TMPro;
 using UnityEngine;
 
-namespace DataSaveManager
+namespace OperatorConsole
 {
-    public sealed class StringWidget : DSMWidget<string>
+    public sealed class StringWidget : OCWidget<string>
     {
         [SerializeField] private TMP_InputField? _input;
 

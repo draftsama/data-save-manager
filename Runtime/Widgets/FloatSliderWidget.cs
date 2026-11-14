@@ -6,9 +6,9 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
-namespace DataSaveManager
+namespace OperatorConsole
 {
-    public sealed class FloatSliderWidget : DSMWidget<float>
+    public sealed class FloatSliderWidget : OCWidget<float>
     {
         [SerializeField] private Slider? _slider;
         [SerializeField] private TMP_InputField? _input;
@@ -23,7 +23,7 @@ namespace DataSaveManager
             if (_input != null) _input.onEndEdit.AddListener(OnEndEdit);
         }
 
-        protected override void OnSetup(DSMEntryDefinition entry)
+        protected override void OnSetup(OCEntryDefinition entry)
         {
             if (_slider == null) return;
             _slider.wholeNumbers = false;
@@ -32,7 +32,7 @@ namespace DataSaveManager
             ListenToSlider();
         }
 
-        public override void ApplyLayout(DSMPanelLayout layout)
+        public override void ApplyLayout(OCPanelLayout layout)
         {
             base.ApplyLayout(layout);
             _decimals = layout.FloatDecimals;

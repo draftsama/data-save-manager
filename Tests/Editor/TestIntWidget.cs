@@ -1,8 +1,8 @@
 #nullable enable
 
-namespace DataSaveManager.Tests
+namespace OperatorConsole.Tests
 {
-    internal sealed class TestIntWidget : DSMWidget<int>
+    internal sealed class TestIntWidget : OCWidget<int>
     {
         protected override void Show(int value) { }
 

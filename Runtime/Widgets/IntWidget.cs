@@ -4,9 +4,9 @@ using System.Globalization;
 using TMPro;
 using UnityEngine;
 
-namespace DataSaveManager
+namespace OperatorConsole
 {
-    public sealed class IntWidget : DSMWidget<int>
+    public sealed class IntWidget : OCWidget<int>
     {
         [SerializeField] private TMP_InputField? _input;
 
