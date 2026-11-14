@@ -22,6 +22,10 @@ namespace OperatorConsole
         private OCCornerTap _cornerTap = new();
         [SerializeField] private OCPasscode _passcode = new();
         [SerializeField] private bool _startVisible;
+        [SerializeField, Tooltip("Show the Log tab: messages the app wrote to Unity's log, kept from app start.")]
+        private bool _showLog;
+        [SerializeField, Tooltip("Show the Performance tab: frame rate, frame time and memory, measured from app start.")]
+        private bool _showPerformance;
         [SerializeField] private OCPanelLayout _layout = new();
 
         public OCPanelDefinition() { }
@@ -46,6 +50,8 @@ namespace OperatorConsole
         public OCCornerTap CornerTap => _cornerTap;
         public OCPasscode Passcode => _passcode;
         public bool StartVisible => _startVisible;
+        public bool ShowLog => _showLog;
+        public bool ShowPerformance => _showPerformance;
         public OCPanelLayout Layout => _layout;
     }
 }
