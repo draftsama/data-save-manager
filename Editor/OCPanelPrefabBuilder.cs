@@ -82,44 +82,6 @@ namespace OperatorConsole.Editor
                        $"  {panelPath}");
         }
 
-        /// <summary>Adds a Lock Screen to the existing Runtime Panel prefab in place, keeping every other object and its overrides in scenes.</summary>
-        [MenuItem("Draft/Operator Console/Add Lock Screen to Runtime Panel Prefab")]
-        internal static void AddLockScreenToPanelPrefab()
-        {
-            var font = TMP_Settings.defaultFontAsset;
-            var prefabDir = ResolvePrefabFolder();
-            if (font == null || prefabDir == null)
-            {
-                Debug.LogError("OC: needs TMP_Settings.defaultFontAsset and this package's Prefab folder.");
-                return;
-            }
-
-            var path = Path.Combine(prefabDir, "OCRuntimePanel.prefab").Replace('\\', '/');
-            var root = PrefabUtility.LoadPrefabContents(path);
-            try
-            {
-                var panel = root.GetComponent<OCRuntimePanel>();
-                if (panel == null)
-                {
-                    Debug.LogError($"OC: no OCRuntimePanel on the root of {path}.");
-                    return;
-                }
-                if (new SerializedObject(panel).FindProperty("_lockScreen").objectReferenceValue != null)
-                {
-                    Debug.Log($"OC: {path} already has a Lock Screen.");
-                    return;
-                }
-
-                SetField(panel, "_lockScreen", BuildLockScreen(root, font));
-                PrefabUtility.SaveAsPrefabAsset(root, path);
-                Debug.Log($"OC: added a Lock Screen to {path}.");
-            }
-            finally
-            {
-                PrefabUtility.UnloadPrefabContents(root);
-            }
-        }
-
         /// <summary>Package root is this script's grandparent folder (script -> Editor -> package root), so this works wherever the package is installed.</summary>
         internal static string? ResolvePrefabFolder()
         {

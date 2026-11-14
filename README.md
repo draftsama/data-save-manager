@@ -24,9 +24,8 @@ isn't installed.
 
 ## Quick start
 
-1. **Draft › Operator Console › Create Config Asset** — creates `Assets/Resources/DSMConfig.asset`.
-2. **Draft › Operator Console › Open Manager** — add Entries (key, type, default, label, exposed flag).
-3. Read and write values from code:
+1. **Draft › Operator Console › Open Manager** — click **Create Config Asset** (creates `Assets/Resources/DSMConfig.asset`), then add Entries (key, type, default, label, exposed flag).
+2. Read and write values from code:
 
 ```csharp
 using OperatorConsole;
@@ -158,12 +157,6 @@ In Edit mode, changing an Entry's current value saves the Save File immediately.
 value edits are live on the running `OC.Store` and persisted whenever AutoSave next fires (or on
 quit).
 
-### Other menu items
-
-- **Draft › Operator Console › Create Config Asset** — creates `Assets/Resources/DSMConfig.asset` if it doesn't exist
-  yet, otherwise selects the existing one.
-- **Draft › Operator Console › Open Save Folder** — reveals the resolved Save File's directory in Finder/Explorer.
-
 ## Runtime Panel
 
 An in-game UI for an operator to view and edit Exposed Entries while the app runs.
@@ -230,8 +223,7 @@ Code chooses whether to ask: `RequestOpen()` and `Toggle()` go through the Lock 
 opens at once. `IsOpen` is true while a Lock Screen is up.
 
 A prefab built before the Lock Screen existed has none, and a locked panel without one refuses to
-open (it logs an error). Add one in place with **Draft › Operator Console › Add Lock Screen to Runtime Panel Prefab**,
-which keeps the rest of the prefab.
+open (it logs an error). Rebuild it with **Draft › Operator Console › Build Runtime Panel Prefabs**.
 
 Regenerate or restyle the default widget prefabs with **Draft › Operator Console › Build Runtime Panel Prefabs** — this
 overwrites the existing prefabs and the `OCWidgetConfig` asset under `Prefab/`.

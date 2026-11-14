@@ -10,9 +10,6 @@ namespace OperatorConsole.Editor
     {
         private const string ConfigPath = "Assets/Resources/DSMConfig.asset";
 
-        [MenuItem("Draft/Operator Console/Create Config Asset")]
-        private static void CreateConfigAssetMenuItem() => CreateConfigAsset();
-
         /// <summary>Loads the Resources config asset, creating it (and its folder) first if it doesn't exist yet. Pings/selects it either way.</summary>
         internal static OCConfig CreateConfigAsset()
         {
@@ -37,22 +34,6 @@ namespace OperatorConsole.Editor
             EditorGUIUtility.PingObject(config);
             Selection.activeObject = config;
             return config;
-        }
-
-        [MenuItem("Draft/Operator Console/Open Save Folder")]
-        private static void OpenSaveFolder()
-        {
-            var config = AssetDatabase.LoadAssetAtPath<OCConfig>(ConfigPath);
-            if (config == null)
-            {
-                Debug.LogWarning($"OC: no OCConfig asset found at '{ConfigPath}'. Create one via Draft/Operator Console/Create Config Asset first.");
-                return;
-            }
-
-            var path = OCPaths.ResolveSaveFilePath(config);
-            var dir = Path.GetDirectoryName(path)!;
-            Directory.CreateDirectory(dir);
-            EditorUtility.RevealInFinder(dir);
         }
     }
 }
