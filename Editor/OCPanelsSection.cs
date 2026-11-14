@@ -13,9 +13,8 @@ namespace OperatorConsole.Editor
     {
         private static readonly Color DuplicateNameColor = new(0.65f, 0.28f, 0.28f);
         private static readonly GUIContent AudiencesLabel = new("Audiences", "Exposed Entries this Panel shows: those naming any of these Audiences, plus those naming none. None selected: every Exposed Entry.");
-        private static readonly GUIContent SectionLabel = new("Runtime Panels", "Each enabled Panel Definition becomes one Runtime Panel when the app starts.");
+        internal static readonly GUIContent TabLabel = new("Runtime Panels", "Each enabled Panel Definition becomes one Runtime Panel when the app starts.");
 
-        private bool _foldout = true;
         private readonly List<bool> _expanded = new();
         private readonly List<string> _newPasscodes = new();
         private Action? _deferred;
@@ -23,9 +22,6 @@ namespace OperatorConsole.Editor
         /// <summary>Draws the section; returns true when a Panel Definition changed.</summary>
         public bool Draw(SerializedObject configSo, OCConfig config, string[] audienceNames)
         {
-            _foldout = EditorGUILayout.Foldout(_foldout, SectionLabel, true);
-            if (!_foldout) return false;
-
             var panelsProp = configSo.FindProperty("_panels");
             Sync(panelsProp.arraySize);
             var duplicates = DuplicateNames(panelsProp);

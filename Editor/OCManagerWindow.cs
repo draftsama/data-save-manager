@@ -52,14 +52,15 @@ namespace OperatorConsole.Editor
         private SerializedObject? _configSo;
         private ReorderableList? _entriesList;
         private string _search = string.Empty;
-        private Vector2 _entriesScroll;
-        private bool _settingsFoldout = true;
+        private enum Tab { Entries, Panels, Commands, Settings }
+
+        [SerializeField] private Tab _tab;
+        private readonly Vector2[] _tabScrolls = new Vector2[4];
         private string _newKey = string.Empty;
         private OCDataType _newType = OCDataType.String;
         private string[] _audienceNames = Array.Empty<string>();
         private int _viewAsIndex = -1;
         private Action? _pendingAudienceEdit;
-        private bool _commandsFoldout = true;
         private readonly OCPanelsSection _panelsSection = new();
         private OCRegisteredCommand? _pendingCommandRun;
         private GUIStyle? _commandErrorStyle;
@@ -123,26 +124,34 @@ namespace OperatorConsole.Editor
                     "OC.Store is configured with a different OCConfig asset. This window only edits the Resources config's values, so the Value column is disabled.",
                     MessageType.Warning);
 
-            if (duplicates.Count > 0)
-                EditorGUILayout.HelpBox($"Duplicate keys: {string.Join(", ", duplicates)}", MessageType.Error);
+            DrawTabBar(duplicates.Count > 0);
 
-            EditorGUILayout.Space();
-            DrawSettings();
-
-            EditorGUILayout.Space();
-            var panelsChanged = _panelsSection.Draw(_configSo, _config, _audienceNames);
-
-            EditorGUILayout.Space();
-            DrawEntries(duplicates, valuesEditable);
-
-            EditorGUILayout.Space();
-            DrawCommands(_config);
-
-            EditorGUILayout.Space();
-            DrawAddEntry();
-
-            EditorGUILayout.Space();
-            DrawFooter();
+            var panelsChanged = false;
+            using (var scroll = new EditorGUILayout.ScrollViewScope(_tabScrolls[(int)_tab]))
+            {
+                _tabScrolls[(int)_tab] = scroll.scrollPosition;
+                switch (_tab)
+                {
+                    case Tab.Entries:
+                        if (duplicates.Count > 0)
+                            EditorGUILayout.HelpBox($"Duplicate keys: {string.Join(", ", duplicates)}", MessageType.Error);
+                        DrawEntries(duplicates, valuesEditable);
+                        EditorGUILayout.Space();
+                        DrawAddEntry();
+                        EditorGUILayout.Space();
+                        DrawFooter();
+                        break;
+                    case Tab.Panels:
+                        panelsChanged = _panelsSection.Draw(_configSo, _config, _audienceNames);
+                        break;
+                    case Tab.Commands:
+                        DrawCommands(_config);
+                        break;
+                    case Tab.Settings:
+                        DrawSettings();
+                        break;
+                }
+            }
 
             if (_pendingCommandRun != null)
             {
@@ -173,6 +182,22 @@ namespace OperatorConsole.Editor
                     if (panel != null) panel.ApplySettings();
         }
 
+        private void DrawTabBar(bool hasDuplicateKeys)
+        {
+            var commandCount = EditorApplication.isPlaying ? OC.Commands.Commands.Count : 0;
+            var labels = new[]
+            {
+                new GUIContent(hasDuplicateKeys ? "Entries ⚠" : "Entries", hasDuplicateKeys ? "Some Entries share a Key." : null),
+                OCPanelsSection.TabLabel,
+                new GUIContent(commandCount > 0 ? $"Commands ({commandCount})" : "Commands", CommandsHeader.tooltip),
+                new GUIContent("Settings", "Save File location and behaviour, and the Config's Audiences.")
+            };
+
+            EditorGUILayout.Space(2);
+            _tab = (Tab)GUILayout.Toolbar((int)_tab, labels, GUILayout.Height(24));
+            EditorGUILayout.Space(2);
+        }
+
         private void DrawToolbar()
         {
             using (new EditorGUILayout.HorizontalScope(EditorStyles.toolbar))
@@ -182,7 +207,8 @@ namespace OperatorConsole.Editor
 
                 GUILayout.FlexibleSpace();
 
-                if (_audienceNames.Length > 0)
+                var hasConfig = _config != null;
+                if (hasConfig && _audienceNames.Length > 0 && _tab is Tab.Entries or Tab.Commands)
                 {
                     GUILayout.Label(ViewAsLabel, EditorStyles.miniLabel);
                     var choices = new string[_audienceNames.Length + 1];
@@ -191,15 +217,13 @@ namespace OperatorConsole.Editor
                     _viewAsIndex = EditorGUILayout.Popup(_viewAsIndex + 1, choices, EditorStyles.toolbarPopup, GUILayout.Width(110)) - 1;
                 }
 
-                _search = EditorGUILayout.TextField(_search, EditorStyles.toolbarSearchField, GUILayout.Width(180));
+                if (hasConfig && _tab == Tab.Entries)
+                    _search = EditorGUILayout.TextField(_search, EditorStyles.toolbarSearchField, GUILayout.Width(180));
             }
         }
 
         private void DrawCommands(OCConfig config)
         {
-            _commandsFoldout = EditorGUILayout.Foldout(_commandsFoldout, CommandsHeader, true, EditorStyles.foldoutHeader);
-            if (!_commandsFoldout) return;
-
             if (!EditorApplication.isPlaying)
             {
                 EditorGUILayout.HelpBox("Commands register while the app runs. Enter Play mode to see and run them.", MessageType.None);
@@ -273,9 +297,7 @@ namespace OperatorConsole.Editor
 
         private void DrawSettings()
         {
-            _settingsFoldout = EditorGUILayout.Foldout(_settingsFoldout, "Settings", true);
-            if (!_settingsFoldout) return;
-
+            EditorGUILayout.LabelField("Save File", EditorStyles.boldLabel);
             using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
             {
                 EditorGUILayout.PropertyField(_configSo!.FindProperty("_autoSave"), new GUIContent("AutoSave"));
@@ -309,16 +331,17 @@ namespace OperatorConsole.Editor
                     }
                 }
 
-                EditorGUILayout.Space(4);
-                DrawAudiences();
             }
+
+            EditorGUILayout.Space();
+            EditorGUILayout.LabelField(new GUIContent("Audiences", "Kinds of operator an Exposed Entry is meant for. Each Runtime Panel picks the Audiences it serves."), EditorStyles.boldLabel);
+            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
+                DrawAudiences();
         }
 
         private void DrawAudiences()
         {
             var audiencesProp = _configSo!.FindProperty("_audiences");
-            EditorGUILayout.LabelField(new GUIContent("Audiences", "Kinds of operator an Exposed Entry is meant for. Each Runtime Panel picks the Audiences it serves."));
-
             for (var i = 0; i < audiencesProp.arraySize; i++)
             {
                 var audienceProp = audiencesProp.GetArrayElementAtIndex(i);
@@ -431,11 +454,7 @@ namespace OperatorConsole.Editor
                 GUI.color = priorColor;
             };
 
-            using (var scroll = new EditorGUILayout.ScrollViewScope(_entriesScroll, false, false, GUILayout.ExpandHeight(true)))
-            {
-                _entriesScroll = scroll.scrollPosition;
-                list.DoLayoutList();
-            }
+            list.DoLayoutList();
 
             if (pendingRemoveIndex >= 0)
                 entriesProp.DeleteArrayElementAtIndex(pendingRemoveIndex);
