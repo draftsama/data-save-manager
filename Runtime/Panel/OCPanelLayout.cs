@@ -62,7 +62,7 @@ namespace OperatorConsole
         private Vector2 _offset = Vector2.zero;
 
         [SerializeField, Tooltip("Panel background color.")]
-        private Color _backgroundColor = new(0.08f, 0.08f, 0.1f, 0.92f);
+        private Color _backgroundColor = new(0f, 0f, 0f, 0.98f);
 
         [SerializeField, Tooltip("Ellipsis keeps the label on one line; Wrap lets the row grow taller to fit it.")]
         private OCLabelOverflow _labelOverflow = OCLabelOverflow.Ellipsis;

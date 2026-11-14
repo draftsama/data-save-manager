@@ -37,15 +37,15 @@
     -unity-font-style: bold;
 }
 
-.ocp-pill {
-    margin-left: 12px;
-    padding: 4px 10px;
-    border-radius: 999px;
-    background-color: rgba(110, 163, 245, 0.14);
-}
-
 .ocp .ocp-pill {
+    margin-left: 12px;
+    padding: 3px 10px;
+    border-radius: 8px;
+    border-width: 1px;
+    border-color: rgba(110, 163, 245, 0.35);
+    background-color: rgba(110, 163, 245, 0.12);
     color: rgb(159, 194, 255);
+    -unity-text-align: middle-center;
 }
 
 .ocp-tabs {
@@ -66,12 +66,18 @@
     color: rgba(255, 255, 255, 0.55);
 }
 
-.ocp-tab:hover {
+.ocp .ocp-tab:hover:enabled {
     background-color: rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.8);
 }
 
-.ocp-tab--selected,
-.ocp-tab--selected:hover {
+.ocp .ocp-tab:hover:active:enabled {
+    background-color: rgba(255, 255, 255, 0.09);
+}
+
+.ocp .ocp-tab--selected,
+.ocp .ocp-tab--selected:hover:enabled,
+.ocp .ocp-tab--selected:hover:active:enabled {
     background-color: rgba(255, 255, 255, 0.12);
     color: rgb(255, 255, 255);
 }
@@ -106,7 +112,7 @@
     display: none;
 }
 
-.ocp-header {
+.ocp .ocp-header {
     margin-bottom: 6px;
     padding-bottom: 4px;
     border-bottom-width: 1px;
@@ -131,7 +137,7 @@
     background-color: rgba(255, 255, 255, 0.06);
 }
 
-.ocp-label {
+.ocp .ocp-label {
     flex-shrink: 0;
     margin-right: 12px;
     -unity-text-align: middle-left;
@@ -165,11 +171,8 @@
     min-width: 0;
 }
 
-.ocp-axis {
-    margin: 0 2px 0 6px;
-}
-
 .ocp .ocp-axis {
+    margin: 0 2px 0 6px;
     color: rgba(255, 255, 255, 0.5);
 }
 
@@ -286,11 +289,11 @@
     text-overflow: ellipsis;
 }
 
-.ocp-button:hover {
+.ocp .ocp-button:hover:enabled {
     background-color: rgba(255, 255, 255, 0.2);
 }
 
-.ocp-button:active {
+.ocp .ocp-button:hover:active:enabled {
     background-color: rgba(255, 255, 255, 0.28);
 }
 
@@ -303,8 +306,12 @@
     background-color: rgb(63, 123, 224);
 }
 
-.ocp-button--primary:hover {
+.ocp .ocp-button--primary:hover:enabled {
     background-color: rgb(84, 140, 235);
+}
+
+.ocp .ocp-button--primary:hover:active:enabled {
+    background-color: rgb(52, 108, 204);
 }
 
 .ocp-button--danger {
@@ -313,14 +320,27 @@
     color: rgb(255, 138, 128);
 }
 
-.ocp-button--danger:hover {
+.ocp .ocp-button--danger:hover:enabled {
     background-color: rgba(255, 138, 128, 0.1);
+}
+
+.ocp .ocp-button--danger:hover:active:enabled {
+    background-color: rgba(255, 138, 128, 0.2);
 }
 
 .ocp-button--ghost {
     border-color: rgba(0, 0, 0, 0);
     background-color: rgba(0, 0, 0, 0);
     color: rgb(196, 202, 214);
+}
+
+.ocp .ocp-button--ghost:hover:enabled {
+    background-color: rgba(255, 255, 255, 0.06);
+    color: rgb(255, 255, 255);
+}
+
+.ocp .ocp-button--ghost:hover:active:enabled {
+    background-color: rgba(255, 255, 255, 0.12);
 }
 
 .ocp-foot {
@@ -404,7 +424,7 @@
     background-color: rgb(30, 32, 41);
 }
 
-.ocp-confirm__message {
+.ocp .ocp-confirm__message {
     margin-bottom: 24px;
     white-space: normal;
 }
@@ -470,11 +490,11 @@
     -unity-text-align: middle-center;
 }
 
-.ocp-lock__key:hover {
+.ocp-lock .ocp-lock__key:hover:enabled {
     background-color: rgba(255, 255, 255, 0.2);
 }
 
-.ocp-lock__key:active {
+.ocp-lock .ocp-lock__key:hover:active:enabled {
     background-color: rgba(255, 255, 255, 0.4);
 }
 
@@ -482,10 +502,10 @@
     background-color: rgba(0, 0, 0, 0);
 }
 
-.ocp-lock__key--ghost:hover {
+.ocp-lock .ocp-lock__key--ghost:hover:enabled {
     background-color: rgba(255, 255, 255, 0.06);
 }
 
-.ocp-lock__key--ghost:active {
+.ocp-lock .ocp-lock__key--ghost:hover:active:enabled {
     background-color: rgba(255, 255, 255, 0.12);
 }
