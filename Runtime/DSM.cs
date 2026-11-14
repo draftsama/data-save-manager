@@ -9,10 +9,14 @@ using UnityEngine;
 public static class DSM
 {
     private static DSMStore? s_store;
+    private static DSMCommandRegistry? s_commands;
     private static bool s_quittingHooked;
 
     /// <summary>The active store, created lazily from the Resources config on first access.</summary>
     public static DSMStore Store => s_store ??= CreateDefault();
+
+    /// <summary>The Registered Commands the Runtime Panel lists. Owners call <c>Register(this)</c> in OnEnable and <c>Unregister(this)</c> in OnDisable.</summary>
+    public static DSMCommandRegistry Commands => s_commands ??= new DSMCommandRegistry(() => Store.Config);
 
     /// <summary>Overrides the active config: saves and disposes any existing store, then loads a new one.</summary>
     public static void Configure(DSMConfig config)
@@ -101,5 +105,7 @@ public static class DSM
         if (s_store?.IsDirty == true) s_store.Save();
         s_store?.Dispose();
         s_store = null;
+        s_commands?.Clear();
+        s_commands = null;
     }
 }
