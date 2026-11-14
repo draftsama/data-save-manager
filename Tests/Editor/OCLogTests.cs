@@ -106,7 +106,7 @@ namespace OperatorConsole.Tests
         public void Highlight_MarksEveryMatchIgnoringCase()
         {
             Assert.AreEqual(
-                "<noparse>a </noparse><mark=#FFC83D99><noparse>Err</noparse></mark><noparse> b </noparse><mark=#FFC83D99><noparse>err</noparse></mark>",
+                "<noparse>a </noparse><mark=#FFC83D99><color=#FFFFFF><b><noparse>Err</noparse></b></color></mark><noparse> b </noparse><mark=#FFC83D99><color=#FFFFFF><b><noparse>err</noparse></b></color></mark>",
                 OCLogMarkup.Highlight("a Err b err", "err"));
         }
 

@@ -8,8 +8,8 @@ namespace OperatorConsole
     /// <summary>Rich text for the Log tab: a message shown as plain text, with the search matches marked.</summary>
     internal static class OCLogMarkup
     {
-        private const string MarkOpen = "<mark=#FFC83D99>";
-        private const string MarkClose = "</mark>";
+        private const string MarkOpen = "<mark=#FFC83D99><color=#FFFFFF><b>";
+        private const string MarkClose = "</b></color></mark>";
         private const string NoParseOpen = "<noparse>";
         private const string NoParseClose = "</noparse>";
         // A zero-width space keeps a literal "</noparse>" in the message from ending the escape.

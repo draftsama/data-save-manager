@@ -53,7 +53,10 @@ namespace OperatorConsole
         private static ThemeStyleSheet? s_theme;
 
         private OCPanelDefinition? _definition;
+        private const string EditingFieldClass = "ocp-field--editing";
+
         private UIDocument? _document;
+        private VisualElement? _editingField;
         private PanelSettings? _panelSettings;
         private bool _countedOpen;
         private bool _visible;
@@ -179,7 +182,7 @@ namespace OperatorConsole
             if (_definition == null) return;
             _lockScreen?.Tick();
 
-            if (Definition.HotkeyEnabled && HotkeyPressed()) Toggle();
+            if (Definition.HotkeyEnabled && _editingField == null && HotkeyPressed()) Toggle();
 
             var cornerTap = Definition.CornerTap;
             if (cornerTap.Enabled && TryGetPointerPress(out var position))
@@ -660,6 +663,29 @@ namespace OperatorConsole
             if (element != null) element.style.display = shown ? DisplayStyle.Flex : DisplayStyle.None;
         }
 
+        private void OnFocusIn(FocusInEvent e)
+        {
+            var field = TextFieldOf(e.target as VisualElement);
+            if (field == _editingField) return;
+            _editingField?.RemoveFromClassList(EditingFieldClass);
+            _editingField = field;
+            _editingField?.AddToClassList(EditingFieldClass);
+        }
+
+        private void OnFocusOut(FocusOutEvent e)
+        {
+            if (_editingField == null || TextFieldOf(e.relatedTarget as VisualElement) == _editingField) return;
+            _editingField.RemoveFromClassList(EditingFieldClass);
+            _editingField = null;
+        }
+
+        private static VisualElement? TextFieldOf(VisualElement? element)
+        {
+            for (var e = element; e != null; e = e.parent)
+                if (e.ClassListContains(TextInputBaseField<string>.ussClassName)) return e;
+            return null;
+        }
+
         private bool EnsureBuilt()
         {
             if (_card != null) return true;
@@ -672,6 +698,8 @@ namespace OperatorConsole
 
             _card = new VisualElement();
             _card.AddToClassList("ocp");
+            _card.RegisterCallback<FocusInEvent>(OnFocusIn, TrickleDown.TrickleDown);
+            _card.RegisterCallback<FocusOutEvent>(OnFocusOut, TrickleDown.TrickleDown);
 
             var head = new VisualElement();
             head.AddToClassList("ocp-head");
