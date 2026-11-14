@@ -86,7 +86,7 @@ namespace OperatorConsole.Editor
 
             var keyBlock = new VisualElement { tooltip = "Click to show the Entry's settings." };
             keyBlock.AddToClassList("oc-entry__key-block");
-            var caret = new Label(expanded ? "▾" : "▸");
+            var caret = new Label(expanded ? "▼" : "▶");
             caret.AddToClassList("oc-caret");
             var texts = new VisualElement();
             texts.AddToClassList("oc-grow");

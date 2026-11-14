@@ -178,7 +178,7 @@
 .oc-entry--dimmed { opacity: 0.4; }
 
 .oc-entry__key-block { flex-direction: row; align-items: center; cursor: link; }
-.oc-caret { width: 12px; color: var(--oc-muted); }
+.oc-caret { width: 18px; font-size: 12px; -unity-text-align: middle-center; color: var(--oc-muted); }
 .oc-value-field { flex-direction: row; align-items: center; }
 .oc-value-field > * { margin: 0; flex-grow: 1; flex-shrink: 1; min-width: 0; }
 .oc-cell { justify-content: center; }
