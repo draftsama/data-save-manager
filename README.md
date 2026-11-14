@@ -143,15 +143,22 @@ Example Save File — a flat JSON object of only the Overrides that have been se
 
 ### Operator Console window (**Draft › Operator Console › Open Manager**)
 
-- **Settings** — edits AutoSave, AutoSave Debounce, Save Directory, and File Name on the Config
-  asset; shows the resolved Save File path with buttons to open its folder or delete the file.
-- **Entries** — one card per Entry Definition: key, type, label, exposed toggle, default value,
-  current value, Reset, and remove. Exposed Int/Float Entries add a Range line. Duplicate keys are highlighted and reported. Drag a card by
-  its handle to reorder it — that order is the Runtime Panel order.
+A UI Toolkit window with a sidebar for its four sections. It follows the Editor's dark or light skin.
+
+- **Entries** — one row per Entry Definition: type, key and label, default value, current value
+  (a dot marks an Override), and Reset. Click a row's key to show its settings: key, type, label,
+  Exposed, Slider (Int/Float), Dropdown Options (Int), Header and Audience, plus Remove Entry.
+  Duplicate keys are highlighted and reported. Drag a row by its handle to reorder it — that order
+  is the Runtime Panel order (reordering is off while searching). **Search** filters by key or
+  label; **View as** dims the Entries that Audience's Runtime Panel would not show.
+- **Add Entry** (bottom bar) — key and type for a new Entry Definition, next to Reset All Values
+  and a live count of current Overrides.
+- **Runtime Panels** — one card per Panel Definition (see below).
 - **Commands** — in Play mode, every Registered Command with its status and a Run button (it asks first
   when the Command has `Confirm`). **View as** dims the Commands that Audience's Runtime Panel would not show.
-- **Add Entry** — key and type for a new Entry Definition.
-- **Footer** — Reset All Values, and a live count of current Overrides.
+- **Settings** — edits AutoSave, AutoSave Debounce, Save Directory, and File Name on the Config
+  asset; shows the resolved Save File path with buttons to open its folder or delete the file; and
+  lists the Config's Audiences.
 
 In Edit mode, changing an Entry's current value saves the Save File immediately. In Play mode,
 value edits are live on the running `OC.Store` and persisted whenever AutoSave next fires (or on

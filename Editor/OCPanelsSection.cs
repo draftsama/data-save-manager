@@ -3,140 +3,220 @@
 using System;
 using System.Collections.Generic;
 using UnityEditor;
+using UnityEditor.UIElements;
 using UnityEngine;
+using UnityEngine.UIElements;
 using Object = UnityEngine.Object;
 
 namespace OperatorConsole.Editor
 {
-    /// <summary>The Operator Console's Runtime Panels section: edits the Config's Panel Definitions.</summary>
-    internal sealed class OCPanelsSection
+    /// <summary>The Manager's Runtime Panels tab: edits the Config's Panel Definitions.</summary>
+    internal sealed class OCPanelsSection : VisualElement
     {
-        private static readonly Color DuplicateNameColor = new(0.65f, 0.28f, 0.28f);
-        private static readonly GUIContent AudiencesLabel = new("Audiences", "Exposed Entries this Panel shows: those naming any of these Audiences, plus those naming none. None selected: every Exposed Entry.");
-        internal static readonly GUIContent TabLabel = new("Runtime Panels", "Each enabled Panel Definition becomes one Runtime Panel when the app starts.");
-
+        private readonly OCManagerContext _context;
+        private readonly ScrollView _scroll = new();
+        private readonly VisualElement _cards = new();
         private readonly List<bool> _expanded = new();
-        private readonly List<string> _newPasscodes = new();
-        private Action? _deferred;
+        private readonly List<Card> _shown = new();
+        private string _shownAudiences = string.Empty;
+        private int _shownCount = -1;
 
-        /// <summary>Draws the section; returns true when a Panel Definition changed.</summary>
-        public bool Draw(SerializedObject configSo, OCConfig config, string[] audienceNames)
+        private sealed class Card
         {
-            var panelsProp = configSo.FindProperty("_panels");
-            Sync(panelsProp.arraySize);
-            var duplicates = DuplicateNames(panelsProp);
+            public Foldout Foldout = null!;
+            public HelpBox DuplicateName = null!;
+            public HelpBox? NoAudience;
+            public HelpBox KeyWarning = null!;
+            public HelpBox Conflicts = null!;
+            public HelpBox LockedConflicts = null!;
+        }
 
-            EditorGUI.BeginChangeCheck();
-            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
+        public OCPanelsSection(OCManagerContext context)
+        {
+            _context = context;
+            AddToClassList("oc-tab");
+            _scroll.AddToClassList("oc-scroll");
+            _scroll.Add(_cards);
+
+            var actions = new VisualElement();
+            actions.AddToClassList("oc-row");
+            actions.AddToClassList("oc-actions");
+            var add = new Button(() =>
             {
-                if (panelsProp.arraySize == 0)
-                    EditorGUILayout.HelpBox("No Panel Definitions: the app shows no Runtime Panel.", MessageType.Info);
+                var panelsProp = Panels;
+                AddDefinition(panelsProp, UniqueName(panelsProp, "Panel"));
+                _context.So.ApplyModifiedProperties();
+                Refresh();
+            }) { text = "+ Add Panel" };
+            add.AddToClassList("oc-button--primary");
+            var import = new Button(() =>
+            {
+                var imported = ImportScenePanels(Panels);
+                _context.So.ApplyModifiedProperties();
+                Refresh();
+                ShowImportResult(imported);
+            }) { text = "Import Scene Panels", tooltip = "Create a Panel Definition from each Runtime Panel placed in the open scenes." };
+            actions.Add(add);
+            actions.Add(import);
+            _scroll.Add(actions);
+            Add(_scroll);
 
-                for (var i = 0; i < panelsProp.arraySize; i++)
-                    DrawDefinition(panelsProp, i, config, audienceNames, duplicates);
+            // Most Panel Definition edits reach a running Runtime Panel at once; its layout needs applying again.
+            this.TrackPropertyValue(Panels, _ =>
+            {
+                if (!EditorApplication.isPlaying) return;
+                foreach (var panel in OC.Panels.All)
+                    if (panel != null) panel.ApplySettings();
+            });
 
-                using (new EditorGUILayout.HorizontalScope())
-                {
-                    if (GUILayout.Button("+ Add Panel", GUILayout.Width(110)))
-                        _deferred = () => AddDefinition(panelsProp, UniqueName(panelsProp, "Panel"));
-                    if (GUILayout.Button(new GUIContent("Import Scene Panels", "Create a Panel Definition from each Runtime Panel placed in the open scenes."), GUILayout.Width(150)))
-                        _deferred = () => ShowImportResult(ImportScenePanels(panelsProp));
-                }
-            }
-            return EditorGUI.EndChangeCheck();
+            Refresh();
         }
 
-        /// <summary>Runs an add, remove or import picked during Draw; adding or removing mid-draw would break the layout. Returns true when one ran.</summary>
-        public bool RunDeferred()
+        private SerializedProperty Panels => _context.So.FindProperty("_panels");
+
+        public void Refresh()
         {
-            if (_deferred == null) return false;
-            var edit = _deferred;
-            _deferred = null;
-            edit();
-            return true;
+            var panelsProp = Panels;
+            var audiences = string.Join("\n", _context.AudienceNames);
+            if (panelsProp.arraySize != _shownCount || audiences != _shownAudiences) Rebuild(panelsProp, audiences);
+
+            var config = _context.Config;
+            var duplicates = DuplicateNames(panelsProp);
+            for (var i = 0; i < _shown.Count && i < panelsProp.arraySize; i++)
+            {
+                var card = _shown[i];
+                var definition = panelsProp.GetArrayElementAtIndex(i);
+                var name = definition.FindPropertyRelative("_name").stringValue;
+                var enabled = definition.FindPropertyRelative("_enabled").boolValue;
+                card.Foldout.text = enabled ? name : $"{name} (disabled)";
+                Show(card.DuplicateName, duplicates.Contains(name));
+                if (card.NoAudience != null) Show(card.NoAudience, definition.FindPropertyRelative("_audienceIds").arraySize == 0);
+#if ENABLE_INPUT_SYSTEM
+                Show(card.KeyWarning, !OCKeyMap.TryGetKey((KeyCode)definition.FindPropertyRelative("_toggleKey").intValue, out _));
+#else
+                Show(card.KeyWarning, false);
+#endif
+                var conflicts = i < config.Panels.Count ? TriggerConflicts(config, i, false) : new List<string>();
+                card.Conflicts.text = $"Shares an Open Trigger with {string.Join(", ", conflicts)}: one use opens both panels.";
+                Show(card.Conflicts, conflicts.Count > 0);
+                var locked = i < config.Panels.Count ? TriggerConflicts(config, i, true) : new List<string>();
+                card.LockedConflicts.text = $"Has a Panel Lock and shares an Open Trigger with {string.Join(", ", locked)}, which also has one: only one Lock Screen shows at a time, so that use opens only the first of them in this list.";
+                Show(card.LockedConflicts, locked.Count > 0);
+            }
         }
 
-        private void DrawDefinition(SerializedProperty panelsProp, int index, OCConfig config, string[] audienceNames, HashSet<string> duplicates)
+        private void Rebuild(SerializedProperty panelsProp, string audiences)
+        {
+            _shownCount = panelsProp.arraySize;
+            _shownAudiences = audiences;
+            while (_expanded.Count < _shownCount) _expanded.Add(true);
+            if (_expanded.Count > _shownCount) _expanded.RemoveRange(_shownCount, _expanded.Count - _shownCount);
+
+            _cards.Clear();
+            _shown.Clear();
+            if (_shownCount == 0)
+            {
+                var none = new HelpBox("No Panel Definitions: the app shows no Runtime Panel.", HelpBoxMessageType.Info);
+                none.AddToClassList("oc-banner");
+                _cards.Add(none);
+            }
+
+            for (var i = 0; i < _shownCount; i++)
+                _cards.Add(BuildCard(panelsProp, i));
+        }
+
+        private VisualElement BuildCard(SerializedProperty panelsProp, int index)
         {
             var definition = panelsProp.GetArrayElementAtIndex(index);
-            var nameProp = definition.FindPropertyRelative("_name");
-            var enabledProp = definition.FindPropertyRelative("_enabled");
+            var card = new Card();
+            var root = new VisualElement();
+            root.AddToClassList("oc-card");
+            root.AddToClassList("oc-panel-card");
 
-            using (new EditorGUILayout.HorizontalScope())
+            card.Foldout = new Foldout { value = _expanded[index] };
+            card.Foldout.AddToClassList("oc-panel-card__foldout");
+            card.Foldout.RegisterValueChangedCallback(e =>
             {
-                var title = enabledProp.boolValue ? nameProp.stringValue : $"{nameProp.stringValue} (disabled)";
-                _expanded[index] = EditorGUILayout.Foldout(_expanded[index], title, true);
-                if (GUILayout.Button("✕", GUILayout.Width(24)))
-                {
-                    var name = nameProp.stringValue;
-                    _deferred = () =>
-                    {
-                        if (!EditorUtility.DisplayDialog("Remove Panel Definition", $"Remove Panel Definition '{name}'? Its Passcode is lost.", "Remove", "Cancel")) return;
-                        panelsProp.DeleteArrayElementAtIndex(index);
-                        _expanded.RemoveAt(index);
-                        _newPasscodes.RemoveAt(index);
-                    };
-                }
-            }
-            if (!_expanded[index]) return;
+                if (e.target == card.Foldout && index < _expanded.Count) _expanded[index] = e.newValue;
+            });
+            root.Add(card.Foldout);
 
-            using (new EditorGUI.IndentLevelScope())
+            var remove = new Button(() => Remove(index)) { text = "✕", tooltip = "Remove Panel Definition" };
+            remove.AddToClassList("oc-icon-button");
+            remove.AddToClassList("oc-card__remove");
+            root.Add(remove);
+
+            var content = card.Foldout;
+            content.Add(Field(definition, "_name", "Name", "Code finds this Runtime Panel by this name: OC.Panels.Get(name)."));
+            card.DuplicateName = Warning(content, "Another Panel Definition has this name; OC.Panels.Get returns only the first.", HelpBoxMessageType.Error);
+            content.Add(Field(definition, "_enabled", "Enabled", "Disabled Panel Definitions create no Runtime Panel."));
+            content.Add(Field(definition, "_sortOrder", "Sort Order", null));
+
+            if (_context.Config.Audiences.Count > 0)
             {
-                var isDuplicate = duplicates.Contains(nameProp.stringValue);
-                var previousColor = GUI.backgroundColor;
-                if (isDuplicate) GUI.backgroundColor = DuplicateNameColor;
-                EditorGUILayout.PropertyField(nameProp, new GUIContent("Name", "Code finds this Runtime Panel by this name: OC.Panels.Get(name)."));
-                GUI.backgroundColor = previousColor;
-                if (isDuplicate)
-                    EditorGUILayout.HelpBox("Another Panel Definition has this name; OC.Panels.Get returns only the first.", MessageType.Error);
-
-                EditorGUILayout.PropertyField(enabledProp, new GUIContent("Enabled", "Disabled Panel Definitions create no Runtime Panel."));
-                EditorGUILayout.PropertyField(definition.FindPropertyRelative("_sortOrder"), new GUIContent("Sort Order"));
-
-                DrawAudiences(definition.FindPropertyRelative("_audienceIds"), config, audienceNames);
-
-                EditorGUILayout.Space(4);
-                EditorGUILayout.LabelField("Open Triggers", EditorStyles.boldLabel);
-                EditorGUILayout.PropertyField(definition.FindPropertyRelative("_hotkeyEnabled"), new GUIContent("Hotkey Enabled"));
-                var toggleKeyProp = definition.FindPropertyRelative("_toggleKey");
-                EditorGUILayout.PropertyField(toggleKeyProp, new GUIContent("Toggle Key"));
-#if ENABLE_INPUT_SYSTEM
-                if (!OCKeyMap.TryGetKey((KeyCode)toggleKeyProp.intValue, out _))
-                    EditorGUILayout.HelpBox("Not a keyboard key: the hotkey does nothing with the Input System.", MessageType.Error);
-#endif
-                EditorGUILayout.PropertyField(definition.FindPropertyRelative("_cornerTap"), new GUIContent("Corner Tap"), true);
-                if (index < config.Panels.Count)
-                {
-                    var conflicts = TriggerConflicts(config, index, false);
-                    if (conflicts.Count > 0)
-                        EditorGUILayout.HelpBox($"Shares an Open Trigger with {string.Join(", ", conflicts)}: one use opens both panels.", MessageType.Warning);
-                    var lockedConflicts = TriggerConflicts(config, index, true);
-                    if (lockedConflicts.Count > 0)
-                        EditorGUILayout.HelpBox($"Has a Panel Lock and shares an Open Trigger with {string.Join(", ", lockedConflicts)}, which also has one: only one Lock Screen shows at a time, so that use opens only the first of them in this list.", MessageType.Warning);
-                }
-
-                EditorGUILayout.Space(4);
-                EditorGUILayout.LabelField("Panel Lock", EditorStyles.boldLabel);
-                var newPasscode = _newPasscodes[index];
-                OCPasscodeEditing.Draw(definition.FindPropertyRelative("_passcode"), ref newPasscode);
-                _newPasscodes[index] = newPasscode;
-
-                EditorGUILayout.Space(4);
-                EditorGUILayout.PropertyField(definition.FindPropertyRelative("_startVisible"), new GUIContent("Start Visible"));
-                EditorGUILayout.PropertyField(definition.FindPropertyRelative("_saveButtonMode"), new GUIContent("Save Button Mode"));
-                EditorGUILayout.PropertyField(definition.FindPropertyRelative("_layout"), new GUIContent("Layout"), true);
+                var mask = OCAudienceEditing.CreateMaskField("Audiences", definition.FindPropertyRelative("_audienceIds"), _context.Config, _context.AudienceNames);
+                mask.tooltip = "Exposed Entries this Panel shows: those naming any of these Audiences, plus those naming none. None selected: every Exposed Entry.";
+                content.Add(mask);
+                card.NoAudience = Warning(content, "This Panel serves no Audience, so it shows every Exposed Entry, including ones meant for other Audiences.", HelpBoxMessageType.Warning);
             }
-            EditorGUILayout.Space(4);
+
+            Heading(content, "Open Triggers");
+            content.Add(Field(definition, "_hotkeyEnabled", "Hotkey Enabled", null));
+            content.Add(Field(definition, "_toggleKey", "Toggle Key", null));
+            card.KeyWarning = Warning(content, "Not a keyboard key: the hotkey does nothing with the Input System.", HelpBoxMessageType.Error);
+            content.Add(Field(definition, "_cornerTap", "Corner Tap", null));
+            card.Conflicts = Warning(content, string.Empty, HelpBoxMessageType.Warning);
+            card.LockedConflicts = Warning(content, string.Empty, HelpBoxMessageType.Warning);
+
+            Heading(content, "Panel Lock");
+            content.Add(OCPasscodeEditing.Create(definition.FindPropertyRelative("_passcode")));
+
+            Heading(content, "Behaviour");
+            content.Add(Field(definition, "_startVisible", "Start Visible", null));
+            content.Add(Field(definition, "_saveButtonMode", "Save Button Mode", null));
+            content.Add(Field(definition, "_layout", "Layout", null));
+
+            _shown.Add(card);
+            return root;
         }
 
-        private static void DrawAudiences(SerializedProperty idsProp, OCConfig config, string[] audienceNames)
+        private void Remove(int index)
         {
-            if (config.Audiences.Count == 0) return;
-            var rect = EditorGUI.IndentedRect(EditorGUILayout.GetControlRect());
-            OCAudienceEditing.DrawMaskField(rect, AudiencesLabel, idsProp, config, audienceNames);
-            if (idsProp.arraySize == 0)
-                EditorGUILayout.HelpBox("This Panel serves no Audience, so it shows every Exposed Entry, including ones meant for other Audiences.", MessageType.Warning);
+            var panelsProp = Panels;
+            var name = panelsProp.GetArrayElementAtIndex(index).FindPropertyRelative("_name").stringValue;
+            if (!EditorUtility.DisplayDialog("Remove Panel Definition", $"Remove Panel Definition '{name}'? Its Passcode is lost.", "Remove", "Cancel")) return;
+            panelsProp.DeleteArrayElementAtIndex(index);
+            _expanded.RemoveAt(index);
+            _context.So.ApplyModifiedProperties();
+            Refresh();
         }
+
+        private static PropertyField Field(SerializedProperty definition, string path, string label, string? tooltip)
+        {
+            var prop = definition.FindPropertyRelative(path);
+            var field = new PropertyField(prop, label);
+            if (tooltip != null) field.tooltip = tooltip;
+            field.BindProperty(prop);
+            return field;
+        }
+
+        private static HelpBox Warning(VisualElement parent, string text, HelpBoxMessageType type)
+        {
+            var box = new HelpBox(text, type);
+            box.style.display = DisplayStyle.None;
+            parent.Add(box);
+            return box;
+        }
+
+        private static void Heading(VisualElement parent, string text)
+        {
+            var label = new Label(text);
+            label.AddToClassList("oc-subheading");
+            parent.Add(label);
+        }
+
+        private static void Show(VisualElement element, bool visible) =>
+            element.style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
 
         private static List<string> TriggerConflicts(OCConfig config, int index, bool lockedOnly)
         {
@@ -153,14 +233,6 @@ namespace OperatorConsole.Editor
                 if (sameKey || sameCorner) conflicts.Add($"'{other.Name}'");
             }
             return conflicts;
-        }
-
-        private void Sync(int count)
-        {
-            while (_expanded.Count < count) _expanded.Add(true);
-            while (_newPasscodes.Count < count) _newPasscodes.Add(string.Empty);
-            if (_expanded.Count > count) _expanded.RemoveRange(count, _expanded.Count - count);
-            if (_newPasscodes.Count > count) _newPasscodes.RemoveRange(count, _newPasscodes.Count - count);
         }
 
         private static HashSet<string> DuplicateNames(SerializedProperty panelsProp)
