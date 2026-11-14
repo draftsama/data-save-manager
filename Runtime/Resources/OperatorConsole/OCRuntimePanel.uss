@@ -16,6 +16,11 @@
     color: rgb(238, 240, 244);
 }
 
+.ocp--edge {
+    border-radius: 0;
+    border-width: 0;
+}
+
 .ocp Label {
     color: rgb(238, 240, 244);
     padding: 0;

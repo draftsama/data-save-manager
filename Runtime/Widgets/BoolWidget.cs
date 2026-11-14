@@ -15,7 +15,10 @@ namespace OperatorConsole
             _toggle.AddToClassList("ocp-switch");
             var knob = new VisualElement();
             knob.AddToClassList("ocp-switch-knob");
-            _toggle.Q(className: Toggle.checkmarkUssClassName).Add(knob);
+            var checkmark = _toggle.Q(className: Toggle.checkmarkUssClassName);
+            checkmark.Add(knob);
+            // The default theme's checked-checkmark image rule outranks any USS selector here.
+            checkmark.style.backgroundImage = StyleKeyword.None;
             // The default theme gives the input flex-basis 0, which beats width once it stops growing.
             var input = _toggle.Q(className: Toggle.inputUssClassName);
             input.style.flexBasis = StyleKeyword.Auto;

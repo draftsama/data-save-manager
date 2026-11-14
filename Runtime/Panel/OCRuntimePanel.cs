@@ -501,6 +501,7 @@ namespace OperatorConsole
             if (_card == null) return;
             var layout = Layout;
             var s = _card.style;
+            _card.EnableInClassList("ocp--edge", layout.SizeMode == OCPanelSizeMode.FullScreen && layout.FullScreenPadding <= 0f);
 
             if (layout.SizeMode == OCPanelSizeMode.FullScreen)
             {
