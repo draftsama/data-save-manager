@@ -10,7 +10,7 @@ namespace OperatorConsole.Editor
     {
         private static readonly GUIContent NewPasscodeLabel = new("New Passcode", "4–8 digits. Only a salted hash is stored; the digits cannot be read back.");
 
-        public static void Draw(SerializedProperty passcode, ref string newPasscode, bool hasLockScreen)
+        public static void Draw(SerializedProperty passcode, ref string newPasscode)
         {
             var length = passcode.FindPropertyRelative("_length");
             var salt = passcode.FindPropertyRelative("_salt");
@@ -48,9 +48,6 @@ namespace OperatorConsole.Editor
 
             if (newPasscode.Length > 0 && !OCPasscode.IsValid(newPasscode))
                 EditorGUILayout.HelpBox($"A Passcode is {OCPasscode.MinLength}–{OCPasscode.MaxLength} digits.", MessageType.None);
-
-            if (isSet && !hasLockScreen)
-                EditorGUILayout.HelpBox("A Passcode is set but the panel prefab has no Lock Screen: Open Triggers will not open this panel.", MessageType.Error);
         }
     }
 }

@@ -107,20 +107,12 @@ namespace OperatorConsole.Tests
             Assert.AreEqual(0, OCEntryRules.DuplicateKeys(config).Count);
         }
 
-        // ── OCWidgetConfig ──────────────────────────────────────────────────
+        // ── OCWidgetTemplates ───────────────────────────────────────────────
 
         [Test]
-        public void GetWidgetPrefab_FallsBackToPlainWhenDropdownSlotEmpty()
+        public void GetWidget_FallsBackToPlainWhenDropdownSlotEmpty()
         {
-            var widgetConfig = ScriptableObject.CreateInstance<OCWidgetConfig>();
-            try
-            {
-                Assert.IsNull(widgetConfig.GetWidgetPrefab(OCWidgetKind.Dropdown, OCDataType.Int));
-            }
-            finally
-            {
-                Object.DestroyImmediate(widgetConfig);
-            }
+            Assert.IsNull(new OCWidgetTemplates().GetWidget(OCWidgetKind.Dropdown, OCDataType.Int));
         }
 
         // ── DefaultJsonFor round-trip ────────────────────────────────────────

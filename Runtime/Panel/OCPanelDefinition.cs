@@ -12,7 +12,6 @@ namespace OperatorConsole
     {
         [SerializeField] private string _name = "Panel";
         [SerializeField] private bool _enabled = true;
-        [SerializeField, Tooltip("Panel prefab this Runtime Panel is created from.")] private OCRuntimePanel? _prefab;
         [SerializeField, Tooltip("Canvas sort order; higher draws on top.")] private int _sortOrder = 1000;
         [SerializeField] private List<string> _audienceIds = new();
         [SerializeField, Tooltip("Auto shows the Save button only when AutoSave is off. Always / Never force it on / off.")]
@@ -27,16 +26,14 @@ namespace OperatorConsole
 
         public OCPanelDefinition() { }
 
-        internal OCPanelDefinition(string name, OCRuntimePanel prefab)
+        internal OCPanelDefinition(string name)
         {
             _name = name;
-            _prefab = prefab;
             _hotkeyEnabled = false;
         }
 
         public string Name => _name;
         public bool Enabled => _enabled;
-        public OCRuntimePanel? Prefab => _prefab;
         public int SortOrder => _sortOrder;
 
         /// <summary>Ids of the Audiences this Runtime Panel serves; empty means it shows every Exposed Entry.</summary>

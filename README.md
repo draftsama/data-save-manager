@@ -24,9 +24,8 @@ isn't installed.
 
 ## Quick start
 
-1. **Draft › Operator Console › Create Config Asset** — creates `Assets/Resources/DSMConfig.asset`.
-2. **Draft › Operator Console › Open Manager** — add Entries (key, type, default, label, exposed flag).
-3. Read and write values from code:
+1. **Draft › Operator Console › Open Manager** — click **Create Config Asset** (creates `Assets/Resources/DSMConfig.asset`), then add Entries (key, type, default, label, exposed flag).
+2. Read and write values from code:
 
 ```csharp
 using OperatorConsole;
@@ -158,12 +157,6 @@ In Edit mode, changing an Entry's current value saves the Save File immediately.
 value edits are live on the running `OC.Store` and persisted whenever AutoSave next fires (or on
 quit).
 
-### Other menu items
-
-- **Draft › Operator Console › Create Config Asset** — creates `Assets/Resources/DSMConfig.asset` if it doesn't exist
-  yet, otherwise selects the existing one.
-- **Draft › Operator Console › Open Save Folder** — reveals the resolved Save File's directory in Finder/Explorer.
-
 ## Runtime Panel
 
 An in-game UI for an operator to view and edit Exposed Entries while the app runs.
@@ -181,8 +174,9 @@ loads. It brings its own Canvas (**Sort Order**, default 1000) and adds an `Even
 that has none. Several Panel Definitions give several panels, e.g. an open Technician panel on `F1`
 beside a locked Admin panel on a Corner Tap; two that share an Open Trigger both open on it, but only one Lock Screen shows at a time: of
 the locked ones, only the first in the Manager's list opens (the Manager warns). **Enabled** off keeps a Panel Definition, Passcode included, without creating its panel.
-**Prefab** picks the panel prefab (default `Prefab/OCRuntimePanel.prefab`). See
-[ADR 0005](docs/adr/0005-runtime-panels-from-panel-definitions.md).
+The panel's UI is built in code when the panel is created, so there is no prefab to assign or
+rebuild. See [ADR 0005](docs/adr/0005-runtime-panels-from-panel-definitions.md) and
+[ADR 0007](docs/adr/0007-runtime-panel-ui-built-in-code.md).
 
 Code finds a panel by its Panel Definition's **Name**: `OC.Panels.Get("Admin")` (null and one
 warning when no panel has that name), `OC.Panels.TryGet`, `OC.Panels.All`, `OC.Panels.HideAll()`.
@@ -190,8 +184,8 @@ Renaming a Panel Definition breaks code that used the old name. `OCRuntimePanel.
 any panel or its Lock Screen is open.
 
 Panel Definition edits made in the Manager during Play mode apply at once and, because the Config is
-an asset, are kept after Play mode ends. Adding or removing a Panel Definition or changing its
-Prefab takes effect the next time Play mode starts.
+an asset, are kept after Play mode ends. Adding or removing a Panel Definition takes effect the next time
+Play mode starts.
 
 **Moving from a scene-placed panel:** a `OCRuntimePanel` placed in a scene now stays hidden and logs
 a warning. Open its scene, press **Import Scene Panels** under Runtime Panels to turn each one into a
@@ -205,9 +199,6 @@ the panel from the scene and save it. Replace Inspector references to the panel 
   when AutoSave is off, `Always` always shows it, `Never` hides it.
 - **Close** (and the toggle key) cancels an open reset confirmation. With AutoSave on, it also saves any
   pending changes immediately instead of waiting for the debounce; with AutoSave off it does not save.
-
-If you use a prefab built before the confirm popup existed (no `ConfirmDialog` assigned), Reset to
-Defaults resets immediately and logs a warning. Regenerate the prefab to get the popup.
 
 ### Open Triggers and Panel Lock
 
@@ -228,13 +219,6 @@ needs a new build. See [ADR 0004](docs/adr/0004-passcode-is-build-time-per-panel
 
 Code chooses whether to ask: `RequestOpen()` and `Toggle()` go through the Lock Screen, `Show()`
 opens at once. `IsOpen` is true while a Lock Screen is up.
-
-A prefab built before the Lock Screen existed has none, and a locked panel without one refuses to
-open (it logs an error). Add one in place with **Draft › Operator Console › Add Lock Screen to Runtime Panel Prefab**,
-which keeps the rest of the prefab.
-
-Regenerate or restyle the default widget prefabs with **Draft › Operator Console › Build Runtime Panel Prefabs** — this
-overwrites the existing prefabs and the `OCWidgetConfig` asset under `Prefab/`.
 
 ### Layout
 
@@ -266,8 +250,7 @@ open panel immediately.
 In the Operator Console, an Exposed Entry of any type gets a **Header** line: a toggle plus a text field.
 When the toggle is on and the text is not blank, the Runtime Panel shows the text as a title row
 directly above that Entry's row, to start a visual group. Turning the toggle off keeps the text. A
-header is presentation only and has no effect on the Value. It needs the Widget Config's **Header Row**
-slot; if that slot is empty the panel logs one warning per rebuild and skips the headers.
+header is presentation only and has no effect on the Value.
 
 ### Range sliders
 
@@ -280,25 +263,13 @@ A Range is a presentation hint only and never clamps the Value: the slider handl
 position, while the input box shows the real Value and accepts anything typed. Int sliders step in whole
 numbers; float sliders round committed values to **Float Decimals**.
 
-### Custom widgets
+### Widgets
 
-- Subclass `OCWidget<T>`: implement `Show(T value)` to render, and call `Commit(value)` when the
-  user edits the control. Read other Values through the protected `Store`, the store the Runtime
-  Panel handed the row, rather than the static `OC`.
-- Or implement `IOCWidget` directly for full control over `Setup(OCEntryDefinition entry, OCStore store)`.
-  The panel calls this overload; its default calls `Setup(OCEntryDefinition entry)`, so widgets
-  written before 2.2 keep working against the global store.
-
-- `OCWidget<T>` also implements `IOCLayoutAware`; override `ApplyLayout(OCPanelLayout)` to pick up
-  extra Layout settings, and `OnSetup(OCEntryDefinition)` to read the Entry (for example its Range)
-  before the first `Show`. A widget that implements only `IOCWidget` can add `IOCLayoutAware` itself.
-
-Either way, assign your widget's prefab to the matching type slot on a `OCWidgetConfig` asset,
-and assign that asset to the Widget Config field of the panel prefab a Panel Definition uses. The Int Slider Widget and
-Float Slider Widget slots are used for Int and Float Entries that have a valid Range; if a slider slot
-is empty, those Entries fall back to the plain Int or Float widget. The **Header Row** slot takes a
-prefab with a `OCHeaderRow` component (a root with a `VerticalLayoutGroup` and a text assigned to its
-`_text` field); it is spawned above Entries that have a Header.
+The panel builds one row per Exposed Entry from its built-in widgets: one per Data Type, plus Int and
+Float sliders for Entries with a valid Range and a dropdown for Entries with Options. They derive from
+`OCWidget<T>` (`Show(T value)` renders, `Commit(value)` writes) and implement `IOCLayoutAware` to follow
+the Layout settings. Since the UI is built in code, a project can no longer swap in its own widget
+prefab; restyle through **Layout**, or change `OCPanelFactory` in this package.
 
 ### Commands
 
@@ -348,8 +319,6 @@ public sealed class Projector : MonoBehaviour
   Entry.
 
 `[OCCommand]` derives from Unity's `PreserveAttribute`, so IL2CPP code stripping keeps the methods.
-The Widget Config's **Command Row** slot takes a prefab with a `OCCommandRow` component; prefabs built
-before 2.3 have no tab bar — regenerate them with **Draft › Operator Console › Build Runtime Panel Prefabs**.
 
 ### Entry Actions
 
@@ -389,10 +358,6 @@ public sealed class ContentFolders : MonoBehaviour
   `Running…`. A failure shows its message on a line under the row.
 - **From code** — `OC.Commands.Register<string>(owner, "contentFolderPath", "Browse…", (current, ct) => ..., new OCEntryActionOptions { Confirm = true, Order = 1 })`.
 - **Order**, **Confirm**, **Same Title twice** — as for Commands.
-
-The Widget Config's **Entry Action Bar** and **Entry Action Error** slots take prefabs with
-`OCEntryActionBar` and `OCEntryActionError` components; regenerate prefabs built before 2.4 with
-**Draft › Operator Console › Build Runtime Panel Prefabs**.
 
 ## Binding
 

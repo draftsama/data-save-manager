@@ -1,533 +1,44 @@
 #nullable enable
 
-using System.IO;
 using TMPro;
-using UnityEditor;
 using UnityEngine;
 using UnityEngine.UI;
 using Object = UnityEngine.Object;
 
-namespace OperatorConsole.Editor
+namespace OperatorConsole
 {
-    /// <summary>
-    /// Generates the Runtime Panel's widget row prefabs, the OCWidgetConfig asset, and the OCRuntimePanel
-    /// prefab itself. Prefabs are agent-unsafe to hand-author (serialized YAML), so this menu command builds
-    /// them from code instead.
-    /// </summary>
-    internal static class OCPanelPrefabBuilder
+    /// <summary>Builds a Runtime Panel's whole UI in code, so a Panel Definition needs no prefab.</summary>
+    internal static class OCPanelFactory
     {
         private static readonly OCPanelLayout Defaults = new();
         private const float SliderInputWidth = 100f;
 
-        [MenuItem("Draft/Operator Console/Build Runtime Panel Prefabs")]
-        internal static void Build()
+        /// <summary>
+        /// Builds a Runtime Panel under <paramref name="parent"/>, which must be inactive so no component
+        /// wakes before the panel has its Panel Definition. Returns null, after logging an error, when
+        /// TextMeshPro has no default font.
+        /// </summary>
+        public static OCRuntimePanel? Create(Transform parent)
         {
             var font = TMP_Settings.defaultFontAsset;
             if (font == null)
             {
-                Debug.LogError("OC: TMP_Settings.defaultFontAsset is null. Import TextMeshPro's \"TMP Essential Resources\" " +
-                                "(Window > TextMeshPro > Import TMP Essential Resources) and run this command again.");
-                return;
+                Debug.LogError("OC: TMP_Settings.defaultFontAsset is null, so no Runtime Panel was created. Import TextMeshPro's " +
+                               "\"TMP Essential Resources\" (Window > TextMeshPro > Import TMP Essential Resources).");
+                return null;
             }
 
-            var prefabDir = ResolvePrefabFolder();
-            if (prefabDir == null)
-            {
-                Debug.LogError("OC: could not resolve this package's Prefab folder from OCPanelPrefabBuilder's own script path.");
-                return;
-            }
-
-            var boolWidget = BuildBoolWidgetPrefab(Path.Combine(prefabDir, "BoolWidget.prefab").Replace('\\', '/'), font);
-            var intWidget = BuildIntWidgetPrefab(Path.Combine(prefabDir, "IntWidget.prefab").Replace('\\', '/'), font);
-            var floatWidget = BuildFloatWidgetPrefab(Path.Combine(prefabDir, "FloatWidget.prefab").Replace('\\', '/'), font);
-            var stringWidget = BuildStringWidgetPrefab(Path.Combine(prefabDir, "StringWidget.prefab").Replace('\\', '/'), font);
-            var vector2Widget = BuildVector2WidgetPrefab(Path.Combine(prefabDir, "Vector2Widget.prefab").Replace('\\', '/'), font);
-            var vector3Widget = BuildVector3WidgetPrefab(Path.Combine(prefabDir, "Vector3Widget.prefab").Replace('\\', '/'), font);
-            var colorWidget = BuildColorWidgetPrefab(Path.Combine(prefabDir, "ColorWidget.prefab").Replace('\\', '/'), font);
-            var intSliderWidget = BuildIntSliderWidgetPrefab(Path.Combine(prefabDir, "IntSliderWidget.prefab").Replace('\\', '/'), font);
-            var floatSliderWidget = BuildFloatSliderWidgetPrefab(Path.Combine(prefabDir, "FloatSliderWidget.prefab").Replace('\\', '/'), font);
-            var dropdownWidget = BuildDropdownWidgetPrefab(Path.Combine(prefabDir, "DropdownWidget.prefab").Replace('\\', '/'), font);
-
-            var headerRow = BuildHeaderRowPrefab(Path.Combine(prefabDir, "HeaderRow.prefab").Replace('\\', '/'), font);
-            var commandRow = BuildCommandRowPrefab(Path.Combine(prefabDir, "CommandRow.prefab").Replace('\\', '/'), font);
-            var entryActionBar = BuildEntryActionBarPrefab(Path.Combine(prefabDir, "EntryActionBar.prefab").Replace('\\', '/'), font);
-            var entryActionError = BuildEntryActionErrorPrefab(Path.Combine(prefabDir, "EntryActionError.prefab").Replace('\\', '/'), font);
-
-            var configPath = Path.Combine(prefabDir, "OCWidgetConfig.asset").Replace('\\', '/');
-            BuildWidgetConfig(configPath, boolWidget, intWidget, floatWidget, stringWidget, vector2Widget, vector3Widget, colorWidget, intSliderWidget, floatSliderWidget, dropdownWidget, headerRow, commandRow, entryActionBar, entryActionError);
-            var widgetConfig = AssetDatabase.LoadAssetAtPath<OCWidgetConfig>(configPath);
-
-            var panelPath = Path.Combine(prefabDir, "OCRuntimePanel.prefab").Replace('\\', '/');
-            BuildRuntimePanelPrefab(panelPath, widgetConfig, font);
-
-            AssetDatabase.SaveAssets();
-            AssetDatabase.Refresh();
-
-            Debug.Log("OC: built runtime panel prefabs:\n" +
-                       $"  {Path.Combine(prefabDir, "BoolWidget.prefab")}\n" +
-                       $"  {Path.Combine(prefabDir, "IntWidget.prefab")}\n" +
-                       $"  {Path.Combine(prefabDir, "FloatWidget.prefab")}\n" +
-                       $"  {Path.Combine(prefabDir, "StringWidget.prefab")}\n" +
-                       $"  {Path.Combine(prefabDir, "Vector2Widget.prefab")}\n" +
-                       $"  {Path.Combine(prefabDir, "Vector3Widget.prefab")}\n" +
-                       $"  {Path.Combine(prefabDir, "ColorWidget.prefab")}\n" +
-                       $"  {Path.Combine(prefabDir, "IntSliderWidget.prefab")}\n" +
-                       $"  {Path.Combine(prefabDir, "FloatSliderWidget.prefab")}\n" +
-                       $"  {Path.Combine(prefabDir, "DropdownWidget.prefab")}\n" +
-                       $"  {Path.Combine(prefabDir, "HeaderRow.prefab")}\n" +
-                       $"  {Path.Combine(prefabDir, "CommandRow.prefab")}\n" +
-                       $"  {Path.Combine(prefabDir, "EntryActionBar.prefab")}\n" +
-                       $"  {Path.Combine(prefabDir, "EntryActionError.prefab")}\n" +
-                       $"  {configPath}\n" +
-                       $"  {panelPath}");
-        }
-
-        /// <summary>Adds a Lock Screen to the existing Runtime Panel prefab in place, keeping every other object and its overrides in scenes.</summary>
-        [MenuItem("Draft/Operator Console/Add Lock Screen to Runtime Panel Prefab")]
-        internal static void AddLockScreenToPanelPrefab()
-        {
-            var font = TMP_Settings.defaultFontAsset;
-            var prefabDir = ResolvePrefabFolder();
-            if (font == null || prefabDir == null)
-            {
-                Debug.LogError("OC: needs TMP_Settings.defaultFontAsset and this package's Prefab folder.");
-                return;
-            }
-
-            var path = Path.Combine(prefabDir, "OCRuntimePanel.prefab").Replace('\\', '/');
-            var root = PrefabUtility.LoadPrefabContents(path);
-            try
-            {
-                var panel = root.GetComponent<OCRuntimePanel>();
-                if (panel == null)
-                {
-                    Debug.LogError($"OC: no OCRuntimePanel on the root of {path}.");
-                    return;
-                }
-                if (new SerializedObject(panel).FindProperty("_lockScreen").objectReferenceValue != null)
-                {
-                    Debug.Log($"OC: {path} already has a Lock Screen.");
-                    return;
-                }
-
-                SetField(panel, "_lockScreen", BuildLockScreen(root, font));
-                PrefabUtility.SaveAsPrefabAsset(root, path);
-                Debug.Log($"OC: added a Lock Screen to {path}.");
-            }
-            finally
-            {
-                PrefabUtility.UnloadPrefabContents(root);
-            }
-        }
-
-        /// <summary>Package root is this script's grandparent folder (script -> Editor -> package root), so this works wherever the package is installed.</summary>
-        internal static string? ResolvePrefabFolder()
-        {
-            var guids = AssetDatabase.FindAssets("t:Script OCPanelPrefabBuilder");
-            if (guids.Length == 0) return null;
-
-            var scriptPath = AssetDatabase.GUIDToAssetPath(guids[0]);
-            var editorDir = Path.GetDirectoryName(scriptPath);
-            if (string.IsNullOrEmpty(editorDir)) return null;
-
-            var packageRoot = Path.GetDirectoryName(editorDir);
-            if (string.IsNullOrEmpty(packageRoot)) return null;
-
-            return Path.Combine(packageRoot, "Prefab").Replace('\\', '/');
-        }
-
-        // ---- Widget prefabs ----
-
-        private static BoolWidget BuildBoolWidgetPrefab(string path, TMP_FontAsset font)
-        {
-            var row = CreateRowRoot("BoolWidget");
-            var label = CreateRowLabel(row, font);
-            var toggle = CreateRowToggle(row);
-
-            var widget = row.AddComponent<BoolWidget>();
-            SetField(widget, "_label", label);
-            SetField(widget, "_toggle", toggle);
-
-            var saved = SaveAndDestroy(row, path);
-
-            return saved.GetComponent<BoolWidget>();
-        }
-
-        private static IntWidget BuildIntWidgetPrefab(string path, TMP_FontAsset font)
-        {
-            var row = CreateRowRoot("IntWidget");
-            var label = CreateRowLabel(row, font);
-            var input = CreateRowInput(row, font, TMP_InputField.ContentType.IntegerNumber);
-
-            var widget = row.AddComponent<IntWidget>();
-            SetField(widget, "_label", label);
-            SetField(widget, "_input", input);
-
-            var saved = SaveAndDestroy(row, path);
-            return saved.GetComponent<IntWidget>();
-        }
-
-        private static FloatWidget BuildFloatWidgetPrefab(string path, TMP_FontAsset font)
-        {
-            var row = CreateRowRoot("FloatWidget");
-            var label = CreateRowLabel(row, font);
-            var input = CreateRowInput(row, font, TMP_InputField.ContentType.DecimalNumber);
-
-            var widget = row.AddComponent<FloatWidget>();
-            SetField(widget, "_label", label);
-            SetField(widget, "_input", input);
-
-            var saved = SaveAndDestroy(row, path);
-            return saved.GetComponent<FloatWidget>();
-        }
-
-        private static StringWidget BuildStringWidgetPrefab(string path, TMP_FontAsset font)
-        {
-            var row = CreateRowRoot("StringWidget");
-            var label = CreateRowLabel(row, font);
-            var input = CreateRowInput(row, font, TMP_InputField.ContentType.Standard);
-
-            var widget = row.AddComponent<StringWidget>();
-            SetField(widget, "_label", label);
-            SetField(widget, "_input", input);
-
-            var saved = SaveAndDestroy(row, path);
-            return saved.GetComponent<StringWidget>();
-        }
-
-        private static Vector2Widget BuildVector2WidgetPrefab(string path, TMP_FontAsset font)
-        {
-            var row = CreateRowRoot("Vector2Widget");
-            var label = CreateRowLabel(row, font);
-            CreateAxisLabel(row, font, "x:");
-            var xInput = CreateRowInput(row, font, TMP_InputField.ContentType.DecimalNumber);
-            CreateAxisLabel(row, font, "y:");
-            var yInput = CreateRowInput(row, font, TMP_InputField.ContentType.DecimalNumber);
-
-            var widget = row.AddComponent<Vector2Widget>();
-            SetField(widget, "_label", label);
-            SetField(widget, "_xInput", xInput);
-            SetField(widget, "_yInput", yInput);
-
-            var saved = SaveAndDestroy(row, path);
-            return saved.GetComponent<Vector2Widget>();
-        }
-
-        private static Vector3Widget BuildVector3WidgetPrefab(string path, TMP_FontAsset font)
-        {
-            var row = CreateRowRoot("Vector3Widget");
-            var label = CreateRowLabel(row, font);
-            CreateAxisLabel(row, font, "x:");
-            var xInput = CreateRowInput(row, font, TMP_InputField.ContentType.DecimalNumber);
-            CreateAxisLabel(row, font, "y:");
-            var yInput = CreateRowInput(row, font, TMP_InputField.ContentType.DecimalNumber);
-            CreateAxisLabel(row, font, "z:");
-            var zInput = CreateRowInput(row, font, TMP_InputField.ContentType.DecimalNumber);
-
-            var widget = row.AddComponent<Vector3Widget>();
-            SetField(widget, "_label", label);
-            SetField(widget, "_xInput", xInput);
-            SetField(widget, "_yInput", yInput);
-            SetField(widget, "_zInput", zInput);
-
-            var saved = SaveAndDestroy(row, path);
-            return saved.GetComponent<Vector3Widget>();
-        }
-
-        private static ColorWidget BuildColorWidgetPrefab(string path, TMP_FontAsset font)
-        {
-            var row = CreateRowRoot("ColorWidget");
-            var label = CreateRowLabel(row, font);
-            var hexInput = CreateRowInput(row, font, TMP_InputField.ContentType.Standard);
-            hexInput.characterLimit = 9;
-            if (hexInput.placeholder is TextMeshProUGUI placeholder) placeholder.text = "#RRGGBBAA";
-            var swatch = CreateRowSwatch(row);
-
-            var widget = row.AddComponent<ColorWidget>();
-            SetField(widget, "_label", label);
-            SetField(widget, "_hexInput", hexInput);
-            SetField(widget, "_swatch", swatch);
-
-            var saved = SaveAndDestroy(row, path);
-            return saved.GetComponent<ColorWidget>();
-        }
-
-        private static IntSliderWidget BuildIntSliderWidgetPrefab(string path, TMP_FontAsset font)
-        {
-            var row = CreateRowRoot("IntSliderWidget");
-            var label = CreateRowLabel(row, font);
-            var slider = CreateRowSlider(row);
-            var input = CreateSliderValueInput(row, font, TMP_InputField.ContentType.IntegerNumber);
-
-            var widget = row.AddComponent<IntSliderWidget>();
-            SetField(widget, "_label", label);
-            SetField(widget, "_slider", slider);
-            SetField(widget, "_input", input);
-
-            var saved = SaveAndDestroy(row, path);
-            return saved.GetComponent<IntSliderWidget>();
-        }
-
-        private static FloatSliderWidget BuildFloatSliderWidgetPrefab(string path, TMP_FontAsset font)
-        {
-            var row = CreateRowRoot("FloatSliderWidget");
-            var label = CreateRowLabel(row, font);
-            var slider = CreateRowSlider(row);
-            var input = CreateSliderValueInput(row, font, TMP_InputField.ContentType.DecimalNumber);
-
-            var widget = row.AddComponent<FloatSliderWidget>();
-            SetField(widget, "_label", label);
-            SetField(widget, "_slider", slider);
-            SetField(widget, "_input", input);
-
-            var saved = SaveAndDestroy(row, path);
-            return saved.GetComponent<FloatSliderWidget>();
-        }
-
-        private static DropdownWidget BuildDropdownWidgetPrefab(string path, TMP_FontAsset font)
-        {
-            var row = CreateRowRoot("DropdownWidget");
-            var label = CreateRowLabel(row, font);
-
-            var go = TMP_DefaultControls.CreateDropdown(TmpUiResources());
-            go.transform.SetParent(row.transform, false);
-            go.name = "Dropdown";
-
-            var dropdown = go.GetComponent<TMP_Dropdown>();
-            dropdown.ClearOptions();
-            if (dropdown.captionText != null)
-            {
-                dropdown.captionText.font = font;
-                dropdown.captionText.fontSize = Defaults.FontSize;
-            }
-            if (dropdown.itemText != null)
-            {
-                dropdown.itemText.font = font;
-                dropdown.itemText.fontSize = Defaults.FontSize;
-                var item = dropdown.itemText.transform.parent as RectTransform;
-                if (item != null) item.sizeDelta = new Vector2(item.sizeDelta.x, Defaults.RowHeight - 4f);
-            }
-            if (dropdown.template != null)
-                dropdown.template.sizeDelta = new Vector2(dropdown.template.sizeDelta.x, 240f);
-
-            var layout = go.AddComponent<LayoutElement>();
-            layout.flexibleWidth = 1f;
-
-            var widget = row.AddComponent<DropdownWidget>();
-            SetField(widget, "_label", label);
-            SetField(widget, "_dropdown", dropdown);
-
-            var saved = SaveAndDestroy(row, path);
-            return saved.GetComponent<DropdownWidget>();
-        }
-
-        private static OCHeaderRow BuildHeaderRowPrefab(string path, TMP_FontAsset font)
-        {
-            var row = new GameObject("HeaderRow", typeof(RectTransform));
-
-            var group = row.AddComponent<VerticalLayoutGroup>();
-            group.padding = new RectOffset(4, 4, Mathf.RoundToInt(Defaults.HeaderSpacing), 0);
-            group.childControlWidth = true;
-            group.childControlHeight = true;
-            group.childForceExpandWidth = true;
-            group.childForceExpandHeight = false;
-
-            var textGo = new GameObject("Text", typeof(RectTransform));
-            textGo.transform.SetParent(row.transform, false);
-
-            var text = textGo.AddComponent<TextMeshProUGUI>();
-            text.text = "Header";
-            text.font = font;
-            text.fontSize = Defaults.HeaderFontSize;
-            text.fontStyle = FontStyles.Bold;
-            text.alignment = TextAlignmentOptions.Left;
-            text.textWrappingMode = TextWrappingModes.NoWrap;
-            text.overflowMode = TextOverflowModes.Ellipsis;
-            text.color = new Color(0.75f, 0.85f, 1f, 1f);
-            text.raycastTarget = false;
-
-            var widget = row.AddComponent<OCHeaderRow>();
-            SetField(widget, "_text", text);
-
-            var saved = SaveAndDestroy(row, path);
-            return saved.GetComponent<OCHeaderRow>();
-        }
-
-        private static OCCommandRow BuildCommandRowPrefab(string path, TMP_FontAsset font)
-        {
-            var row = new GameObject("CommandRow", typeof(RectTransform));
-
-            var rowLayout = row.AddComponent<HorizontalLayoutGroup>();
-            rowLayout.padding = new RectOffset(4, 4, 8, 8);
-            rowLayout.spacing = 12f;
-            rowLayout.childControlWidth = true;
-            rowLayout.childControlHeight = true;
-            rowLayout.childForceExpandWidth = false;
-            rowLayout.childForceExpandHeight = false;
-            rowLayout.childAlignment = TextAnchor.MiddleLeft;
-            row.AddComponent<LayoutElement>().minHeight = Defaults.RowHeight;
-
-            var textGo = new GameObject("Text", typeof(RectTransform));
-            textGo.transform.SetParent(row.transform, false);
-            var textLayout = textGo.AddComponent<VerticalLayoutGroup>();
-            textLayout.spacing = 2f;
-            textLayout.childControlWidth = true;
-            textLayout.childControlHeight = true;
-            textLayout.childForceExpandWidth = true;
-            textLayout.childForceExpandHeight = false;
-            textGo.AddComponent<LayoutElement>().flexibleWidth = 1f;
-
-            var title = CreateCommandText(textGo, "Title", font, Defaults.FontSize, Color.white);
-            var description = CreateCommandText(textGo, "Description", font, Defaults.CommandDescriptionFontSize, new Color(0.6f, 0.63f, 0.69f, 1f));
-            var error = CreateCommandText(textGo, "Error", font, Defaults.CommandDescriptionFontSize, new Color(0.89f, 0.34f, 0.30f, 1f));
-            error.gameObject.SetActive(false);
-
-            var statusGo = new GameObject("StatusDot", typeof(RectTransform));
-            statusGo.transform.SetParent(row.transform, false);
-            var statusDot = statusGo.AddComponent<Image>();
-            statusDot.sprite = BuiltinSprite("Knob");
-            statusDot.preserveAspect = true;
-            statusDot.raycastTarget = false;
-            statusDot.enabled = false;
-            var statusLayout = statusGo.AddComponent<LayoutElement>();
-            statusLayout.preferredWidth = 14f;
-            statusLayout.preferredHeight = 14f;
-
-            var buttonGo = TMP_DefaultControls.CreateButton(TmpUiResources());
-            buttonGo.transform.SetParent(row.transform, false);
-            buttonGo.name = "RunButton";
-            var buttonLayout = buttonGo.AddComponent<LayoutElement>();
-            buttonLayout.preferredWidth = Defaults.CommandButtonWidth;
-            buttonLayout.preferredHeight = Defaults.RowHeight;
-            var runLabel = buttonGo.GetComponentInChildren<TextMeshProUGUI>();
-            runLabel.text = "Run";
-            runLabel.font = font;
-            runLabel.fontSize = Defaults.FontSize;
-
-            var widget = row.AddComponent<OCCommandRow>();
-            SetField(widget, "_title", title);
-            SetField(widget, "_description", description);
-            SetField(widget, "_statusDot", statusDot);
-            SetField(widget, "_error", error);
-            SetField(widget, "_runButton", buttonGo.GetComponent<Button>());
-            SetField(widget, "_runLabel", runLabel);
-
-            var saved = SaveAndDestroy(row, path);
-            return saved.GetComponent<OCCommandRow>();
-        }
-
-        private static OCEntryActionBar BuildEntryActionBarPrefab(string path, TMP_FontAsset font)
-        {
-            var bar = new GameObject("EntryActionBar", typeof(RectTransform));
-            var barLayout = bar.AddComponent<HorizontalLayoutGroup>();
-            barLayout.spacing = 8f;
-            barLayout.childControlWidth = true;
-            barLayout.childControlHeight = true;
-            barLayout.childForceExpandWidth = false;
-            barLayout.childForceExpandHeight = true;
-            barLayout.childAlignment = TextAnchor.MiddleRight;
-            bar.AddComponent<LayoutElement>().flexibleWidth = 0f;
-
-            var buttonGo = TMP_DefaultControls.CreateButton(TmpUiResources());
-            buttonGo.transform.SetParent(bar.transform, false);
-            buttonGo.name = "ButtonTemplate";
-            var buttonLayout = buttonGo.AddComponent<LayoutElement>();
-            buttonLayout.preferredWidth = Defaults.EntryActionButtonWidth;
-            buttonLayout.flexibleWidth = 0f;
-            var label = buttonGo.GetComponentInChildren<TextMeshProUGUI>();
-            label.text = "Action";
-            label.font = font;
-            label.fontSize = Defaults.FontSize;
-            label.textWrappingMode = TextWrappingModes.NoWrap;
-            label.overflowMode = TextOverflowModes.Ellipsis;
-            buttonGo.SetActive(false);
-
-            var component = bar.AddComponent<OCEntryActionBar>();
-            SetField(component, "_buttonTemplate", buttonGo.GetComponent<Button>());
-
-            var saved = SaveAndDestroy(bar, path);
-            return saved.GetComponent<OCEntryActionBar>();
-        }
-
-        private static OCEntryActionError BuildEntryActionErrorPrefab(string path, TMP_FontAsset font)
-        {
-            var row = new GameObject("EntryActionError", typeof(RectTransform));
-            var rowLayout = row.AddComponent<HorizontalLayoutGroup>();
-            rowLayout.padding = new RectOffset(Mathf.RoundToInt(Defaults.LabelWidth) + 12, 4, 0, 4);
-            rowLayout.childControlWidth = true;
-            rowLayout.childControlHeight = true;
-            rowLayout.childForceExpandWidth = true;
-            rowLayout.childForceExpandHeight = false;
-
-            var text = CreateCommandText(row, "Text", font, Defaults.EntryActionErrorFontSize, new Color(0.89f, 0.34f, 0.30f, 1f));
-
-            var component = row.AddComponent<OCEntryActionError>();
-            SetField(component, "_text", text);
-            row.SetActive(false);
-
-            var saved = SaveAndDestroy(row, path);
-            return saved.GetComponent<OCEntryActionError>();
-        }
-
-        private static TextMeshProUGUI CreateCommandText(GameObject parent, string goName, TMP_FontAsset font, float fontSize, Color color)
-        {
-            var go = new GameObject(goName, typeof(RectTransform));
-            go.transform.SetParent(parent.transform, false);
-            var text = go.AddComponent<TextMeshProUGUI>();
-            text.text = goName;
-            text.font = font;
-            text.fontSize = fontSize;
-            text.color = color;
-            text.alignment = TextAlignmentOptions.Left;
-            text.textWrappingMode = TextWrappingModes.Normal;
-            text.raycastTarget = false;
-            return text;
-        }
-
-        private static void BuildWidgetConfig(
-            string path,
-            BoolWidget boolWidget, IntWidget intWidget, FloatWidget floatWidget, StringWidget stringWidget,
-            Vector2Widget vector2Widget, Vector3Widget vector3Widget, ColorWidget colorWidget,
-            IntSliderWidget intSliderWidget, FloatSliderWidget floatSliderWidget, DropdownWidget dropdownWidget,
-            OCHeaderRow headerRow, OCCommandRow commandRow, OCEntryActionBar entryActionBar, OCEntryActionError entryActionError)
-        {
-            var config = AssetDatabase.LoadAssetAtPath<OCWidgetConfig>(path);
-            if (config == null)
-            {
-                config = ScriptableObject.CreateInstance<OCWidgetConfig>();
-                AssetDatabase.CreateAsset(config, path);
-            }
-
-            SetField(config, "_boolWidget", boolWidget);
-            SetField(config, "_intWidget", intWidget);
-            SetField(config, "_floatWidget", floatWidget);
-            SetField(config, "_stringWidget", stringWidget);
-            SetField(config, "_vector2Widget", vector2Widget);
-            SetField(config, "_vector3Widget", vector3Widget);
-            SetField(config, "_colorWidget", colorWidget);
-            SetField(config, "_intSliderWidget", intSliderWidget);
-            SetField(config, "_floatSliderWidget", floatSliderWidget);
-            SetField(config, "_dropdownWidget", dropdownWidget);
-            SetField(config, "_headerRow", headerRow);
-            SetField(config, "_commandRow", commandRow);
-            SetField(config, "_entryActionBar", entryActionBar);
-            SetField(config, "_entryActionError", entryActionError);
-
-            EditorUtility.SetDirty(config);
-        }
-
-        private static void BuildRuntimePanelPrefab(string path, OCWidgetConfig? widgetConfig, TMP_FontAsset font)
-        {
-            var rootGo = new GameObject("OCRuntimePanel", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
-
-            var canvas = rootGo.GetComponent<Canvas>();
+            var rootGo = new GameObject("OCRuntimePanel", typeof(RectTransform));
+            rootGo.transform.SetParent(parent, false);
+            var canvas = rootGo.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             canvas.sortingOrder = 1000;
 
-            var scaler = rootGo.GetComponent<CanvasScaler>();
+            var scaler = rootGo.AddComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1920f, 1080f);
             scaler.matchWidthOrHeight = 0.5f;
+            rootGo.AddComponent<GraphicRaycaster>();
 
             // "Panel" is the visible surface (_root): toggled active/inactive by OCRuntimePanel.Show/Hide.
             var panel = new GameObject("Panel", typeof(RectTransform));
@@ -562,32 +73,395 @@ namespace OperatorConsole.Editor
             tabBar.SetActive(false);
             commandsView.SetActive(false);
             var lockScreen = BuildLockScreen(rootGo, font);
+            var templates = BuildTemplates(rootGo.transform, font);
 
             var panelComponent = rootGo.AddComponent<OCRuntimePanel>();
-            SetField(panelComponent, "_widgetConfig", widgetConfig);
-            SetField(panelComponent, "_root", panel);
-            SetField(panelComponent, "_container", container);
-            SetField(panelComponent, "_saveButton", saveButton);
-            SetField(panelComponent, "_resetButton", resetButton);
-            SetField(panelComponent, "_closeButton", closeButton);
-            SetField(panelComponent, "_confirmDialog", confirmDialog);
-            SetField(panelComponent, "_confirmCancelButton", confirmCancelButton);
-            SetField(panelComponent, "_confirmResetButton", confirmResetButton);
-            SetField(panelComponent, "_tabBar", tabBar);
-            SetField(panelComponent, "_settingsTab", settingsTab);
-            SetField(panelComponent, "_commandsTab", commandsTab);
-            SetField(panelComponent, "_settingsView", settingsView);
-            SetField(panelComponent, "_commandsView", commandsView);
-            SetField(panelComponent, "_commandContainer", commandContainer);
-            SetField(panelComponent, "_confirmMessage", confirmMessage);
-            SetField(panelComponent, "_confirmButtonLabel", confirmButtonLabel);
-            SetField(panelComponent, "_lockScreen", lockScreen);
-            // _startVisible / _toggleKey / _saveButtonMode keep their C# field defaults (false / KeyCode.F1 / Auto).
-
-            SaveAndDestroy(rootGo, path);
+            OCFieldWiring.Set(panelComponent, "_templates", templates);
+            OCFieldWiring.Set(panelComponent, "_root", panel);
+            OCFieldWiring.Set(panelComponent, "_container", container);
+            OCFieldWiring.Set(panelComponent, "_saveButton", saveButton);
+            OCFieldWiring.Set(panelComponent, "_resetButton", resetButton);
+            OCFieldWiring.Set(panelComponent, "_closeButton", closeButton);
+            OCFieldWiring.Set(panelComponent, "_confirmDialog", confirmDialog);
+            OCFieldWiring.Set(panelComponent, "_confirmCancelButton", confirmCancelButton);
+            OCFieldWiring.Set(panelComponent, "_confirmResetButton", confirmResetButton);
+            OCFieldWiring.Set(panelComponent, "_tabBar", tabBar);
+            OCFieldWiring.Set(panelComponent, "_settingsTab", settingsTab);
+            OCFieldWiring.Set(panelComponent, "_commandsTab", commandsTab);
+            OCFieldWiring.Set(panelComponent, "_settingsView", settingsView);
+            OCFieldWiring.Set(panelComponent, "_commandsView", commandsView);
+            OCFieldWiring.Set(panelComponent, "_commandContainer", commandContainer);
+            OCFieldWiring.Set(panelComponent, "_confirmMessage", confirmMessage);
+            OCFieldWiring.Set(panelComponent, "_confirmButtonLabel", confirmButtonLabel);
+            OCFieldWiring.Set(panelComponent, "_lockScreen", lockScreen);
+            return panelComponent;
         }
 
-        /// <summary>Builds the full-screen Lock Screen as a sibling after the Panel, so it covers the screen whatever the panel size; saved inactive.</summary>
+        /// <summary>Builds the row templates under an inactive holder: the templates never wake, and their clones start active.</summary>
+        private static OCWidgetTemplates BuildTemplates(Transform root, TMP_FontAsset font)
+        {
+            var holder = new GameObject("Templates", typeof(RectTransform));
+            holder.transform.SetParent(root, false);
+            holder.SetActive(false);
+            var parent = holder.transform;
+
+            return new OCWidgetTemplates
+            {
+                BoolWidget = BuildBoolWidget(parent, font),
+                IntWidget = BuildIntWidget(parent, font),
+                FloatWidget = BuildFloatWidget(parent, font),
+                StringWidget = BuildStringWidget(parent, font),
+                Vector2Widget = BuildVector2Widget(parent, font),
+                Vector3Widget = BuildVector3Widget(parent, font),
+                ColorWidget = BuildColorWidget(parent, font),
+                IntSliderWidget = BuildIntSliderWidget(parent, font),
+                FloatSliderWidget = BuildFloatSliderWidget(parent, font),
+                DropdownWidget = BuildDropdownWidget(parent, font),
+                HeaderRow = BuildHeaderRow(parent, font),
+                CommandRow = BuildCommandRow(parent, font),
+                EntryActionBar = BuildEntryActionBar(parent, font),
+                EntryActionError = BuildEntryActionError(parent, font),
+            };
+        }
+
+        // ---- Row templates ----
+
+        private static BoolWidget BuildBoolWidget(Transform parent, TMP_FontAsset font)
+        {
+            var row = CreateRowRoot("BoolWidget", parent);
+            var label = CreateRowLabel(row, font);
+            var toggle = CreateRowToggle(row);
+
+            var widget = row.AddComponent<BoolWidget>();
+            OCFieldWiring.Set(widget, "_label", label);
+            OCFieldWiring.Set(widget, "_toggle", toggle);
+
+            return row.GetComponent<BoolWidget>();
+        }
+
+        private static IntWidget BuildIntWidget(Transform parent, TMP_FontAsset font)
+        {
+            var row = CreateRowRoot("IntWidget", parent);
+            var label = CreateRowLabel(row, font);
+            var input = CreateRowInput(row, font, TMP_InputField.ContentType.IntegerNumber);
+
+            var widget = row.AddComponent<IntWidget>();
+            OCFieldWiring.Set(widget, "_label", label);
+            OCFieldWiring.Set(widget, "_input", input);
+
+            return row.GetComponent<IntWidget>();
+        }
+
+        private static FloatWidget BuildFloatWidget(Transform parent, TMP_FontAsset font)
+        {
+            var row = CreateRowRoot("FloatWidget", parent);
+            var label = CreateRowLabel(row, font);
+            var input = CreateRowInput(row, font, TMP_InputField.ContentType.DecimalNumber);
+
+            var widget = row.AddComponent<FloatWidget>();
+            OCFieldWiring.Set(widget, "_label", label);
+            OCFieldWiring.Set(widget, "_input", input);
+
+            return row.GetComponent<FloatWidget>();
+        }
+
+        private static StringWidget BuildStringWidget(Transform parent, TMP_FontAsset font)
+        {
+            var row = CreateRowRoot("StringWidget", parent);
+            var label = CreateRowLabel(row, font);
+            var input = CreateRowInput(row, font, TMP_InputField.ContentType.Standard);
+
+            var widget = row.AddComponent<StringWidget>();
+            OCFieldWiring.Set(widget, "_label", label);
+            OCFieldWiring.Set(widget, "_input", input);
+
+            return row.GetComponent<StringWidget>();
+        }
+
+        private static Vector2Widget BuildVector2Widget(Transform parent, TMP_FontAsset font)
+        {
+            var row = CreateRowRoot("Vector2Widget", parent);
+            var label = CreateRowLabel(row, font);
+            CreateAxisLabel(row, font, "x:");
+            var xInput = CreateRowInput(row, font, TMP_InputField.ContentType.DecimalNumber);
+            CreateAxisLabel(row, font, "y:");
+            var yInput = CreateRowInput(row, font, TMP_InputField.ContentType.DecimalNumber);
+
+            var widget = row.AddComponent<Vector2Widget>();
+            OCFieldWiring.Set(widget, "_label", label);
+            OCFieldWiring.Set(widget, "_xInput", xInput);
+            OCFieldWiring.Set(widget, "_yInput", yInput);
+
+            return row.GetComponent<Vector2Widget>();
+        }
+
+        private static Vector3Widget BuildVector3Widget(Transform parent, TMP_FontAsset font)
+        {
+            var row = CreateRowRoot("Vector3Widget", parent);
+            var label = CreateRowLabel(row, font);
+            CreateAxisLabel(row, font, "x:");
+            var xInput = CreateRowInput(row, font, TMP_InputField.ContentType.DecimalNumber);
+            CreateAxisLabel(row, font, "y:");
+            var yInput = CreateRowInput(row, font, TMP_InputField.ContentType.DecimalNumber);
+            CreateAxisLabel(row, font, "z:");
+            var zInput = CreateRowInput(row, font, TMP_InputField.ContentType.DecimalNumber);
+
+            var widget = row.AddComponent<Vector3Widget>();
+            OCFieldWiring.Set(widget, "_label", label);
+            OCFieldWiring.Set(widget, "_xInput", xInput);
+            OCFieldWiring.Set(widget, "_yInput", yInput);
+            OCFieldWiring.Set(widget, "_zInput", zInput);
+
+            return row.GetComponent<Vector3Widget>();
+        }
+
+        private static ColorWidget BuildColorWidget(Transform parent, TMP_FontAsset font)
+        {
+            var row = CreateRowRoot("ColorWidget", parent);
+            var label = CreateRowLabel(row, font);
+            var hexInput = CreateRowInput(row, font, TMP_InputField.ContentType.Standard);
+            hexInput.characterLimit = 9;
+            if (hexInput.placeholder is TextMeshProUGUI placeholder) placeholder.text = "#RRGGBBAA";
+            var swatch = CreateRowSwatch(row);
+
+            var widget = row.AddComponent<ColorWidget>();
+            OCFieldWiring.Set(widget, "_label", label);
+            OCFieldWiring.Set(widget, "_hexInput", hexInput);
+            OCFieldWiring.Set(widget, "_swatch", swatch);
+
+            return row.GetComponent<ColorWidget>();
+        }
+
+        private static IntSliderWidget BuildIntSliderWidget(Transform parent, TMP_FontAsset font)
+        {
+            var row = CreateRowRoot("IntSliderWidget", parent);
+            var label = CreateRowLabel(row, font);
+            var slider = CreateRowSlider(row);
+            var input = CreateSliderValueInput(row, font, TMP_InputField.ContentType.IntegerNumber);
+
+            var widget = row.AddComponent<IntSliderWidget>();
+            OCFieldWiring.Set(widget, "_label", label);
+            OCFieldWiring.Set(widget, "_slider", slider);
+            OCFieldWiring.Set(widget, "_input", input);
+
+            return row.GetComponent<IntSliderWidget>();
+        }
+
+        private static FloatSliderWidget BuildFloatSliderWidget(Transform parent, TMP_FontAsset font)
+        {
+            var row = CreateRowRoot("FloatSliderWidget", parent);
+            var label = CreateRowLabel(row, font);
+            var slider = CreateRowSlider(row);
+            var input = CreateSliderValueInput(row, font, TMP_InputField.ContentType.DecimalNumber);
+
+            var widget = row.AddComponent<FloatSliderWidget>();
+            OCFieldWiring.Set(widget, "_label", label);
+            OCFieldWiring.Set(widget, "_slider", slider);
+            OCFieldWiring.Set(widget, "_input", input);
+
+            return row.GetComponent<FloatSliderWidget>();
+        }
+
+        private static DropdownWidget BuildDropdownWidget(Transform parent, TMP_FontAsset font)
+        {
+            var row = CreateRowRoot("DropdownWidget", parent);
+            var label = CreateRowLabel(row, font);
+
+            var go = TMP_DefaultControls.CreateDropdown(OCUiSprites.TmpUiResources());
+            go.transform.SetParent(row.transform, false);
+            go.name = "Dropdown";
+
+            var dropdown = go.GetComponent<TMP_Dropdown>();
+            dropdown.ClearOptions();
+            if (dropdown.captionText != null)
+            {
+                dropdown.captionText.font = font;
+                dropdown.captionText.fontSize = Defaults.FontSize;
+            }
+            if (dropdown.itemText != null)
+            {
+                dropdown.itemText.font = font;
+                dropdown.itemText.fontSize = Defaults.FontSize;
+                var item = dropdown.itemText.transform.parent as RectTransform;
+                if (item != null) item.sizeDelta = new Vector2(item.sizeDelta.x, Defaults.RowHeight - 4f);
+            }
+            if (dropdown.template != null)
+                dropdown.template.sizeDelta = new Vector2(dropdown.template.sizeDelta.x, 240f);
+
+            var layout = go.AddComponent<LayoutElement>();
+            layout.flexibleWidth = 1f;
+
+            var widget = row.AddComponent<DropdownWidget>();
+            OCFieldWiring.Set(widget, "_label", label);
+            OCFieldWiring.Set(widget, "_dropdown", dropdown);
+
+            return row.GetComponent<DropdownWidget>();
+        }
+
+        private static OCHeaderRow BuildHeaderRow(Transform parent, TMP_FontAsset font)
+        {
+            var row = new GameObject("HeaderRow", typeof(RectTransform));
+            row.transform.SetParent(parent, false);
+
+            var group = row.AddComponent<VerticalLayoutGroup>();
+            group.padding = new RectOffset(4, 4, Mathf.RoundToInt(Defaults.HeaderSpacing), 0);
+            group.childControlWidth = true;
+            group.childControlHeight = true;
+            group.childForceExpandWidth = true;
+            group.childForceExpandHeight = false;
+
+            var textGo = new GameObject("Text", typeof(RectTransform));
+            textGo.transform.SetParent(row.transform, false);
+
+            var text = textGo.AddComponent<TextMeshProUGUI>();
+            text.text = "Header";
+            text.font = font;
+            text.fontSize = Defaults.HeaderFontSize;
+            text.fontStyle = FontStyles.Bold;
+            text.alignment = TextAlignmentOptions.Left;
+            text.textWrappingMode = TextWrappingModes.NoWrap;
+            text.overflowMode = TextOverflowModes.Ellipsis;
+            text.color = new Color(0.75f, 0.85f, 1f, 1f);
+            text.raycastTarget = false;
+
+            var widget = row.AddComponent<OCHeaderRow>();
+            OCFieldWiring.Set(widget, "_text", text);
+
+            return row.GetComponent<OCHeaderRow>();
+        }
+
+        private static OCCommandRow BuildCommandRow(Transform parent, TMP_FontAsset font)
+        {
+            var row = new GameObject("CommandRow", typeof(RectTransform));
+            row.transform.SetParent(parent, false);
+
+            var rowLayout = row.AddComponent<HorizontalLayoutGroup>();
+            rowLayout.padding = new RectOffset(4, 4, 8, 8);
+            rowLayout.spacing = 12f;
+            rowLayout.childControlWidth = true;
+            rowLayout.childControlHeight = true;
+            rowLayout.childForceExpandWidth = false;
+            rowLayout.childForceExpandHeight = false;
+            rowLayout.childAlignment = TextAnchor.MiddleLeft;
+            row.AddComponent<LayoutElement>().minHeight = Defaults.RowHeight;
+
+            var textGo = new GameObject("Text", typeof(RectTransform));
+            textGo.transform.SetParent(row.transform, false);
+            var textLayout = textGo.AddComponent<VerticalLayoutGroup>();
+            textLayout.spacing = 2f;
+            textLayout.childControlWidth = true;
+            textLayout.childControlHeight = true;
+            textLayout.childForceExpandWidth = true;
+            textLayout.childForceExpandHeight = false;
+            textGo.AddComponent<LayoutElement>().flexibleWidth = 1f;
+
+            var title = CreateCommandText(textGo, "Title", font, Defaults.FontSize, Color.white);
+            var description = CreateCommandText(textGo, "Description", font, Defaults.CommandDescriptionFontSize, new Color(0.6f, 0.63f, 0.69f, 1f));
+            var error = CreateCommandText(textGo, "Error", font, Defaults.CommandDescriptionFontSize, new Color(0.89f, 0.34f, 0.30f, 1f));
+            error.gameObject.SetActive(false);
+
+            var statusGo = new GameObject("StatusDot", typeof(RectTransform));
+            statusGo.transform.SetParent(row.transform, false);
+            var statusDot = statusGo.AddComponent<Image>();
+            statusDot.sprite = OCUiSprites.Knob;
+            statusDot.preserveAspect = true;
+            statusDot.raycastTarget = false;
+            statusDot.enabled = false;
+            var statusLayout = statusGo.AddComponent<LayoutElement>();
+            statusLayout.preferredWidth = 14f;
+            statusLayout.preferredHeight = 14f;
+
+            var buttonGo = TMP_DefaultControls.CreateButton(OCUiSprites.TmpUiResources());
+            buttonGo.transform.SetParent(row.transform, false);
+            buttonGo.name = "RunButton";
+            var buttonLayout = buttonGo.AddComponent<LayoutElement>();
+            buttonLayout.preferredWidth = Defaults.CommandButtonWidth;
+            buttonLayout.preferredHeight = Defaults.RowHeight;
+            var runLabel = buttonGo.GetComponentInChildren<TextMeshProUGUI>();
+            runLabel.text = "Run";
+            runLabel.font = font;
+            runLabel.fontSize = Defaults.FontSize;
+
+            var widget = row.AddComponent<OCCommandRow>();
+            OCFieldWiring.Set(widget, "_title", title);
+            OCFieldWiring.Set(widget, "_description", description);
+            OCFieldWiring.Set(widget, "_statusDot", statusDot);
+            OCFieldWiring.Set(widget, "_error", error);
+            OCFieldWiring.Set(widget, "_runButton", buttonGo.GetComponent<Button>());
+            OCFieldWiring.Set(widget, "_runLabel", runLabel);
+
+            return row.GetComponent<OCCommandRow>();
+        }
+
+        private static OCEntryActionBar BuildEntryActionBar(Transform parent, TMP_FontAsset font)
+        {
+            var bar = new GameObject("EntryActionBar", typeof(RectTransform));
+            bar.transform.SetParent(parent, false);
+            var barLayout = bar.AddComponent<HorizontalLayoutGroup>();
+            barLayout.spacing = 8f;
+            barLayout.childControlWidth = true;
+            barLayout.childControlHeight = true;
+            barLayout.childForceExpandWidth = false;
+            barLayout.childForceExpandHeight = true;
+            barLayout.childAlignment = TextAnchor.MiddleRight;
+            bar.AddComponent<LayoutElement>().flexibleWidth = 0f;
+
+            var buttonGo = TMP_DefaultControls.CreateButton(OCUiSprites.TmpUiResources());
+            buttonGo.transform.SetParent(bar.transform, false);
+            buttonGo.name = "ButtonTemplate";
+            var buttonLayout = buttonGo.AddComponent<LayoutElement>();
+            buttonLayout.preferredWidth = Defaults.EntryActionButtonWidth;
+            buttonLayout.flexibleWidth = 0f;
+            var label = buttonGo.GetComponentInChildren<TextMeshProUGUI>();
+            label.text = "Action";
+            label.font = font;
+            label.fontSize = Defaults.FontSize;
+            label.textWrappingMode = TextWrappingModes.NoWrap;
+            label.overflowMode = TextOverflowModes.Ellipsis;
+            buttonGo.SetActive(false);
+
+            var component = bar.AddComponent<OCEntryActionBar>();
+            OCFieldWiring.Set(component, "_buttonTemplate", buttonGo.GetComponent<Button>());
+
+            return bar.GetComponent<OCEntryActionBar>();
+        }
+
+        private static OCEntryActionError BuildEntryActionError(Transform parent, TMP_FontAsset font)
+        {
+            var row = new GameObject("EntryActionError", typeof(RectTransform));
+            row.transform.SetParent(parent, false);
+            var rowLayout = row.AddComponent<HorizontalLayoutGroup>();
+            rowLayout.padding = new RectOffset(Mathf.RoundToInt(Defaults.LabelWidth) + 12, 4, 0, 4);
+            rowLayout.childControlWidth = true;
+            rowLayout.childControlHeight = true;
+            rowLayout.childForceExpandWidth = true;
+            rowLayout.childForceExpandHeight = false;
+
+            var text = CreateCommandText(row, "Text", font, Defaults.EntryActionErrorFontSize, new Color(0.89f, 0.34f, 0.30f, 1f));
+
+            var component = row.AddComponent<OCEntryActionError>();
+            OCFieldWiring.Set(component, "_text", text);
+            row.SetActive(false);
+
+            return row.GetComponent<OCEntryActionError>();
+        }
+
+        private static TextMeshProUGUI CreateCommandText(GameObject parent, string goName, TMP_FontAsset font, float fontSize, Color color)
+        {
+            var go = new GameObject(goName, typeof(RectTransform));
+            go.transform.SetParent(parent.transform, false);
+            var text = go.AddComponent<TextMeshProUGUI>();
+            text.text = goName;
+            text.font = font;
+            text.fontSize = fontSize;
+            text.color = color;
+            text.alignment = TextAlignmentOptions.Left;
+            text.textWrappingMode = TextWrappingModes.Normal;
+            text.raycastTarget = false;
+            return text;
+        }
+
+        /// <summary>Builds the full-screen Lock Screen as a sibling after the Panel, so it covers the screen whatever the panel size; left inactive.</summary>
         private static OCLockScreen BuildLockScreen(GameObject canvasRoot, TMP_FontAsset font)
         {
             var go = new GameObject("LockScreen", typeof(RectTransform));
@@ -673,15 +547,15 @@ namespace OperatorConsole.Editor
             var backspace = CreateLockKey(keypad, "Delete", font, Defaults.LockKeyFontSize * 0.5f, false);
 
             var lockScreen = go.AddComponent<OCLockScreen>();
-            SetField(lockScreen, "_backdrop", backdrop);
-            SetArray(lockScreen, "_digitKeys", digitKeys);
-            SetField(lockScreen, "_cancelKey", cancel);
-            SetField(lockScreen, "_backspaceKey", backspace);
-            SetField(lockScreen, "_keypad", grid);
-            SetArray(lockScreen, "_dots", dots);
-            SetField(lockScreen, "_dotRow", dotRowRect);
-            SetField(lockScreen, "_dotRowSlot", dotSlotLayout);
-            SetField(lockScreen, "_error", error);
+            OCFieldWiring.Set(lockScreen, "_backdrop", backdrop);
+            OCFieldWiring.Set(lockScreen, "_digitKeys", digitKeys);
+            OCFieldWiring.Set(lockScreen, "_cancelKey", cancel);
+            OCFieldWiring.Set(lockScreen, "_backspaceKey", backspace);
+            OCFieldWiring.Set(lockScreen, "_keypad", grid);
+            OCFieldWiring.Set(lockScreen, "_dots", dots);
+            OCFieldWiring.Set(lockScreen, "_dotRow", dotRowRect);
+            OCFieldWiring.Set(lockScreen, "_dotRowSlot", dotSlotLayout);
+            OCFieldWiring.Set(lockScreen, "_error", error);
 
             go.SetActive(false);
             return lockScreen;
@@ -825,9 +699,9 @@ namespace OperatorConsole.Editor
             underline.SetActive(selected);
 
             var tab = go.AddComponent<OCPanelTab>();
-            SetField(tab, "_button", button);
-            SetField(tab, "_label", label);
-            SetField(tab, "_underline", underline);
+            OCFieldWiring.Set(tab, "_button", button);
+            OCFieldWiring.Set(tab, "_label", label);
+            OCFieldWiring.Set(tab, "_underline", underline);
             return tab;
         }
 
@@ -893,7 +767,7 @@ namespace OperatorConsole.Editor
 
         private static Scrollbar CreateVerticalScrollbar(GameObject scrollView)
         {
-            var go = DefaultControls.CreateScrollbar(UiResources());
+            var go = DefaultControls.CreateScrollbar(OCUiSprites.UiResources());
             go.transform.SetParent(scrollView.transform, false);
             go.name = "Scrollbar Vertical";
 
@@ -932,7 +806,7 @@ namespace OperatorConsole.Editor
             return (save, reset, close);
         }
 
-        /// <summary>Builds the modal confirm overlay as the last child of the panel; saved inactive.</summary>
+        /// <summary>Builds the modal confirm overlay as the last child of the panel; left inactive.</summary>
         private static (GameObject dialog, Button cancel, Button confirm, TMP_Text message, TMP_Text confirmLabel) BuildConfirmDialog(GameObject panel, TMP_FontAsset font)
         {
             var dialog = new GameObject("ConfirmDialog", typeof(RectTransform));
@@ -1004,7 +878,7 @@ namespace OperatorConsole.Editor
 
         private static Button CreateFooterButton(GameObject footer, string goName, string text, TMP_FontAsset font)
         {
-            var go = TMP_DefaultControls.CreateButton(TmpUiResources());
+            var go = TMP_DefaultControls.CreateButton(OCUiSprites.TmpUiResources());
             go.transform.SetParent(footer.transform, false);
             go.name = goName;
 
@@ -1023,11 +897,12 @@ namespace OperatorConsole.Editor
             return button;
         }
 
-        // ---- Row building blocks shared by the widget prefabs ----
+        // ---- Row building blocks shared by the widget templates ----
 
-        private static GameObject CreateRowRoot(string name)
+        private static GameObject CreateRowRoot(string name, Transform parent)
         {
             var row = new GameObject(name, typeof(RectTransform));
+            row.transform.SetParent(parent, false);
 
             var rowLayoutGroup = row.AddComponent<HorizontalLayoutGroup>();
             rowLayoutGroup.spacing = 8f;
@@ -1083,7 +958,7 @@ namespace OperatorConsole.Editor
 
         private static TMP_InputField CreateRowInput(GameObject row, TMP_FontAsset font, TMP_InputField.ContentType contentType)
         {
-            var go = TMP_DefaultControls.CreateInputField(TmpUiResources());
+            var go = TMP_DefaultControls.CreateInputField(OCUiSprites.TmpUiResources());
             go.transform.SetParent(row.transform, false);
 
             var input = go.GetComponent<TMP_InputField>();
@@ -1106,7 +981,7 @@ namespace OperatorConsole.Editor
 
         private static Slider CreateRowSlider(GameObject row)
         {
-            var go = DefaultControls.CreateSlider(UiResources());
+            var go = DefaultControls.CreateSlider(OCUiSprites.UiResources());
             go.transform.SetParent(row.transform, false);
             go.name = "Slider";
 
@@ -1129,7 +1004,7 @@ namespace OperatorConsole.Editor
 
         private static Toggle CreateRowToggle(GameObject row)
         {
-            var go = DefaultControls.CreateToggle(UiResources());
+            var go = DefaultControls.CreateToggle(OCUiSprites.UiResources());
             go.transform.SetParent(row.transform, false);
             go.name = "Toggle";
 
@@ -1159,58 +1034,6 @@ namespace OperatorConsole.Editor
             layout.preferredHeight = Defaults.RowHeight;
 
             return image;
-        }
-
-        // ---- Small helpers ----
-
-        private static Sprite? BuiltinSprite(string name) => AssetDatabase.GetBuiltinExtraResource<Sprite>($"UI/Skin/{name}.psd");
-
-        private static DefaultControls.Resources UiResources() => new()
-        {
-            standard = BuiltinSprite("UISprite"), background = BuiltinSprite("Background"), inputField = BuiltinSprite("InputFieldBackground"),
-            checkmark = BuiltinSprite("Checkmark"), knob = BuiltinSprite("Knob"), dropdown = BuiltinSprite("DropdownArrow"), mask = BuiltinSprite("UIMask"),
-        };
-
-        private static TMP_DefaultControls.Resources TmpUiResources() => new()
-        {
-            standard = BuiltinSprite("UISprite"), background = BuiltinSprite("Background"), inputField = BuiltinSprite("InputFieldBackground"),
-            checkmark = BuiltinSprite("Checkmark"), knob = BuiltinSprite("Knob"), dropdown = BuiltinSprite("DropdownArrow"), mask = BuiltinSprite("UIMask"),
-        };
-
-        private static GameObject SaveAndDestroy(GameObject go, string path)
-        {
-            var saved = PrefabUtility.SaveAsPrefabAsset(go, path);
-            Object.DestroyImmediate(go);
-            return saved;
-        }
-
-        private static void SetArray(Object target, string fieldName, Object[] values)
-        {
-            var so = new SerializedObject(target);
-            var property = so.FindProperty(fieldName);
-            if (property == null || !property.isArray)
-            {
-                Debug.LogError($"OC: serialized array '{fieldName}' not found on '{target.GetType().Name}'.");
-                return;
-            }
-            property.arraySize = values.Length;
-            for (var i = 0; i < values.Length; i++)
-                property.GetArrayElementAtIndex(i).objectReferenceValue = values[i];
-            so.ApplyModifiedPropertiesWithoutUndo();
-        }
-
-        /// <summary>Assigns a private [SerializeField] reference by name — these are project MonoBehaviours/ScriptableObjects with no public setters.</summary>
-        private static void SetField(Object target, string fieldName, Object? value)
-        {
-            var so = new SerializedObject(target);
-            var property = so.FindProperty(fieldName);
-            if (property == null)
-            {
-                Debug.LogError($"OC: serialized property '{fieldName}' not found on '{target.GetType().Name}'.");
-                return;
-            }
-            property.objectReferenceValue = value;
-            so.ApplyModifiedPropertiesWithoutUndo();
         }
     }
 }
