@@ -340,16 +340,16 @@ namespace DataSaveManager.Editor
             var error = CreateCommandText(textGo, "Error", font, Defaults.CommandDescriptionFontSize, new Color(0.89f, 0.34f, 0.30f, 1f));
             error.gameObject.SetActive(false);
 
-            var statusGo = new GameObject("Status", typeof(RectTransform));
+            var statusGo = new GameObject("StatusDot", typeof(RectTransform));
             statusGo.transform.SetParent(row.transform, false);
-            var status = statusGo.AddComponent<TextMeshProUGUI>();
-            status.text = string.Empty;
-            status.font = font;
-            status.fontSize = Defaults.FontSize;
-            status.alignment = TextAlignmentOptions.Center;
-            status.raycastTarget = false;
+            var statusDot = statusGo.AddComponent<Image>();
+            statusDot.sprite = BuiltinSprite("Knob");
+            statusDot.preserveAspect = true;
+            statusDot.raycastTarget = false;
+            statusDot.enabled = false;
             var statusLayout = statusGo.AddComponent<LayoutElement>();
-            statusLayout.preferredWidth = 28f;
+            statusLayout.preferredWidth = 14f;
+            statusLayout.preferredHeight = 14f;
 
             var buttonGo = TMP_DefaultControls.CreateButton(TmpUiResources());
             buttonGo.transform.SetParent(row.transform, false);
@@ -365,7 +365,7 @@ namespace DataSaveManager.Editor
             var widget = row.AddComponent<DSMCommandRow>();
             SetField(widget, "_title", title);
             SetField(widget, "_description", description);
-            SetField(widget, "_status", status);
+            SetField(widget, "_statusDot", statusDot);
             SetField(widget, "_error", error);
             SetField(widget, "_runButton", buttonGo.GetComponent<Button>());
             SetField(widget, "_runLabel", runLabel);

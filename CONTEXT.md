@@ -100,7 +100,7 @@ The .NET composite format string on a **Link** (e.g. `Speed: {0:0.0}`) that turn
 - Each owner registers its own **Commands**, so two owners of the same kind give two **Registered Commands** with the same **Title**; the **Runtime Panel** tells them apart by owner.
 - A **Command** keeps running when the **Runtime Panel** closes. It is stopped when its owner unregisters. While it runs it cannot be run again; other **Commands** can.
 - A **Command**'s last outcome (running, succeeded, failed) belongs to the **Registered Command**, not to the **Runtime Panel**, and is shown again when the **Runtime Panel** reopens.
-- A **Command** shows a **Header** above it to start a visual group, as an **Exposed Entry** does.
+- A **Command** shows a **Header** above it to start a visual group, as an **Exposed Entry** does; when the **Command** listed just before it has the same **Header**, the **Header** is shown once for both.
 - A **Runtime Panel** with no **Command** to show has no Commands tab and looks as it did before **Commands** existed.
 - A **Command** never changes a **Value** by being run through the **Runtime Panel**; anything it changes, it changes through code like any other caller.
 - A **Binding** has one or more **Links**. A **Link** whose member takes the **Entry**'s own **Data Type** receives the **Value** as-is; only when no such member exists does a text member receive it through the **Format**.

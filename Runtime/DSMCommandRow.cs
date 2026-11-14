@@ -7,12 +7,12 @@ using UnityEngine.UI;
 
 namespace DataSaveManager
 {
-    /// <summary>A Runtime Panel row for one Registered Command: Title, Description, last outcome and a Run button.</summary>
+    /// <summary>A Runtime Panel row for one Registered Command: Title, Description, a dot coloured by its last outcome, and a Run button.</summary>
     public sealed class DSMCommandRow : MonoBehaviour, IDSMLayoutAware
     {
         [SerializeField] private TMP_Text? _title;
         [SerializeField] private TMP_Text? _description;
-        [SerializeField] private TMP_Text? _status;
+        [SerializeField] private Image? _statusDot;
         [SerializeField] private TMP_Text? _error;
         [SerializeField] private Button? _runButton;
         [SerializeField] private TMP_Text? _runLabel;
@@ -55,7 +55,6 @@ namespace DataSaveManager
             row.minHeight = layout.RowHeight;
 
             if (_title != null) _title.fontSize = layout.FontSize;
-            if (_status != null) _status.fontSize = layout.FontSize;
             if (_runLabel != null) _runLabel.fontSize = layout.FontSize;
             if (_description != null) _description.fontSize = layout.CommandDescriptionFontSize;
             if (_error != null) _error.fontSize = layout.CommandDescriptionFontSize;
@@ -83,14 +82,15 @@ namespace DataSaveManager
             if (_command == null) return;
 
             var status = _command.Status;
-            if (_status != null)
+            if (_statusDot != null)
             {
-                (_status.text, _status.color) = status switch
+                _statusDot.enabled = status != DSMCommandStatus.NeverRun;
+                _statusDot.color = status switch
                 {
-                    DSMCommandStatus.Running   => ("◌", _runningColor),
-                    DSMCommandStatus.Succeeded => ("✓", _succeededColor),
-                    DSMCommandStatus.Failed    => ("✗", _failedColor),
-                    _                          => (string.Empty, _status.color)
+                    DSMCommandStatus.Running   => _runningColor,
+                    DSMCommandStatus.Succeeded => _succeededColor,
+                    DSMCommandStatus.Failed    => _failedColor,
+                    _                          => _statusDot.color
                 };
             }
 

@@ -280,10 +280,11 @@ public sealed class Projector : MonoBehaviour
   `Register(this)` reads instance methods only.
 - **From code** — `DSM.Commands.Register(owner, "Title", ct => ..., new DSMCommandOptions { ... })`;
   `Unregister(owner)` removes it too.
-- **Running** — the row shows ◌ while it runs (its Run button disabled), then ✓, or ✗ with the
-  exception message; the exception is also logged. The outcome stays with the Command, so it is still
+- **Running** — a dot beside the Run button turns amber while it runs (the button reads `Running…` and is
+  disabled), then green, or red with the exception message under the Description; the exception is also logged. The outcome stays with the Command, so it is still
   there when the panel reopens. A Command keeps running when the panel closes. `Unregister` cancels the
   token; a cancelled run isn't a failure.
+- **Header** — starts a visual group; consecutive Commands with the same Header show it once.
 - **Same Title twice** — two owners that register the same Title (two projectors) show as
   `Reconnect (Projector L)` and `Reconnect (Projector R)`, from the owners' GameObject names.
 - **Audiences** — named by **name** (not id) because an attribute can't hold an id. Renaming an Audience

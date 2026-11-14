@@ -409,9 +409,12 @@ namespace DataSaveManager
             }
 
             var headerPrefab = _widgetConfig.HeaderRow;
+            string? previousHeader = null;
             foreach (var command in _shownCommands)
             {
-                if (command.Header != null && headerPrefab != null)
+                var startsGroup = command.Header != null && !string.Equals(command.Header, previousHeader, StringComparison.Ordinal);
+                previousHeader = command.Header;
+                if (startsGroup && headerPrefab != null)
                 {
                     var headerRow = Instantiate(headerPrefab, _commandContainer);
                     headerRow.SetText(command.Header);
