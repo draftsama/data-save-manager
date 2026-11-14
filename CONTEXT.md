@@ -42,8 +42,12 @@ _Avoid_: choice, item, enum value
 An optional title on an **Exposed Entry**, shown on the **Runtime Panel** directly above that **Entry**'s row to start a visual group. Presentation only; it has no effect on the **Value**.
 _Avoid_: section, category, group
 
+**Operator**:
+A person on site who uses a **Runtime Panel** to view and change **Entries** and run **Commands**, whatever **Audience** they belong to.
+_Avoid_: user, admin, player
+
 **Audience**:
-A named kind of operator (e.g. Technician, Admin) that an **Exposed Entry** or a **Command** is meant for. An **Entry** may name several **Audiences**; one naming none is meant for every **Audience**. Every **Audience** is declared once in the **Config**.
+A named kind of **Operator** (e.g. Technician, Admin) that an **Exposed Entry** or a **Command** is meant for. An **Entry** may name several **Audiences**; one naming none is meant for every **Audience**. Every **Audience** is declared once in the **Config**.
 _Avoid_: tag, group, app, category
 
 **Presentation Hint**:
@@ -125,7 +129,7 @@ The .NET composite format string on a **Link** (e.g. `Speed: {0:0.0}`) that turn
 - A **Reset** from a **Runtime Panel** covers only the **Exposed Entries** that **Runtime Panel** shows, and only after the operator confirms; **Overrides** of every other **Entry** and of _ad-hoc keys_ survive it.
 - The **Config** holds zero or more **Panel Definitions**, each with a unique name. The app creates one **Runtime Panel** per enabled **Panel Definition** when it starts, and that **Runtime Panel** lasts until the app quits, across scene loads. With no enabled **Panel Definition** there is no **Runtime Panel**.
 - Code finds a **Runtime Panel** by its **Panel Definition**'s name, so renaming a **Panel Definition** breaks code that used the old name.
-- Two **Panel Definitions** may share an **Open Trigger**; one use of it then opens both **Runtime Panels**.
+- Two **Panel Definitions** may share an **Open Trigger**; one use of it then opens both **Runtime Panels**, except that at most one **Lock Screen** is shown at a time: of the **Runtime Panels** with a **Panel Lock**, only the first in the **Config**'s order opens.
 - A **Panel Lock** guards only the **Open Triggers**; code that opens a **Runtime Panel** directly is not asked for the **Passcode**. A wrong **Passcode** can be retried without limit. A **Runtime Panel** with a **Panel Lock** but no **Lock Screen** refuses to open from its **Open Triggers**.
 - While its **Lock Screen** is up, a **Runtime Panel** counts as open to the rest of the app, as it does once unlocked.
 - A **Runtime Panel** with a **Panel Lock** and one without can serve different **Audiences** in the same app (e.g. a locked Admin panel beside an open Technician panel).

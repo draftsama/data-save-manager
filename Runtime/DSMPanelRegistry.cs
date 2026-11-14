@@ -17,8 +17,14 @@ namespace DataSaveManager
     {
         private readonly List<DSMRuntimePanel> _panels = new();
         private readonly HashSet<string> _warnedNames = new(StringComparer.Ordinal);
+        private readonly List<EventSystem> _sceneEventSystems = new();
+        private readonly DSMLockTurn _lockTurn = new();
+        private GameObject? _createdEventSystem;
 
         public IReadOnlyList<DSMRuntimePanel> All => _panels;
+
+        /// <summary>True once the Runtime Panels were created, even if no Panel Definition was enabled.</summary>
+        public bool HasSpawned { get; private set; }
 
         /// <summary>The first Runtime Panel whose Panel Definition is named <paramref name="name"/>.</summary>
         public bool TryGet(string name, out DSMRuntimePanel panel)
@@ -50,17 +56,51 @@ namespace DataSaveManager
                 if (panel != null) panel.Hide();
         }
 
-        internal void Remove(DSMRuntimePanel panel) => _panels.Remove(panel);
+        internal void Remove(DSMRuntimePanel panel)
+        {
+            _panels.Remove(panel);
+            _lockTurn.Release(panel, Time.frameCount);
+        }
+
+        /// <summary>Asks to show <paramref name="panel"/>'s Lock Screen; false when another panel's Lock Screen has the turn.</summary>
+        internal bool ClaimLockScreen(DSMRuntimePanel panel)
+        {
+            var order = _panels.IndexOf(panel);
+            if (order < 0) order = int.MaxValue;
+            var result = _lockTurn.Claim(panel, order, Time.frameCount, out var displaced);
+            if (result == DSMLockTurnResult.TakeOver && displaced is DSMRuntimePanel other && other != null)
+                other.DropLockScreen();
+            return result != DSMLockTurnResult.Yield;
+        }
+
+        internal void ReleaseLockScreen(DSMRuntimePanel panel) => _lockTurn.Release(panel, Time.frameCount);
 
         internal void Clear()
         {
             _panels.Clear();
             _warnedNames.Clear();
+            _lockTurn.Clear();
+            HasSpawned = false;
             SceneManager.sceneLoaded -= OnSceneLoaded;
+        }
+
+        /// <summary>Destroys the Runtime Panels and creates them again from <paramref name="config"/>.</summary>
+        internal void Respawn(DSMConfig config)
+        {
+            foreach (var panel in _panels)
+            {
+                if (panel == null) continue;
+                // Deactivated first so the old panel's Open Triggers stop before Destroy takes effect at the end of the frame.
+                panel.gameObject.SetActive(false);
+                Object.Destroy(panel.gameObject);
+            }
+            Clear();
+            SpawnAll(config);
         }
 
         internal void SpawnAll(DSMConfig config)
         {
+            HasSpawned = true;
             var spawnedAny = false;
             foreach (var definition in config.Panels)
             {
@@ -94,16 +134,40 @@ namespace DataSaveManager
             return panel;
         }
 
-        private static void OnSceneLoaded(Scene scene, LoadSceneMode mode) => EnsureEventSystem();
-
-        private static void EnsureEventSystem()
+        private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
-            if (EventSystem.current != null) return;
-            var go = new GameObject("EventSystem", typeof(EventSystem));
+            if (_createdEventSystem != null && SceneHasEventSystem(scene))
+            {
+                Object.Destroy(_createdEventSystem);
+                _createdEventSystem = null;
+            }
+            EnsureEventSystem();
+        }
+
+        private bool SceneHasEventSystem(Scene scene)
+        {
+            foreach (var root in scene.GetRootGameObjects())
+            {
+                root.GetComponentsInChildren(true, _sceneEventSystems);
+                foreach (var eventSystem in _sceneEventSystems)
+                {
+                    if (eventSystem.gameObject == _createdEventSystem) continue;
+                    _sceneEventSystems.Clear();
+                    return true;
+                }
+            }
+            _sceneEventSystems.Clear();
+            return false;
+        }
+
+        private void EnsureEventSystem()
+        {
+            if (EventSystem.current != null || _createdEventSystem != null) return;
+            _createdEventSystem = new GameObject("EventSystem", typeof(EventSystem));
 #if ENABLE_INPUT_SYSTEM
-            go.AddComponent<InputSystemUIInputModule>();
+            _createdEventSystem.AddComponent<InputSystemUIInputModule>();
 #else
-            go.AddComponent<StandaloneInputModule>();
+            _createdEventSystem.AddComponent<StandaloneInputModule>();
 #endif
         }
     }

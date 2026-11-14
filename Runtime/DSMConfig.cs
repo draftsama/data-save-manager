@@ -79,6 +79,8 @@ namespace DataSaveManager
 
         internal void AddAudienceForTests(DSMAudience audience) => _audiences.Add(audience);
 
+        internal void AddPanelForTests(DSMPanelDefinition definition) => _panels.Add(definition);
+
         internal void SetForTests(bool autoSave, float debounce, string saveDirectory, string fileName)
         {
             _autoSave = autoSave;

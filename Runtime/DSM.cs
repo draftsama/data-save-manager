@@ -34,6 +34,8 @@ public static class DSM
         s_store = new DSMStore(config);
         s_store.Load();
         HookQuitting();
+
+        if (s_panels != null && s_panels.HasSpawned) s_panels.Respawn(config);
     }
 
     /// <summary>Returns the value for <paramref name="key"/>, or the Entry's Default if never overridden.</summary>
@@ -116,5 +118,8 @@ public static class DSM
     }
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
-    private static void SpawnPanels() => Panels.SpawnAll(Store.Config);
+    private static void SpawnPanels()
+    {
+        if (!Panels.HasSpawned) Panels.SpawnAll(Store.Config);
+    }
 }

@@ -166,7 +166,9 @@ namespace DataSaveManager
             if (toggleKey != _parsedToggleKey)
             {
                 _parsedToggleKey = toggleKey;
-                _hasInputSystemToggleKey = Enum.TryParse(toggleKey.ToString(), out _inputSystemToggleKey);
+                _hasInputSystemToggleKey = DSMKeyMap.TryGetKey(toggleKey, out _inputSystemToggleKey);
+                if (!_hasInputSystemToggleKey)
+                    Debug.LogWarning($"DSMRuntimePanel '{Name}': Toggle Key {toggleKey} is not a keyboard key, so the hotkey does nothing. Pick another key in the DSM Manager.", this);
             }
             return _hasInputSystemToggleKey && Keyboard.current != null && Keyboard.current[_inputSystemToggleKey].wasPressedThisFrame;
 #elif ENABLE_LEGACY_INPUT_MANAGER
@@ -217,16 +219,30 @@ namespace DataSaveManager
                 Debug.LogError($"DSMRuntimePanel on '{gameObject.name}': a Passcode is set but no Lock Screen is assigned, so the panel stays closed.", this);
                 return;
             }
+            if (!DSM.Panels.ClaimLockScreen(this)) return;
             _lockScreen.ApplyLayout(Layout);
             _lockScreen.Open(passcode, _onUnlocked!, _onLockCancelled!);
             SetOpen(true);
         }
 
-        private void OnLockCancelled() => SetOpen(false);
+        private void OnLockCancelled()
+        {
+            DSM.Panels.ReleaseLockScreen(this);
+            SetOpen(false);
+        }
+
+        /// <summary>Closes the Lock Screen without opening the panel, because another panel's Lock Screen took the turn.</summary>
+        internal void DropLockScreen()
+        {
+            if (!IsLocking) return;
+            _lockScreen!.Close();
+            SetOpen(false);
+        }
 
         /// <summary>Opens the panel at once, without asking for the Passcode.</summary>
         public void Show()
         {
+            DSM.Panels.ReleaseLockScreen(this);
             if (IsLocking) _lockScreen!.Close();
             CloseConfirmDialog();
             Rebuild();
@@ -239,6 +255,7 @@ namespace DataSaveManager
 
         public void Hide()
         {
+            DSM.Panels.ReleaseLockScreen(this);
             if (IsLocking) _lockScreen!.Close();
             CloseConfirmDialog();
             if (Store.Config.AutoSave && Store.IsDirty) Store.Save();
