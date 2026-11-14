@@ -82,6 +82,44 @@ namespace DataSaveManager.Editor
                        $"  {panelPath}");
         }
 
+        /// <summary>Adds a Lock Screen to the existing Runtime Panel prefab in place, keeping every other object and its overrides in scenes.</summary>
+        [MenuItem("Draft/DSM/Add Lock Screen to Runtime Panel Prefab")]
+        internal static void AddLockScreenToPanelPrefab()
+        {
+            var font = TMP_Settings.defaultFontAsset;
+            var prefabDir = ResolvePrefabFolder();
+            if (font == null || prefabDir == null)
+            {
+                Debug.LogError("DSM: needs TMP_Settings.defaultFontAsset and this package's Prefab folder.");
+                return;
+            }
+
+            var path = Path.Combine(prefabDir, "DSMRuntimePanel.prefab").Replace('\\', '/');
+            var root = PrefabUtility.LoadPrefabContents(path);
+            try
+            {
+                var panel = root.GetComponent<DSMRuntimePanel>();
+                if (panel == null)
+                {
+                    Debug.LogError($"DSM: no DSMRuntimePanel on the root of {path}.");
+                    return;
+                }
+                if (new SerializedObject(panel).FindProperty("_lockScreen").objectReferenceValue != null)
+                {
+                    Debug.Log($"DSM: {path} already has a Lock Screen.");
+                    return;
+                }
+
+                SetField(panel, "_lockScreen", BuildLockScreen(root, font));
+                PrefabUtility.SaveAsPrefabAsset(root, path);
+                Debug.Log($"DSM: added a Lock Screen to {path}.");
+            }
+            finally
+            {
+                PrefabUtility.UnloadPrefabContents(root);
+            }
+        }
+
         /// <summary>Package root is this script's grandparent folder (script -> Editor -> package root), so this works wherever the package is installed.</summary>
         private static string? ResolvePrefabFolder()
         {
@@ -523,6 +561,7 @@ namespace DataSaveManager.Editor
             var (confirmDialog, confirmCancelButton, confirmResetButton, confirmMessage, confirmButtonLabel) = BuildConfirmDialog(panel, font);
             tabBar.SetActive(false);
             commandsView.SetActive(false);
+            var lockScreen = BuildLockScreen(rootGo, font);
 
             var panelComponent = rootGo.AddComponent<DSMRuntimePanel>();
             SetField(panelComponent, "_widgetConfig", widgetConfig);
@@ -542,9 +581,142 @@ namespace DataSaveManager.Editor
             SetField(panelComponent, "_commandContainer", commandContainer);
             SetField(panelComponent, "_confirmMessage", confirmMessage);
             SetField(panelComponent, "_confirmButtonLabel", confirmButtonLabel);
+            SetField(panelComponent, "_lockScreen", lockScreen);
             // _startVisible / _toggleKey / _saveButtonMode keep their C# field defaults (false / KeyCode.F1 / Auto).
 
             SaveAndDestroy(rootGo, path);
+        }
+
+        /// <summary>Builds the full-screen Lock Screen as a sibling after the Panel, so it covers the screen whatever the panel size; saved inactive.</summary>
+        private static DSMLockScreen BuildLockScreen(GameObject canvasRoot, TMP_FontAsset font)
+        {
+            var go = new GameObject("LockScreen", typeof(RectTransform));
+            go.transform.SetParent(canvasRoot.transform, false);
+            Stretch(go.GetComponent<RectTransform>());
+            var backdrop = go.AddComponent<Image>();
+            backdrop.color = new Color(0.03f, 0.035f, 0.047f, Defaults.LockBackgroundAlpha);
+            backdrop.raycastTarget = true;
+
+            var content = new GameObject("Content", typeof(RectTransform));
+            content.transform.SetParent(go.transform, false);
+            var contentRect = content.GetComponent<RectTransform>();
+            contentRect.anchorMin = contentRect.anchorMax = contentRect.pivot = new Vector2(0.5f, 0.5f);
+            var contentLayout = content.AddComponent<VerticalLayoutGroup>();
+            contentLayout.spacing = 28f;
+            contentLayout.childControlWidth = true;
+            contentLayout.childControlHeight = true;
+            contentLayout.childForceExpandWidth = false;
+            contentLayout.childForceExpandHeight = false;
+            contentLayout.childAlignment = TextAnchor.MiddleCenter;
+            var contentFitter = content.AddComponent<ContentSizeFitter>();
+            contentFitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+            contentFitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+            var title = CreateCommandText(content, "Title", font, 34f, new Color(0.95f, 0.96f, 0.97f, 1f));
+            title.text = "Enter Passcode";
+            title.alignment = TextAlignmentOptions.Center;
+
+            var dotSlot = new GameObject("DotSlot", typeof(RectTransform));
+            dotSlot.transform.SetParent(content.transform, false);
+            var dotSlotLayout = dotSlot.AddComponent<LayoutElement>();
+            dotSlotLayout.preferredHeight = Defaults.LockDotSize;
+
+            var dotRow = new GameObject("Dots", typeof(RectTransform));
+            dotRow.transform.SetParent(dotSlot.transform, false);
+            var dotRowRect = dotRow.GetComponent<RectTransform>();
+            dotRowRect.anchorMin = dotRowRect.anchorMax = dotRowRect.pivot = new Vector2(0.5f, 0.5f);
+            var dotRowLayout = dotRow.AddComponent<HorizontalLayoutGroup>();
+            dotRowLayout.spacing = Defaults.LockDotSize * 1.1f;
+            dotRowLayout.childControlWidth = true;
+            dotRowLayout.childControlHeight = true;
+            dotRowLayout.childForceExpandWidth = false;
+            dotRowLayout.childForceExpandHeight = false;
+            dotRowLayout.childAlignment = TextAnchor.MiddleCenter;
+            var dotRowFitter = dotRow.AddComponent<ContentSizeFitter>();
+            dotRowFitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+            dotRowFitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+            var dots = new Image[DSMPasscode.MaxLength];
+            for (var i = 0; i < dots.Length; i++)
+            {
+                var dot = new GameObject($"Dot{i + 1}", typeof(RectTransform));
+                dot.transform.SetParent(dotRow.transform, false);
+                var image = dot.AddComponent<Image>();
+                image.raycastTarget = false;
+                var element = dot.AddComponent<LayoutElement>();
+                element.preferredWidth = Defaults.LockDotSize;
+                element.preferredHeight = Defaults.LockDotSize;
+                dots[i] = image;
+            }
+
+            var error = CreateCommandText(content, "Error", font, 22f, new Color(1f, 0.42f, 0.42f, 1f));
+            error.text = string.Empty;
+            error.alignment = TextAlignmentOptions.Center;
+            var errorLayout = error.gameObject.AddComponent<LayoutElement>();
+            errorLayout.preferredHeight = 26f;
+            errorLayout.preferredWidth = 400f;
+
+            var keypad = new GameObject("Keypad", typeof(RectTransform));
+            keypad.transform.SetParent(content.transform, false);
+            var grid = keypad.AddComponent<GridLayoutGroup>();
+            grid.cellSize = new Vector2(Defaults.LockKeySize, Defaults.LockKeySize);
+            grid.spacing = new Vector2(Defaults.LockKeySpacing, Defaults.LockKeySpacing);
+            grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
+            grid.constraintCount = 3;
+            grid.childAlignment = TextAnchor.MiddleCenter;
+
+            var digitKeys = new Button[10];
+            for (var digit = 1; digit <= 9; digit++)
+                digitKeys[digit] = CreateLockKey(keypad, digit.ToString(), font, Defaults.LockKeyFontSize, true);
+            var cancel = CreateLockKey(keypad, "Cancel", font, Defaults.LockKeyFontSize * 0.5f, false);
+            digitKeys[0] = CreateLockKey(keypad, "0", font, Defaults.LockKeyFontSize, true);
+            var backspace = CreateLockKey(keypad, "Delete", font, Defaults.LockKeyFontSize * 0.5f, false);
+
+            var lockScreen = go.AddComponent<DSMLockScreen>();
+            SetField(lockScreen, "_backdrop", backdrop);
+            SetArray(lockScreen, "_digitKeys", digitKeys);
+            SetField(lockScreen, "_cancelKey", cancel);
+            SetField(lockScreen, "_backspaceKey", backspace);
+            SetField(lockScreen, "_keypad", grid);
+            SetArray(lockScreen, "_dots", dots);
+            SetField(lockScreen, "_dotRow", dotRowRect);
+            SetField(lockScreen, "_dotRowSlot", dotSlotLayout);
+            SetField(lockScreen, "_error", error);
+
+            go.SetActive(false);
+            return lockScreen;
+        }
+
+        private static Button CreateLockKey(GameObject keypad, string text, TMP_FontAsset font, float fontSize, bool filled)
+        {
+            var go = new GameObject(text == "Delete" ? "DeleteKey" : $"Key{text}", typeof(RectTransform));
+            go.transform.SetParent(keypad.transform, false);
+            var image = go.AddComponent<Image>();
+            image.color = Color.white;
+            var button = go.AddComponent<Button>();
+            button.targetGraphic = image;
+            var colors = button.colors;
+            colors.normalColor = new Color(1f, 1f, 1f, filled ? 0.14f : 0f);
+            colors.highlightedColor = new Color(1f, 1f, 1f, filled ? 0.2f : 0.06f);
+            colors.selectedColor = colors.normalColor;
+            colors.pressedColor = new Color(1f, 1f, 1f, filled ? 0.4f : 0.12f);
+            colors.fadeDuration = 0.05f;
+            button.colors = colors;
+
+            var label = CreateCommandText(go, "Label", font, fontSize, Color.white);
+            label.text = text;
+            label.alignment = TextAlignmentOptions.Center;
+            label.raycastTarget = false;
+            Stretch(label.rectTransform);
+            return button;
+        }
+
+        private static void Stretch(RectTransform rect)
+        {
+            rect.anchorMin = Vector2.zero;
+            rect.anchorMax = Vector2.one;
+            rect.offsetMin = Vector2.zero;
+            rect.offsetMax = Vector2.zero;
         }
 
         private static void BuildHeader(GameObject panel, TMP_FontAsset font)
@@ -1010,6 +1182,21 @@ namespace DataSaveManager.Editor
             var saved = PrefabUtility.SaveAsPrefabAsset(go, path);
             Object.DestroyImmediate(go);
             return saved;
+        }
+
+        private static void SetArray(Object target, string fieldName, Object[] values)
+        {
+            var so = new SerializedObject(target);
+            var property = so.FindProperty(fieldName);
+            if (property == null || !property.isArray)
+            {
+                Debug.LogError($"DSM: serialized array '{fieldName}' not found on '{target.GetType().Name}'.");
+                return;
+            }
+            property.arraySize = values.Length;
+            for (var i = 0; i < values.Length; i++)
+                property.GetArrayElementAtIndex(i).objectReferenceValue = values[i];
+            so.ApplyModifiedPropertiesWithoutUndo();
         }
 
         /// <summary>Assigns a private [SerializeField] reference by name — these are project MonoBehaviours/ScriptableObjects with no public setters.</summary>

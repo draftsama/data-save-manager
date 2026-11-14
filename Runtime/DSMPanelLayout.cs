@@ -18,6 +18,12 @@ namespace DataSaveManager
         BottomRight
     }
 
+    public enum DSMPanelSizeMode
+    {
+        Fixed,
+        FullScreen
+    }
+
     public enum DSMLabelOverflow
     {
         Ellipsis,
@@ -40,7 +46,13 @@ namespace DataSaveManager
         [SerializeField, Tooltip("Font size of every text in a row (label, input, placeholder, value).")]
         private float _fontSize = 20f;
 
-        [SerializeField, Tooltip("Panel width and height.")]
+        [SerializeField, Tooltip("Fixed uses Panel Size, Anchor and Offset; Full Screen stretches the panel over the whole screen.")]
+        private DSMPanelSizeMode _sizeMode = DSMPanelSizeMode.Fixed;
+
+        [SerializeField, Tooltip("Gap between the screen edges and a Full Screen panel.")]
+        private float _fullScreenPadding;
+
+        [SerializeField, Tooltip("Panel width and height (Fixed size mode).")]
         private Vector2 _panelSize = new(900f, 800f);
 
         [SerializeField, Tooltip("Screen point the panel is anchored and pivoted to.")]
@@ -85,6 +97,28 @@ namespace DataSaveManager
         [SerializeField, Tooltip("Font size of the error line under a row whose Entry Action failed.")]
         private float _entryActionErrorFontSize = 16f;
 
+        [SerializeField, Tooltip("Diameter of each Lock Screen key.")]
+        private float _lockKeySize = 120f;
+
+        [SerializeField, Tooltip("Gap between Lock Screen keys.")]
+        private float _lockKeySpacing = 28f;
+
+        [SerializeField, Tooltip("Font size of the Lock Screen key digits.")]
+        private float _lockKeyFontSize = 48f;
+
+        [SerializeField, Tooltip("Diameter of each Lock Screen passcode dot.")]
+        private float _lockDotSize = 20f;
+
+        [SerializeField, Range(0f, 1f), Tooltip("Opacity of the Lock Screen backdrop.")]
+        private float _lockBackgroundAlpha = 0.9f;
+
+        public DSMPanelSizeMode SizeMode => _sizeMode;
+        public float FullScreenPadding => _fullScreenPadding;
+        public float LockKeySize => _lockKeySize;
+        public float LockKeySpacing => _lockKeySpacing;
+        public float LockKeyFontSize => _lockKeyFontSize;
+        public float LockDotSize => _lockDotSize;
+        public float LockBackgroundAlpha => Mathf.Clamp01(_lockBackgroundAlpha);
         public float LabelWidth => _labelWidth;
         public float RowHeight => _rowHeight;
         public float RowSpacing => _rowSpacing;

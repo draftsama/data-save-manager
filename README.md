@@ -187,6 +187,30 @@ The Color widget takes a hex code (`#RGB`, `#RRGGBB`, or `#RRGGBBAA`; the leadin
 If you use a prefab built before the confirm popup existed (no `ConfirmDialog` assigned), Reset to
 Defaults resets immediately and logs a warning. Regenerate the prefab to get the popup.
 
+### Open Triggers and Panel Lock
+
+An operator opens the panel by hand with its **Open Triggers**, set on the `DSMRuntimePanel` component:
+
+- **Hotkey Enabled** + **Toggle Key** — the key opens and closes the panel.
+- **Corner Tap** — tapping (or clicking) one screen **Corner** **Tap Count** times, each within
+  **Max Interval** seconds of the last, opens the panel. The zone is a square whose side is **Size
+  Percent** of the screen's shorter side. It only opens; close the panel with Close or the hotkey.
+  Taps on the app's own UI in that corner still reach it.
+
+Both can be on at once. Under **Panel Lock**, type 4–8 digits into **New Passcode** and press **Set
+Passcode** to lock the panel: every Open Trigger then shows the full-screen **Lock Screen** keypad first.
+The panel opens as soon as the right digits are entered; a wrong code shakes, shows "Wrong passcode",
+and can be retried. Cancel, Esc, or the hotkey closes the Lock Screen. The keyboard's digit keys and
+Backspace work too. Only a salted hash of the Passcode is stored, on the component, so changing it
+needs a new build. See [ADR 0004](docs/adr/0004-passcode-is-build-time-per-panel.md).
+
+Code chooses whether to ask: `RequestOpen()` and `Toggle()` go through the Lock Screen, `Show()`
+opens at once. `IsOpen` is true while the Lock Screen is up.
+
+A prefab built before the Lock Screen existed has none, and a locked panel without one refuses to
+open (it logs an error). Add one in place with **DSM › Add Lock Screen to Runtime Panel Prefab**,
+which keeps the rest of the prefab and the overrides scenes made on it.
+
 Regenerate or restyle the default widget prefabs with **DSM › Build Runtime Panel Prefabs** — this
 overwrites the existing prefabs and the `DSMWidgetConfig` asset under `Prefab/`.
 
@@ -197,8 +221,10 @@ apply to the open panel immediately.
 
 - **Label Width**, **Row Height**, **Row Spacing**, **Font Size** — row metrics; the font size applies to
   every text in a row.
+- **Size Mode** — `Fixed` uses Panel Size, Anchor and Offset; `Full Screen` stretches the panel over the
+  whole screen, inset by **Full Screen Padding**.
 - **Panel Size**, **Anchor** (Center, Left, Right, Top, Bottom, or a corner), **Offset** — where the panel
-  sits on screen. Anchor sets both the anchor and the pivot; Offset is relative to it.
+  sits on screen in `Fixed` mode. Anchor sets both the anchor and the pivot; Offset is relative to it.
 - **Background Color** — the panel's background.
 - **Label Overflow** — `Ellipsis` keeps each label on one line at Row Height; `Wrap` lets a row grow
   taller than Row Height to fit its wrapped label (Row Height becomes the minimum).
@@ -208,6 +234,8 @@ apply to the open panel immediately.
 - **Header Font Size**, **Header Spacing** — font size of Entry headers and the extra space above each one.
 - **Tab Height**, **Command Description Font Size**, **Command Button Width** — the Settings / Commands
   tabs, and the Description, error line and Run button of each Command row.
+- **Lock Key Size**, **Lock Key Spacing**, **Lock Key Font Size**, **Lock Dot Size**, **Lock Background
+  Alpha** — the Lock Screen keypad, its passcode dots, and how much of the app shows through behind it.
 - **Entry Action Button Width**, **Entry Action Error Font Size** — each Entry Action button beside a
   widget (longer Titles end in an ellipsis) and the error line under a row whose Entry Action failed.
 
