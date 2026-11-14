@@ -30,6 +30,7 @@ namespace OperatorConsole.Editor
             saveCard.Add(Bound(so, "_autoSaveDebounce", "AutoSave Debounce"));
             saveCard.Add(Bound(so, "_saveDirectory", "Save Directory"));
             saveCard.Add(Bound(so, "_fileName", "File Name"));
+            saveCard.Add(Bound(so, "_logCapacity", "Log Capacity"));
 
             _path = new TextField("Resolved Path") { isReadOnly = true };
             _path.AddToClassList("oc-mono-field");

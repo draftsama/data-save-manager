@@ -509,3 +509,424 @@
 .ocp-lock .ocp-lock__key--ghost:hover:active:enabled {
     background-color: rgba(255, 255, 255, 0.12);
 }
+
+.ocp-tab--with-badge {
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+}
+
+.ocp .ocp-tab Label {
+    color: rgba(255, 255, 255, 0.55);
+}
+
+.ocp .ocp-tab:hover:enabled Label {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.ocp .ocp-tab--selected Label,
+.ocp .ocp-tab--selected:hover:enabled Label {
+    color: rgb(255, 255, 255);
+}
+
+.ocp .ocp-tab .ocp-tab__badge {
+    margin-left: 8px;
+    min-width: 22px;
+    padding: 1px 6px;
+    border-radius: 11px;
+    background-color: rgb(227, 87, 77);
+    color: rgb(255, 255, 255);
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+}
+
+.ocp-log {
+    flex-grow: 1;
+    padding: 14px 28px;
+}
+
+.ocp-log__toolbar {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.ocp .ocp-log__search {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 0;
+    margin: 0;
+}
+
+.ocp-log__filter {
+    flex-direction: row;
+    align-items: center;
+    margin: 0 0 0 8px;
+    padding: 0 12px;
+    border-width: 1px;
+    border-radius: 10px;
+    border-color: rgba(255, 255, 255, 0.1);
+    background-color: rgba(255, 255, 255, 0.04);
+}
+
+.ocp .ocp-log__filter:hover:enabled {
+    background-color: rgba(255, 255, 255, 0.08);
+}
+
+.ocp .ocp-log__filter--on {
+    border-color: rgba(255, 255, 255, 0.18);
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.ocp .ocp-log__filter .ocp-log__filter-count {
+    margin-left: 8px;
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.ocp .ocp-log__filter--on .ocp-log__filter-count {
+    color: rgb(255, 255, 255);
+}
+
+.ocp-log__filter .ocp-log-dot {
+    opacity: 0.35;
+}
+
+.ocp-log__filter--on .ocp-log-dot {
+    opacity: 1;
+}
+
+.ocp-log-dot {
+    flex-shrink: 0;
+    width: 10px;
+    height: 10px;
+    border-radius: 5px;
+}
+
+.ocp-log-dot--info,
+.ocp-log-row--info .ocp-log-dot {
+    background-color: rgb(154, 163, 180);
+}
+
+.ocp-log-dot--warning,
+.ocp-log-row--warning .ocp-log-dot {
+    background-color: rgb(224, 179, 64);
+}
+
+.ocp-log-dot--error,
+.ocp-log-row--error .ocp-log-dot {
+    background-color: rgb(227, 87, 77);
+}
+
+.ocp-log__collapse {
+    flex-direction: row;
+    align-items: center;
+}
+
+.ocp .ocp-log__collapse-label {
+    margin-right: 10px;
+    color: rgb(153, 161, 176);
+}
+
+.ocp-log__list {
+    flex-grow: 1;
+}
+
+.ocp-log__list .unity-collection-view__item,
+.ocp-log__list .unity-collection-view__item:hover {
+    padding: 0;
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.ocp-log__list .unity-scroller--vertical {
+    border-width: 0;
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.ocp-log__list .unity-scroller--vertical .unity-base-slider__tracker {
+    border-width: 0;
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.ocp-log__list .unity-scroller--vertical .unity-base-slider__dragger {
+    border-width: 0;
+    border-radius: 4px;
+    margin-left: 4px;
+    margin-right: 4px;
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
+.ocp-log__list .unity-scroller--vertical .unity-repeat-button {
+    display: none;
+}
+
+.ocp-log-row__card {
+    border-width: 1px;
+    border-radius: 10px;
+    border-color: rgba(0, 0, 0, 0);
+    background-color: rgba(255, 255, 255, 0.035);
+}
+
+.ocp-log-row__card:hover {
+    background-color: rgba(255, 255, 255, 0.06);
+}
+
+.ocp-log-row--expanded .ocp-log-row__card {
+    border-color: rgba(63, 123, 224, 0.5);
+    background-color: rgba(63, 123, 224, 0.18);
+}
+
+.ocp-log-row__main {
+    flex-direction: row;
+    align-items: center;
+    padding: 0 12px;
+}
+
+.ocp .ocp-log-row__time {
+    flex-shrink: 0;
+    margin-left: 12px;
+    color: rgb(153, 161, 176);
+}
+
+.ocp .ocp-log-row__message {
+    flex-grow: 1;
+    flex-shrink: 1;
+    min-width: 0;
+    margin-left: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ocp .ocp-log-row--warning .ocp-log-row__message {
+    color: rgb(240, 214, 150);
+}
+
+.ocp .ocp-log-row--error .ocp-log-row__message {
+    color: rgb(255, 170, 160);
+}
+
+.ocp .ocp-log-row__count {
+    flex-shrink: 0;
+    margin-left: 10px;
+    padding: 1px 8px;
+    border-radius: 8px;
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.ocp-log-row__detail {
+    padding: 0 12px 12px 34px;
+}
+
+.ocp .ocp-log-row__full {
+    margin-bottom: 6px;
+    white-space: normal;
+}
+
+.ocp .ocp-log-row__stack {
+    white-space: normal;
+    color: rgb(153, 161, 176);
+}
+
+.ocp .ocp-log-row__stack--none {
+    -unity-font-style: italic;
+}
+
+.ocp .ocp-log-row__copy {
+    align-self: flex-start;
+    height: 34px;
+    margin: 8px 0 0 0;
+    padding: 0 14px;
+}
+
+.ocp-log__empty {
+    flex-grow: 1;
+    align-items: center;
+    justify-content: center;
+}
+
+.ocp .ocp-log__empty Label {
+    color: rgb(153, 161, 176);
+    white-space: normal;
+    -unity-text-align: middle-center;
+}
+
+.ocp .ocp-log__empty .ocp-log__empty-title {
+    margin-bottom: 6px;
+    color: rgb(238, 240, 244);
+    -unity-font-style: bold;
+}
+
+.ocp-perf {
+    flex-grow: 1;
+}
+
+.ocp-perf__hero {
+    flex-direction: row;
+    align-items: flex-end;
+    margin-bottom: 12px;
+}
+
+.ocp-perf__fps {
+    flex-direction: row;
+    align-items: flex-end;
+    margin-right: 28px;
+}
+
+.ocp .ocp-perf__fps-value {
+    -unity-font-style: bold;
+}
+
+.ocp .ocp-perf__fps-unit {
+    margin: 0 0 8px 6px;
+    color: rgb(153, 161, 176);
+}
+
+.ocp-perf__stat {
+    margin-right: 28px;
+    margin-bottom: 4px;
+}
+
+.ocp .ocp-perf__stat-name {
+    color: rgb(153, 161, 176);
+    letter-spacing: 1.5px;
+}
+
+.ocp .ocp-perf__stat-value {
+    -unity-font-style: bold;
+}
+
+.ocp-graph {
+    overflow: hidden;
+    margin-bottom: 8px;
+    border-radius: 12px;
+    background-color: rgba(255, 255, 255, 0.035);
+}
+
+.ocp .ocp-graph__label {
+    position: absolute;
+    left: 8px;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.ocp-perf__legend {
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+
+.ocp-perf__key {
+    flex-direction: row;
+    align-items: center;
+    margin-right: 16px;
+}
+
+.ocp .ocp-perf__key Label {
+    color: rgb(153, 161, 176);
+}
+
+.ocp-perf__swatch {
+    width: 10px;
+    height: 10px;
+    margin-right: 6px;
+    border-radius: 2px;
+}
+
+.ocp-perf__key--cpu {
+    background-color: rgb(63, 123, 224);
+}
+
+.ocp-perf__key--rest {
+    background-color: rgba(159, 194, 255, 0.45);
+}
+
+.ocp-perf__key--over {
+    background-color: rgb(224, 179, 64);
+}
+
+.ocp-perf__key--budget {
+    height: 2px;
+    background-color: rgba(255, 255, 255, 0.75);
+}
+
+.ocp-perf__section {
+    margin-top: 14px;
+}
+
+.ocp-perf__grid {
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+
+.ocp-metric {
+    width: 32%;
+    margin: 0 1% 6px 0;
+    padding: 10px 14px;
+    border-radius: 10px;
+    background-color: rgba(255, 255, 255, 0.035);
+}
+
+.ocp-metric--action {
+    justify-content: center;
+    align-items: flex-start;
+}
+
+.ocp .ocp-metric--action .ocp-button {
+    margin: 0;
+}
+
+.ocp .ocp-metric__name {
+    color: rgb(153, 161, 176);
+}
+
+.ocp .ocp-metric__value {
+    -unity-font-style: bold;
+}
+
+.ocp .ocp-metric__value--na {
+    color: rgba(255, 255, 255, 0.35);
+    -unity-font-style: normal;
+}
+
+.ocp .ocp-metric__value--over {
+    color: rgb(224, 179, 64);
+}
+
+.ocp .ocp-metric__note {
+    color: rgb(153, 161, 176);
+    white-space: normal;
+}
+
+.ocp-metric__bar {
+    overflow: hidden;
+    height: 4px;
+    margin: 4px 0 2px 0;
+    border-radius: 2px;
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.ocp-metric__fill {
+    height: 100%;
+    background-color: rgb(63, 123, 224);
+}
+
+.ocp-log-row__detail-scroll .unity-scroller--vertical {
+    width: 12px;
+    border-width: 0;
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.ocp-log-row__detail-scroll .unity-scroller--vertical .unity-base-slider__tracker {
+    border-width: 0;
+    background-color: rgba(0, 0, 0, 0);
+}
+
+.ocp-log-row__detail-scroll .unity-scroller--vertical .unity-base-slider__dragger {
+    border-width: 0;
+    border-radius: 3px;
+    margin-left: 3px;
+    margin-right: 3px;
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
+.ocp-log-row__detail-scroll .unity-scroller--vertical .unity-repeat-button {
+    display: none;
+}

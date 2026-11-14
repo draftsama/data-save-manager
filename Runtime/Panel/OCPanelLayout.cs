@@ -97,6 +97,15 @@ namespace OperatorConsole
         [SerializeField, Tooltip("Font size of the error line under a row whose Entry Action failed.")]
         private float _entryActionErrorFontSize = 16f;
 
+        [SerializeField, Tooltip("Font size of a Log Entry's full message and stack trace.")]
+        private float _logStackTraceFontSize = 16f;
+
+        [SerializeField, Tooltip("Height of the frame time graph on the Performance tab.")]
+        private float _performanceGraphHeight = 180f;
+
+        [SerializeField, Min(0.1f), Tooltip("Frame time budget in milliseconds, drawn as a line on the Performance graph. 16.67 ms is 60 fps.")]
+        private float _frameBudgetMs = 16.67f;
+
         [SerializeField, Tooltip("Diameter of each Lock Screen key.")]
         private float _lockKeySize = 120f;
 
@@ -138,5 +147,8 @@ namespace OperatorConsole
         public float CommandButtonWidth => _commandButtonWidth;
         public float EntryActionButtonWidth => _entryActionButtonWidth;
         public float EntryActionErrorFontSize => _entryActionErrorFontSize;
+        public float LogStackTraceFontSize => _logStackTraceFontSize;
+        public float PerformanceGraphHeight => _performanceGraphHeight;
+        public float FrameBudgetMs => Mathf.Max(0.1f, _frameBudgetMs);
     }
 }
