@@ -49,9 +49,10 @@ namespace DataSaveManager.Editor
             var dropdownWidget = BuildDropdownWidgetPrefab(Path.Combine(prefabDir, "DropdownWidget.prefab").Replace('\\', '/'), font);
 
             var headerRow = BuildHeaderRowPrefab(Path.Combine(prefabDir, "HeaderRow.prefab").Replace('\\', '/'), font);
+            var commandRow = BuildCommandRowPrefab(Path.Combine(prefabDir, "CommandRow.prefab").Replace('\\', '/'), font);
 
             var configPath = Path.Combine(prefabDir, "DSMWidgetConfig.asset").Replace('\\', '/');
-            BuildWidgetConfig(configPath, boolWidget, intWidget, floatWidget, stringWidget, vector2Widget, vector3Widget, colorWidget, intSliderWidget, floatSliderWidget, dropdownWidget, headerRow);
+            BuildWidgetConfig(configPath, boolWidget, intWidget, floatWidget, stringWidget, vector2Widget, vector3Widget, colorWidget, intSliderWidget, floatSliderWidget, dropdownWidget, headerRow, commandRow);
             var widgetConfig = AssetDatabase.LoadAssetAtPath<DSMWidgetConfig>(configPath);
 
             var panelPath = Path.Combine(prefabDir, "DSMRuntimePanel.prefab").Replace('\\', '/');
@@ -72,6 +73,7 @@ namespace DataSaveManager.Editor
                        $"  {Path.Combine(prefabDir, "FloatSliderWidget.prefab")}\n" +
                        $"  {Path.Combine(prefabDir, "DropdownWidget.prefab")}\n" +
                        $"  {Path.Combine(prefabDir, "HeaderRow.prefab")}\n" +
+                       $"  {Path.Combine(prefabDir, "CommandRow.prefab")}\n" +
                        $"  {configPath}\n" +
                        $"  {panelPath}");
         }
@@ -309,12 +311,90 @@ namespace DataSaveManager.Editor
             return saved.GetComponent<DSMHeaderRow>();
         }
 
+        private static DSMCommandRow BuildCommandRowPrefab(string path, TMP_FontAsset font)
+        {
+            var row = new GameObject("CommandRow", typeof(RectTransform));
+
+            var rowLayout = row.AddComponent<HorizontalLayoutGroup>();
+            rowLayout.padding = new RectOffset(4, 4, 8, 8);
+            rowLayout.spacing = 12f;
+            rowLayout.childControlWidth = true;
+            rowLayout.childControlHeight = true;
+            rowLayout.childForceExpandWidth = false;
+            rowLayout.childForceExpandHeight = false;
+            rowLayout.childAlignment = TextAnchor.MiddleLeft;
+            row.AddComponent<LayoutElement>().minHeight = Defaults.RowHeight;
+
+            var textGo = new GameObject("Text", typeof(RectTransform));
+            textGo.transform.SetParent(row.transform, false);
+            var textLayout = textGo.AddComponent<VerticalLayoutGroup>();
+            textLayout.spacing = 2f;
+            textLayout.childControlWidth = true;
+            textLayout.childControlHeight = true;
+            textLayout.childForceExpandWidth = true;
+            textLayout.childForceExpandHeight = false;
+            textGo.AddComponent<LayoutElement>().flexibleWidth = 1f;
+
+            var title = CreateCommandText(textGo, "Title", font, Defaults.FontSize, Color.white);
+            var description = CreateCommandText(textGo, "Description", font, Defaults.CommandDescriptionFontSize, new Color(0.6f, 0.63f, 0.69f, 1f));
+            var error = CreateCommandText(textGo, "Error", font, Defaults.CommandDescriptionFontSize, new Color(0.89f, 0.34f, 0.30f, 1f));
+            error.gameObject.SetActive(false);
+
+            var statusGo = new GameObject("Status", typeof(RectTransform));
+            statusGo.transform.SetParent(row.transform, false);
+            var status = statusGo.AddComponent<TextMeshProUGUI>();
+            status.text = string.Empty;
+            status.font = font;
+            status.fontSize = Defaults.FontSize;
+            status.alignment = TextAlignmentOptions.Center;
+            status.raycastTarget = false;
+            var statusLayout = statusGo.AddComponent<LayoutElement>();
+            statusLayout.preferredWidth = 28f;
+
+            var buttonGo = TMP_DefaultControls.CreateButton(TmpUiResources());
+            buttonGo.transform.SetParent(row.transform, false);
+            buttonGo.name = "RunButton";
+            var buttonLayout = buttonGo.AddComponent<LayoutElement>();
+            buttonLayout.preferredWidth = Defaults.CommandButtonWidth;
+            buttonLayout.preferredHeight = Defaults.RowHeight;
+            var runLabel = buttonGo.GetComponentInChildren<TextMeshProUGUI>();
+            runLabel.text = "Run";
+            runLabel.font = font;
+            runLabel.fontSize = Defaults.FontSize;
+
+            var widget = row.AddComponent<DSMCommandRow>();
+            SetField(widget, "_title", title);
+            SetField(widget, "_description", description);
+            SetField(widget, "_status", status);
+            SetField(widget, "_error", error);
+            SetField(widget, "_runButton", buttonGo.GetComponent<Button>());
+            SetField(widget, "_runLabel", runLabel);
+
+            var saved = SaveAndDestroy(row, path);
+            return saved.GetComponent<DSMCommandRow>();
+        }
+
+        private static TextMeshProUGUI CreateCommandText(GameObject parent, string goName, TMP_FontAsset font, float fontSize, Color color)
+        {
+            var go = new GameObject(goName, typeof(RectTransform));
+            go.transform.SetParent(parent.transform, false);
+            var text = go.AddComponent<TextMeshProUGUI>();
+            text.text = goName;
+            text.font = font;
+            text.fontSize = fontSize;
+            text.color = color;
+            text.alignment = TextAlignmentOptions.Left;
+            text.textWrappingMode = TextWrappingModes.Normal;
+            text.raycastTarget = false;
+            return text;
+        }
+
         private static void BuildWidgetConfig(
             string path,
             BoolWidget boolWidget, IntWidget intWidget, FloatWidget floatWidget, StringWidget stringWidget,
             Vector2Widget vector2Widget, Vector3Widget vector3Widget, ColorWidget colorWidget,
             IntSliderWidget intSliderWidget, FloatSliderWidget floatSliderWidget, DropdownWidget dropdownWidget,
-            DSMHeaderRow headerRow)
+            DSMHeaderRow headerRow, DSMCommandRow commandRow)
         {
             var config = AssetDatabase.LoadAssetAtPath<DSMWidgetConfig>(path);
             if (config == null)
@@ -334,6 +414,7 @@ namespace DataSaveManager.Editor
             SetField(config, "_floatSliderWidget", floatSliderWidget);
             SetField(config, "_dropdownWidget", dropdownWidget);
             SetField(config, "_headerRow", headerRow);
+            SetField(config, "_commandRow", commandRow);
 
             EditorUtility.SetDirty(config);
         }
@@ -374,9 +455,15 @@ namespace DataSaveManager.Editor
             panelLayout.childForceExpandHeight = false;
 
             BuildHeader(panel, font);
-            var container = BuildScrollView(panel);
+            var (tabBar, settingsTab, commandsTab) = BuildTabBar(panel, font);
+            var container = BuildScrollView(panel, "SettingsView");
+            var commandContainer = BuildScrollView(panel, "CommandsView");
+            var settingsView = ViewOf(container);
+            var commandsView = ViewOf(commandContainer);
             var (saveButton, resetButton, closeButton) = BuildFooter(panel, font);
-            var (confirmDialog, confirmCancelButton, confirmResetButton) = BuildConfirmDialog(panel, font);
+            var (confirmDialog, confirmCancelButton, confirmResetButton, confirmMessage, confirmButtonLabel) = BuildConfirmDialog(panel, font);
+            tabBar.SetActive(false);
+            commandsView.SetActive(false);
 
             var panelComponent = rootGo.AddComponent<DSMRuntimePanel>();
             SetField(panelComponent, "_widgetConfig", widgetConfig);
@@ -388,6 +475,14 @@ namespace DataSaveManager.Editor
             SetField(panelComponent, "_confirmDialog", confirmDialog);
             SetField(panelComponent, "_confirmCancelButton", confirmCancelButton);
             SetField(panelComponent, "_confirmResetButton", confirmResetButton);
+            SetField(panelComponent, "_tabBar", tabBar);
+            SetField(panelComponent, "_settingsTab", settingsTab);
+            SetField(panelComponent, "_commandsTab", commandsTab);
+            SetField(panelComponent, "_settingsView", settingsView);
+            SetField(panelComponent, "_commandsView", commandsView);
+            SetField(panelComponent, "_commandContainer", commandContainer);
+            SetField(panelComponent, "_confirmMessage", confirmMessage);
+            SetField(panelComponent, "_confirmButtonLabel", confirmButtonLabel);
             // _startVisible / _toggleKey / _saveButtonMode keep their C# field defaults (false / KeyCode.F1 / Auto).
 
             SaveAndDestroy(rootGo, path);
@@ -419,10 +514,99 @@ namespace DataSaveManager.Editor
             spacerLayout.flexibleWidth = 1f;
         }
 
-        /// <summary>Builds the scroll view and returns its Content transform (the panel's row container).</summary>
-        private static Transform BuildScrollView(GameObject panel)
+        /// <summary>Builds the Settings / Commands tab bar under the title: two tabs on one line, then a 1px rule.</summary>
+        private static (GameObject bar, DSMPanelTab settings, DSMPanelTab commands) BuildTabBar(GameObject panel, TMP_FontAsset font)
         {
-            var scrollGo = new GameObject("Scroll View", typeof(RectTransform));
+            var bar = new GameObject("TabBar", typeof(RectTransform));
+            bar.transform.SetParent(panel.transform, false);
+            var barLayout = bar.AddComponent<VerticalLayoutGroup>();
+            barLayout.childControlWidth = true;
+            barLayout.childControlHeight = true;
+            barLayout.childForceExpandWidth = true;
+            barLayout.childForceExpandHeight = false;
+
+            var tabs = new GameObject("Tabs", typeof(RectTransform));
+            tabs.transform.SetParent(bar.transform, false);
+            var tabsLayout = tabs.AddComponent<HorizontalLayoutGroup>();
+            tabsLayout.spacing = 4f;
+            tabsLayout.childControlWidth = true;
+            tabsLayout.childControlHeight = true;
+            tabsLayout.childForceExpandWidth = false;
+            tabsLayout.childForceExpandHeight = false;
+            tabsLayout.childAlignment = TextAnchor.LowerLeft;
+
+            var settings = CreateTab(tabs, "SettingsTab", "Settings", font, true);
+            var commands = CreateTab(tabs, "CommandsTab", "Commands", font, false);
+
+            var rule = new GameObject("Rule", typeof(RectTransform));
+            rule.transform.SetParent(bar.transform, false);
+            var ruleImage = rule.AddComponent<Image>();
+            ruleImage.color = new Color(1f, 1f, 1f, 0.12f);
+            ruleImage.raycastTarget = false;
+            var ruleLayout = rule.AddComponent<LayoutElement>();
+            ruleLayout.preferredHeight = 1f;
+            ruleLayout.minHeight = 1f;
+
+            return (bar, settings, commands);
+        }
+
+        private static DSMPanelTab CreateTab(GameObject tabs, string goName, string text, TMP_FontAsset font, bool selected)
+        {
+            var go = new GameObject(goName, typeof(RectTransform));
+            go.transform.SetParent(tabs.transform, false);
+
+            // Transparent, but it is what the Button raycasts against.
+            var hitArea = go.AddComponent<Image>();
+            hitArea.color = new Color(1f, 1f, 1f, 0f);
+            var button = go.AddComponent<Button>();
+            button.targetGraphic = hitArea;
+
+            var layout = go.AddComponent<LayoutElement>();
+            layout.preferredWidth = 180f;
+            layout.preferredHeight = Defaults.TabHeight;
+            layout.minHeight = Defaults.TabHeight;
+
+            var labelGo = new GameObject("Label", typeof(RectTransform));
+            labelGo.transform.SetParent(go.transform, false);
+            var labelRect = labelGo.GetComponent<RectTransform>();
+            labelRect.anchorMin = Vector2.zero;
+            labelRect.anchorMax = Vector2.one;
+            labelRect.offsetMin = Vector2.zero;
+            labelRect.offsetMax = Vector2.zero;
+            var label = labelGo.AddComponent<TextMeshProUGUI>();
+            label.text = text;
+            label.font = font;
+            label.fontSize = Defaults.FontSize;
+            label.alignment = TextAlignmentOptions.Center;
+            label.raycastTarget = false;
+
+            var underline = new GameObject("Underline", typeof(RectTransform));
+            underline.transform.SetParent(go.transform, false);
+            var underlineRect = underline.GetComponent<RectTransform>();
+            underlineRect.anchorMin = new Vector2(0f, 0f);
+            underlineRect.anchorMax = new Vector2(1f, 0f);
+            underlineRect.pivot = new Vector2(0.5f, 0f);
+            underlineRect.sizeDelta = new Vector2(0f, 3f);
+            underlineRect.anchoredPosition = Vector2.zero;
+            var underlineImage = underline.AddComponent<Image>();
+            underlineImage.color = new Color(0.43f, 0.64f, 0.96f, 1f);
+            underlineImage.raycastTarget = false;
+            underline.SetActive(selected);
+
+            var tab = go.AddComponent<DSMPanelTab>();
+            SetField(tab, "_button", button);
+            SetField(tab, "_label", label);
+            SetField(tab, "_underline", underline);
+            return tab;
+        }
+
+        /// <summary>The scroll view GameObject that holds a container built by <see cref="BuildScrollView"/> (Content → Viewport → view).</summary>
+        private static GameObject ViewOf(Transform container) => container.parent.parent.gameObject;
+
+        /// <summary>Builds a scroll view and returns its Content transform (a row container).</summary>
+        private static Transform BuildScrollView(GameObject panel, string name)
+        {
+            var scrollGo = new GameObject(name, typeof(RectTransform));
             scrollGo.transform.SetParent(panel.transform, false);
 
             var scrollLayoutElement = scrollGo.AddComponent<LayoutElement>();
@@ -515,7 +699,7 @@ namespace DataSaveManager.Editor
         }
 
         /// <summary>Builds the modal confirm overlay as the last child of the panel; saved inactive.</summary>
-        private static (GameObject dialog, Button cancel, Button confirm) BuildConfirmDialog(GameObject panel, TMP_FontAsset font)
+        private static (GameObject dialog, Button cancel, Button confirm, TMP_Text message, TMP_Text confirmLabel) BuildConfirmDialog(GameObject panel, TMP_FontAsset font)
         {
             var dialog = new GameObject("ConfirmDialog", typeof(RectTransform));
             dialog.transform.SetParent(panel.transform, false);
@@ -581,7 +765,7 @@ namespace DataSaveManager.Editor
             var confirm = CreateFooterButton(buttonRow, "ConfirmResetButton", "Reset", font);
 
             dialog.SetActive(false);
-            return (dialog, cancel, confirm);
+            return (dialog, cancel, confirm, message, confirm.GetComponentInChildren<TMP_Text>());
         }
 
         private static Button CreateFooterButton(GameObject footer, string goName, string text, TMP_FontAsset font)
