@@ -166,7 +166,9 @@ namespace DataSaveManager
             if (toggleKey != _parsedToggleKey)
             {
                 _parsedToggleKey = toggleKey;
-                _hasInputSystemToggleKey = Enum.TryParse(toggleKey.ToString(), out _inputSystemToggleKey);
+                _hasInputSystemToggleKey = DSMKeyMap.TryGetKey(toggleKey, out _inputSystemToggleKey);
+                if (!_hasInputSystemToggleKey)
+                    Debug.LogWarning($"DSMRuntimePanel '{Name}': Toggle Key {toggleKey} is not a keyboard key, so the hotkey does nothing. Pick another key in the DSM Manager.", this);
             }
             return _hasInputSystemToggleKey && Keyboard.current != null && Keyboard.current[_inputSystemToggleKey].wasPressedThisFrame;
 #elif ENABLE_LEGACY_INPUT_MANAGER
