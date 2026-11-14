@@ -15,8 +15,12 @@ namespace DataSaveManager
         [SerializeField] private string _fileName = "save.json";
         [SerializeField] private List<DSMEntryDefinition> _entries = new();
         [SerializeField] private List<DSMAudience> _audiences = new();
+        [SerializeField] private List<DSMPanelDefinition> _panels = new();
 
         public IReadOnlyList<DSMAudience> Audiences => _audiences;
+
+        /// <summary>The Panel Definitions the app creates its Runtime Panels from.</summary>
+        public IReadOnlyList<DSMPanelDefinition> Panels => _panels;
 
         public bool TryGetAudience(string id, out DSMAudience audience)
         {

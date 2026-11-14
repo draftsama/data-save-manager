@@ -60,6 +60,7 @@ namespace DataSaveManager.Editor
         private int _viewAsIndex = -1;
         private Action? _pendingAudienceEdit;
         private bool _commandsFoldout = true;
+        private readonly DSMPanelsSection _panelsSection = new();
         private DSMRegisteredCommand? _pendingCommandRun;
         private GUIStyle? _commandErrorStyle;
         private static readonly GUIContent CommandsHeader = new("Commands", "Registered Commands, listed while in Play mode. Run them here without opening the Runtime Panel.");
@@ -129,6 +130,9 @@ namespace DataSaveManager.Editor
             DrawSettings();
 
             EditorGUILayout.Space();
+            var panelsChanged = _panelsSection.Draw(_configSo, _config, _audienceNames);
+
+            EditorGUILayout.Space();
             DrawEntries(duplicates, valuesEditable);
 
             EditorGUILayout.Space();
@@ -155,7 +159,18 @@ namespace DataSaveManager.Editor
                 Repaint();
             }
 
+            if (_panelsSection.RunDeferred())
+            {
+                panelsChanged = true;
+                Repaint();
+            }
+
             _configSo.ApplyModifiedProperties();
+
+            // A Runtime Panel holds its Panel Definition from the Config, so most edits reach it at once; the layout needs applying again.
+            if (panelsChanged && EditorApplication.isPlaying)
+                foreach (var panel in DSM.Panels.All)
+                    if (panel != null) panel.ApplySettings();
         }
 
         private void DrawToolbar()

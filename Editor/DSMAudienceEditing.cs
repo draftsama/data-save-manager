@@ -54,22 +54,15 @@ namespace DataSaveManager.Editor
             return -1;
         }
 
-        /// <summary>Where an Audience is still named: Entry keys in the Config, plus Runtime Panels in open objects and in prefab / scene files under Assets.</summary>
+        /// <summary>Where an Audience is still named: Entries and Panel Definitions in the Config, plus Runtime Panels from before Panel Definitions in prefab / scene files under Assets.</summary>
         public static List<string> FindUsers(DSMConfig config, string audienceId)
         {
             var users = new List<string>();
             foreach (var key in DSMEntryRules.EntriesNamingAudience(config, audienceId))
                 users.Add($"Entry '{key}'");
 
-            var seenPaths = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var panel in Resources.FindObjectsOfTypeAll<DSMRuntimePanel>())
-            {
-                if (!Contains(panel.AudienceIds, audienceId)) continue;
-                var path = AssetDatabase.GetAssetPath(panel);
-                if (string.IsNullOrEmpty(path)) path = panel.gameObject.scene.path;
-                if (seenPaths.Add($"{path}|{panel.gameObject.name}"))
-                    users.Add($"Runtime Panel '{panel.gameObject.name}'{(string.IsNullOrEmpty(path) ? string.Empty : $" in {path}")}");
-            }
+            foreach (var panel in config.Panels)
+                if (Contains(panel.AudienceIds, audienceId)) users.Add($"Panel Definition '{panel.Name}'");
 
             // Closed scenes and prefabs aren't loaded, so their files are searched for the id as text.
             var projectRoot = Path.GetDirectoryName(Application.dataPath) ?? string.Empty;
@@ -79,8 +72,7 @@ namespace DataSaveManager.Editor
                 {
                     if (!File.ReadAllText(file).Contains(audienceId, StringComparison.Ordinal)) continue;
                     var relative = Path.GetRelativePath(projectRoot, file).Replace('\\', '/');
-                    if (!AnyStartsWith(seenPaths, relative + "|"))
-                        users.Add($"Runtime Panel in {relative}");
+                    users.Add($"Runtime Panel in {relative}");
                 }
             }
             return users;
@@ -90,13 +82,6 @@ namespace DataSaveManager.Editor
         {
             for (var i = 0; i < ids.Count; i++)
                 if (ids[i] == id) return true;
-            return false;
-        }
-
-        private static bool AnyStartsWith(HashSet<string> values, string prefix)
-        {
-            foreach (var value in values)
-                if (value.StartsWith(prefix, StringComparison.Ordinal)) return true;
             return false;
         }
     }

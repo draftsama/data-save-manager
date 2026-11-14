@@ -19,7 +19,7 @@ namespace DataSaveManager
         Never
     }
 
-    /// <summary>The in-game UI where an operator views and edits Exposed Entries and runs Commands and Entry Actions while the app runs. Toggled with a hotkey.</summary>
+    /// <summary>The in-game UI where an operator views and edits Exposed Entries and runs Commands and Entry Actions while the app runs. Created from a Panel Definition; see <see cref="DSM.Panels"/>.</summary>
     public sealed class DSMRuntimePanel : MonoBehaviour
     {
         [SerializeField] private DSMWidgetConfig? _widgetConfig;
@@ -31,18 +31,8 @@ namespace DataSaveManager
         [SerializeField] private GameObject? _confirmDialog;
         [SerializeField] private Button? _confirmCancelButton;
         [SerializeField] private Button? _confirmResetButton;
-        [SerializeField, Tooltip("Auto shows the Save button only when AutoSave is off. Always / Never force it on / off.")]
-        private DSMSaveButtonMode _saveButtonMode = DSMSaveButtonMode.Auto;
-        [SerializeField, Tooltip("Open and close the panel with Toggle Key.")] private bool _hotkeyEnabled = true;
-        [SerializeField] private KeyCode _toggleKey = KeyCode.F1;
-        [SerializeField, Tooltip("Open the panel by tapping one screen corner several times in quick succession.")]
-        private DSMCornerTap _cornerTap = new();
-        [SerializeField] private DSMPasscode _passcode = new();
         [SerializeField, Tooltip("Keypad shown before the panel opens when a Passcode is set.")]
         private DSMLockScreen? _lockScreen;
-        [SerializeField] private bool _startVisible;
-        [SerializeField] private DSMPanelLayout _layout = new();
-        [SerializeField] private List<string> _audienceIds = new();
         [SerializeField] private GameObject? _tabBar;
         [SerializeField] private DSMPanelTab? _settingsTab;
         [SerializeField] private DSMPanelTab? _commandsTab;
@@ -51,6 +41,22 @@ namespace DataSaveManager
         [SerializeField] private Transform? _commandContainer;
         [SerializeField] private TMP_Text? _confirmMessage;
         [SerializeField] private TMP_Text? _confirmButtonLabel;
+
+        // Settings from before Panel Definitions; read only by the DSM Manager's import from scene panels.
+#pragma warning disable CS0414
+        [SerializeField, HideInInspector, FormerlySerializedAs("_saveButtonMode")] private DSMSaveButtonMode _legacySaveButtonMode = DSMSaveButtonMode.Auto;
+        [SerializeField, HideInInspector, FormerlySerializedAs("_hotkeyEnabled")] private bool _legacyHotkeyEnabled = true;
+        [SerializeField, HideInInspector, FormerlySerializedAs("_toggleKey")] private KeyCode _legacyToggleKey = KeyCode.F1;
+        [SerializeField, HideInInspector, FormerlySerializedAs("_cornerTap")] private DSMCornerTap _legacyCornerTap = new();
+        [SerializeField, HideInInspector, FormerlySerializedAs("_passcode")] private DSMPasscode _legacyPasscode = new();
+        [SerializeField, HideInInspector, FormerlySerializedAs("_startVisible")] private bool _legacyStartVisible;
+        [SerializeField, HideInInspector, FormerlySerializedAs("_layout")] private DSMPanelLayout _legacyLayout = new();
+        [SerializeField, HideInInspector, FormerlySerializedAs("_audienceIds")] private List<string> _legacyAudienceIds = new();
+#pragma warning restore CS0414
+
+        private DSMPanelDefinition? _definition;
+        private bool _countedOpen;
+        private static int s_openCount;
 
         private readonly List<DSMRegisteredCommand> _shownCommands = new();
         private int _shownEntryCount;
@@ -64,31 +70,52 @@ namespace DataSaveManager
         private Action? _onLockCancelled;
 
 #if ENABLE_INPUT_SYSTEM
+        private KeyCode _parsedToggleKey = KeyCode.None;
         private Key _inputSystemToggleKey;
         private bool _hasInputSystemToggleKey;
 #endif
 
-        public static bool IsOpen { get; private set; }
         public static event Action<bool>? OpenChanged;
 
-        public DSMPanelLayout Layout => _layout;
+        /// <summary>True while any Runtime Panel, or its Lock Screen, is open.</summary>
+        public static bool IsOpen => s_openCount > 0;
+
+        /// <summary>The name of the Panel Definition this Runtime Panel was created from.</summary>
+        public string Name => Definition.Name;
+
+        public DSMPanelLayout Layout => Definition.Layout;
 
         /// <summary>Ids of the Audiences this Panel serves; empty means it shows every Exposed Entry.</summary>
-        public IReadOnlyList<string> AudienceIds => _audienceIds;
+        public IReadOnlyList<string> AudienceIds => Definition.AudienceIds;
+
+        private DSMPanelDefinition Definition => _definition!;
 
         public bool IsVisible => _root != null && _root.activeSelf;
 
         /// <summary>True while the Lock Screen is asking for this Panel's Passcode.</summary>
         public bool IsLocking => _lockScreen != null && _lockScreen.IsShown;
 
-        public bool HasPanelLock => _passcode.IsSet;
+        public bool HasPanelLock => Definition.Passcode.IsSet;
 
         private static DSMStore Store => DSM.Store;
 
         private static void SaveStore() => Store.Save();
 
+        internal void Initialize(DSMPanelDefinition definition)
+        {
+            _definition = definition;
+            if (TryGetComponent<Canvas>(out var canvas)) canvas.sortingOrder = definition.SortOrder;
+        }
+
         private void Awake()
         {
+            if (_definition == null)
+            {
+                Debug.LogWarning($"DSMRuntimePanel on '{gameObject.name}' was placed in a scene. Runtime Panels are now created from Panel Definitions: import this one in the DSM Manager, then remove it from the scene.", this);
+                gameObject.SetActive(false);
+                return;
+            }
+
             if (_saveButton != null) _saveButton.onClick.AddListener(SaveStore);
             if (_resetButton != null) _resetButton.onClick.AddListener(OnResetClicked);
             if (_closeButton != null) _closeButton.onClick.AddListener(Hide);
@@ -102,39 +129,48 @@ namespace DataSaveManager
             _onLockCancelled = OnLockCancelled;
             if (_lockScreen != null) _lockScreen.Close();
 
-#if ENABLE_INPUT_SYSTEM
-            // Parsed once here instead of every frame in Update.
-            _hasInputSystemToggleKey = Enum.TryParse<Key>(_toggleKey.ToString(), out _inputSystemToggleKey);
-#endif
-
             CloseConfirmDialog();
             ApplySaveButtonMode();
 
-            if (_startVisible) Show();
+            if (Definition.StartVisible) Show();
             else if (_root != null) _root.SetActive(false);
         }
 
-        private void OnEnable() => DSM.Commands.Changed += OnCommandsChanged;
+        private void OnEnable()
+        {
+            if (_definition != null) DSM.Commands.Changed += OnCommandsChanged;
+        }
 
-        private void OnDisable() => DSM.Commands.Changed -= OnCommandsChanged;
+        private void OnDisable()
+        {
+            if (_definition != null) DSM.Commands.Changed -= OnCommandsChanged;
+        }
 
         private void Update()
         {
-            if (_hotkeyEnabled && HotkeyPressed()) Toggle();
+            if (Definition.HotkeyEnabled && HotkeyPressed()) Toggle();
 
-            if (_cornerTap.Enabled && TryGetPointerPress(out var position))
+            var cornerTap = Definition.CornerTap;
+            if (cornerTap.Enabled && TryGetPointerPress(out var position))
             {
-                if (IsVisible || IsLocking) _cornerTap.ResetCount();
-                else if (_cornerTap.RegisterPress(position, new Vector2(Screen.width, Screen.height), Time.unscaledTimeAsDouble)) RequestOpen();
+                if (IsVisible || IsLocking) cornerTap.ResetCount();
+                else if (cornerTap.RegisterPress(position, new Vector2(Screen.width, Screen.height), Time.unscaledTimeAsDouble)) RequestOpen();
             }
         }
 
         private bool HotkeyPressed()
         {
+            var toggleKey = Definition.ToggleKey;
 #if ENABLE_INPUT_SYSTEM
+            // Parsed only when the key changes, since the DSM Manager can change it in Play mode.
+            if (toggleKey != _parsedToggleKey)
+            {
+                _parsedToggleKey = toggleKey;
+                _hasInputSystemToggleKey = Enum.TryParse(toggleKey.ToString(), out _inputSystemToggleKey);
+            }
             return _hasInputSystemToggleKey && Keyboard.current != null && Keyboard.current[_inputSystemToggleKey].wasPressedThisFrame;
 #elif ENABLE_LEGACY_INPUT_MANAGER
-            return Input.GetKeyDown(_toggleKey);
+            return Input.GetKeyDown(toggleKey);
 #else
             return false;
 #endif
@@ -170,7 +206,8 @@ namespace DataSaveManager
         public void RequestOpen()
         {
             if (IsVisible || IsLocking) return;
-            if (!_passcode.IsSet)
+            var passcode = Definition.Passcode;
+            if (!passcode.IsSet)
             {
                 Show();
                 return;
@@ -180,8 +217,8 @@ namespace DataSaveManager
                 Debug.LogError($"DSMRuntimePanel on '{gameObject.name}': a Passcode is set but no Lock Screen is assigned, so the panel stays closed.", this);
                 return;
             }
-            _lockScreen.ApplyLayout(_layout);
-            _lockScreen.Open(_passcode, _onUnlocked!, _onLockCancelled!);
+            _lockScreen.ApplyLayout(Layout);
+            _lockScreen.Open(passcode, _onUnlocked!, _onLockCancelled!);
             SetOpen(true);
         }
 
@@ -253,7 +290,7 @@ namespace DataSaveManager
             OpenConfirmDialog(_resetConfirmMessage, _resetConfirmButtonText, ResetShownEntries);
         }
 
-        private void ResetShownEntries() => Store.ResetExposedEntries(_audienceIds);
+        private void ResetShownEntries() => Store.ResetExposedEntries(Definition.AudienceIds);
 
         private void OnRunClicked(DSMRegisteredCommand command)
         {
@@ -314,7 +351,7 @@ namespace DataSaveManager
             {
                 error = Instantiate(errorPrefab, _container);
                 error.transform.SetSiblingIndex(widgetRow.transform.GetSiblingIndex() + 1);
-                error.ApplyLayout(_layout);
+                error.ApplyLayout(Layout);
             }
 
             var bar = Instantiate(barPrefab, widgetRow.transform);
@@ -347,7 +384,7 @@ namespace DataSaveManager
         {
             if (_saveButton == null) return;
 
-            var active = _saveButtonMode switch
+            var active = Definition.SaveButtonMode switch
             {
                 DSMSaveButtonMode.Always => true,
                 DSMSaveButtonMode.Never  => false,
@@ -356,14 +393,23 @@ namespace DataSaveManager
             _saveButton.gameObject.SetActive(active && !_commandsSelected);
         }
 
-        private void OnDestroy() => SetOpen(false);
-
-        private static void SetOpen(bool open)
+        private void OnDestroy()
         {
-            if (IsOpen == open) return;
-            IsOpen = open;
-            OpenChanged?.Invoke(open);
+            SetOpen(false);
+            if (_definition != null) DSM.Panels.Remove(this);
         }
+
+        private void SetOpen(bool open)
+        {
+            if (_countedOpen == open) return;
+            _countedOpen = open;
+            var wasOpen = IsOpen;
+            s_openCount += open ? 1 : -1;
+            if (IsOpen != wasOpen) OpenChanged?.Invoke(IsOpen);
+        }
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetOpenCount() => s_openCount = 0;
 
         /// <summary>Closes the panel or its Lock Screen, or opens it through <see cref="RequestOpen"/>.</summary>
         public void Toggle()
@@ -373,17 +419,19 @@ namespace DataSaveManager
             else RequestOpen();
         }
 
-        private void OnValidate()
+        /// <summary>Applies the Panel Definition's layout and Save Button Mode again, for edits made while the panel is up.</summary>
+        public void ApplySettings()
         {
-            if (!Application.isPlaying || _root == null || _container == null) return;
+            if (_definition == null || _root == null || _container == null) return;
 
+            if (TryGetComponent<Canvas>(out var canvas)) canvas.sortingOrder = Definition.SortOrder;
             ApplyPanelLayout();
             ApplySaveButtonMode();
             foreach (var row in _container.GetComponentsInChildren<IDSMLayoutAware>(true))
-                row.ApplyLayout(_layout);
+                row.ApplyLayout(Layout);
             if (_commandContainer != null)
                 foreach (var row in _commandContainer.GetComponentsInChildren<IDSMLayoutAware>(true))
-                    row.ApplyLayout(_layout);
+                    row.ApplyLayout(Layout);
         }
 
         private void ApplyPanelLayout()
@@ -392,9 +440,9 @@ namespace DataSaveManager
 
             if (_root.TryGetComponent<RectTransform>(out var rect))
             {
-                if (_layout.SizeMode == DSMPanelSizeMode.FullScreen)
+                if (Layout.SizeMode == DSMPanelSizeMode.FullScreen)
                 {
-                    var padding = _layout.FullScreenPadding;
+                    var padding = Layout.FullScreenPadding;
                     rect.anchorMin = Vector2.zero;
                     rect.anchorMax = Vector2.one;
                     rect.pivot = new Vector2(0.5f, 0.5f);
@@ -403,23 +451,23 @@ namespace DataSaveManager
                 }
                 else
                 {
-                    var point = AnchorPoint(_layout.Anchor);
+                    var point = AnchorPoint(Layout.Anchor);
                     rect.anchorMin = point;
                     rect.anchorMax = point;
                     rect.pivot = point;
-                    rect.sizeDelta = _layout.PanelSize;
-                    rect.anchoredPosition = _layout.Offset;
+                    rect.sizeDelta = Layout.PanelSize;
+                    rect.anchoredPosition = Layout.Offset;
                 }
             }
 
             if (_root.TryGetComponent<Image>(out var background))
-                background.color = _layout.BackgroundColor;
+                background.color = Layout.BackgroundColor;
 
             ApplyContainerLayout(_container);
             ApplyContainerLayout(_commandContainer);
-            if (_settingsTab != null) _settingsTab.ApplyLayout(_layout);
-            if (_commandsTab != null) _commandsTab.ApplyLayout(_layout);
-            if (_lockScreen != null) _lockScreen.ApplyLayout(_layout);
+            if (_settingsTab != null) _settingsTab.ApplyLayout(Layout);
+            if (_commandsTab != null) _commandsTab.ApplyLayout(Layout);
+            if (_lockScreen != null) _lockScreen.ApplyLayout(Layout);
         }
 
         private void ApplyContainerLayout(Transform? container)
@@ -427,17 +475,17 @@ namespace DataSaveManager
             if (container == null) return;
 
             if (container.TryGetComponent<VerticalLayoutGroup>(out var group))
-                group.spacing = _layout.RowSpacing;
+                group.spacing = Layout.RowSpacing;
 
             var scrollRect = container.GetComponentInParent<ScrollRect>(true);
             if (scrollRect != null)
             {
-                scrollRect.scrollSensitivity = _layout.ScrollSensitivity;
+                scrollRect.scrollSensitivity = Layout.ScrollSensitivity;
                 if (scrollRect.verticalScrollbar != null
                     && scrollRect.verticalScrollbar.TryGetComponent<RectTransform>(out var barRect))
                 {
                     var size = barRect.sizeDelta;
-                    size.x = _layout.ScrollbarWidth;
+                    size.x = Layout.ScrollbarWidth;
                     barRect.sizeDelta = size;
                 }
             }
@@ -477,7 +525,7 @@ namespace DataSaveManager
 
             foreach (var entry in store.Config.Entries)
             {
-                if (!DSMAudienceFilter.Shows(entry, _audienceIds)) continue;
+                if (!DSMAudienceFilter.Shows(entry, Definition.AudienceIds)) continue;
                 _shownEntryCount++;
 
                 var presentation = DSMPresentation.Present(DSMHintSettings.From(entry));
@@ -502,7 +550,7 @@ namespace DataSaveManager
                     {
                         var headerRow = Instantiate(headerPrefab, _container);
                         headerRow.SetText(presentation.Header);
-                        headerRow.ApplyLayout(_layout);
+                        headerRow.ApplyLayout(Layout);
                     }
                     else if (!warnedMissingHeaderRow)
                     {
@@ -520,8 +568,8 @@ namespace DataSaveManager
                 }
                 widget.Setup(entry, store);
                 AddEntryActions(go, entry.Key);
-                if (widget is IDSMLayoutAware layoutAware) layoutAware.ApplyLayout(_layout);
-                foreach (var bar in go.GetComponentsInChildren<DSMEntryActionBar>(true)) bar.ApplyLayout(_layout);
+                if (widget is IDSMLayoutAware layoutAware) layoutAware.ApplyLayout(Layout);
+                foreach (var bar in go.GetComponentsInChildren<DSMEntryActionBar>(true)) bar.ApplyLayout(Layout);
             }
         }
 
@@ -532,7 +580,7 @@ namespace DataSaveManager
             var registry = DSM.Commands;
             var config = Store.Config;
             foreach (var command in registry.Commands)
-                if (DSMAudienceFilter.Shows(command, _audienceIds, config)) _shownCommands.Add(command);
+                if (DSMAudienceFilter.Shows(command, Definition.AudienceIds, config)) _shownCommands.Add(command);
 
             if (_commandContainer == null) return;
 
@@ -562,12 +610,12 @@ namespace DataSaveManager
                 {
                     var headerRow = Instantiate(headerPrefab, _commandContainer);
                     headerRow.SetText(command.Header);
-                    headerRow.ApplyLayout(_layout);
+                    headerRow.ApplyLayout(Layout);
                 }
 
                 var row = Instantiate(rowPrefab, _commandContainer);
                 row.Setup(command, registry.DisplayTitle(command), OnRunClicked);
-                row.ApplyLayout(_layout);
+                row.ApplyLayout(Layout);
             }
         }
     }
