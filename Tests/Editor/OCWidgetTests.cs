@@ -11,13 +11,11 @@ namespace OperatorConsole.Tests
     {
         private OCConfig? _config;
         private OCStore? _store;
-        private GameObject? _go;
 
         [TearDown]
         public void TearDown()
         {
             _store?.Dispose();
-            if (_go != null) Object.DestroyImmediate(_go);
             if (_config != null)
             {
                 if (Directory.Exists(_config.SaveDirectory))
@@ -33,11 +31,11 @@ namespace OperatorConsole.Tests
             _config = TestConfigs.Create(entry);
             _store = new OCStore(_config, Path.Combine(_config.SaveDirectory, _config.FileName));
             _store.Load();
-            _go = new GameObject("widget");
-            var widget = _go.AddComponent<TestIntWidget>();
+            var widget = new TestIntWidget();
 
             widget.Setup(entry, _store);
             widget.CommitForTest(42);
+            widget.StopWatching();
 
             Assert.IsTrue(_store.HasOverride("intKey"));
             Assert.AreEqual(42, _store.Get<int>("intKey"));

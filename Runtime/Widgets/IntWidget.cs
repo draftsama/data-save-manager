@@ -1,28 +1,19 @@
 #nullable enable
 
-using System.Globalization;
-using TMPro;
-using UnityEngine;
+using UnityEngine.UIElements;
 
 namespace OperatorConsole
 {
-    public sealed class IntWidget : OCWidget<int>
+    internal sealed class IntWidget : OCWidget<int>
     {
-        [SerializeField] private TMP_InputField? _input;
+        private readonly IntegerField _input = new() { isDelayed = true };
 
-        private void Awake()
+        public IntWidget()
         {
-            if (_input != null) _input.onEndEdit.AddListener(OnEndEdit);
+            _input.RegisterValueChangedCallback(e => Commit(e.newValue));
+            Field.Add(Grow(_input));
         }
 
-        protected override void Show(int value) => _input?.SetTextWithoutNotify(value.ToString(CultureInfo.InvariantCulture));
-
-        private void OnEndEdit(string text)
-        {
-            if (int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value))
-                Commit(value);
-            else
-                Show(Store.Get(Key, 0));
-        }
+        protected override void Show(int value) => _input.SetValueWithoutNotify(value);
     }
 }

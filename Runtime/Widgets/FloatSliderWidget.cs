@@ -2,69 +2,49 @@
 
 using System;
 using System.Globalization;
-using TMPro;
-using UnityEngine;
-using UnityEngine.UI;
+using UnityEngine.UIElements;
 
 namespace OperatorConsole
 {
-    public sealed class FloatSliderWidget : OCWidget<float>
+    internal sealed class FloatSliderWidget : OCWidget<float>
     {
-        [SerializeField] private Slider? _slider;
-        [SerializeField] private TMP_InputField? _input;
-
+        private readonly Slider _slider = new();
+        private readonly FloatField _input = new() { isDelayed = true, formatString = "F2" };
         private int _decimals = 2;
-        private string _format = "F2";
-        private float _current;
-        private bool _hasValue;
 
-        private void Awake()
+        public FloatSliderWidget()
         {
-            if (_input != null) _input.onEndEdit.AddListener(OnEndEdit);
+            _input.AddToClassList("ocp-slider-value");
+            _input.RegisterValueChangedCallback(e => Commit(e.newValue));
+            Field.Add(Grow(_slider));
+            Field.Add(_input);
         }
 
+        // Listened to only after the range is set: the range setters re-clamp the value with callbacks on.
         protected override void OnSetup(OCEntryDefinition entry)
         {
-            if (_slider == null) return;
-            _slider.wholeNumbers = false;
-            _slider.minValue = entry.RangeMin;
-            _slider.maxValue = entry.RangeMax;
-            ListenToSlider();
+            _slider.UnregisterValueChangedCallback(OnSliderChanged);
+            _slider.lowValue = entry.RangeMin;
+            _slider.highValue = entry.RangeMax;
+            _slider.RegisterValueChangedCallback(OnSliderChanged);
         }
 
         public override void ApplyLayout(OCPanelLayout layout)
         {
             base.ApplyLayout(layout);
             _decimals = layout.FloatDecimals;
-            _format = "F" + _decimals.ToString(CultureInfo.InvariantCulture);
-            if (_hasValue) Show(_current);
+            _input.formatString = "F" + _decimals.ToString(CultureInfo.InvariantCulture);
+            _input.SetValueWithoutNotify(_input.value);
         }
 
+        // The slider clamps its position to the Range; the input keeps the real Value.
         protected override void Show(float value)
         {
-            _current = value;
-            _hasValue = true;
-            // The slider clamps its position to the Range; the input keeps the real Value.
-            if (_slider != null) _slider.SetValueWithoutNotify(value);
-            _input?.SetTextWithoutNotify(value.ToString(_format, CultureInfo.InvariantCulture));
+            _slider.SetValueWithoutNotify(value);
+            _input.SetValueWithoutNotify(value);
         }
 
-        // Registered only after min/max are set: those setters re-clamp the value with the callback on.
-        private void ListenToSlider()
-        {
-            _slider!.onValueChanged.RemoveListener(OnSliderChanged);
-            _slider.onValueChanged.AddListener(OnSliderChanged);
-        }
-
-        private void OnSliderChanged(float value) =>
-            Commit((float)Math.Round(value, _decimals, MidpointRounding.AwayFromZero));
-
-        private void OnEndEdit(string text)
-        {
-            if (float.TryParse(text, NumberStyles.Any, CultureInfo.InvariantCulture, out var value))
-                Commit(value);
-            else
-                Show(Store.Get(Key, 0f));
-        }
+        private void OnSliderChanged(ChangeEvent<float> e) =>
+            Commit((float)Math.Round(e.newValue, _decimals, MidpointRounding.AwayFromZero));
     }
 }

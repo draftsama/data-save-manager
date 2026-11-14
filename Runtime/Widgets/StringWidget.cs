@@ -1,19 +1,19 @@
 #nullable enable
 
-using TMPro;
-using UnityEngine;
+using UnityEngine.UIElements;
 
 namespace OperatorConsole
 {
-    public sealed class StringWidget : OCWidget<string>
+    internal sealed class StringWidget : OCWidget<string>
     {
-        [SerializeField] private TMP_InputField? _input;
+        private readonly TextField _input = new() { isDelayed = true };
 
-        private void Awake()
+        public StringWidget()
         {
-            if (_input != null) _input.onEndEdit.AddListener(Commit);
+            _input.RegisterValueChangedCallback(e => Commit(e.newValue));
+            Field.Add(Grow(_input));
         }
 
-        protected override void Show(string value) => _input?.SetTextWithoutNotify(value);
+        protected override void Show(string value) => _input.SetValueWithoutNotify(value);
     }
 }
