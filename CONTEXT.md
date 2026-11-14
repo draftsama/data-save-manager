@@ -111,6 +111,22 @@ _Avoid_: target, connection
 **Format**:
 The .NET composite format string on a **Link** (e.g. `Speed: {0:0.0}`) that turns a non-text **Value** into text.
 
+**Log**:
+The messages the app wrote to Unity's log while it runs, kept so an **Operator** can read them on a **Runtime Panel**, including those written before the panel was opened.
+_Avoid_: console, debug log
+
+**Log Entry**:
+One message in the **Log**, with its type (Info, Warning or Error) and, when there is one, its stack trace.
+_Avoid_: log line, message
+
+**Performance**:
+Live measurements of how the running app is doing (frame rate, frame time, memory), shown to an **Operator** on a **Runtime Panel**.
+_Avoid_: profiler, profiling, stats
+
+**Metric**:
+One measured quantity in **Performance** (e.g. frame time, GC allocation per frame). A **Metric** the running build cannot measure is shown as unavailable, not hidden.
+_Avoid_: counter, stat
+
 ## Relationships
 
 - The **Config** holds zero or more **Entry Definitions**; each defines exactly one **Entry**.
@@ -148,7 +164,19 @@ The .NET composite format string on a **Link** (e.g. `Speed: {0:0.0}`) that turn
 - One **Entry** may have several **Entry Actions**. While any of them runs, that **Entry**'s row on the **Runtime Panel** is locked: no other of its **Entry Actions** and no typing.
 - An **Entry Action** may require confirmation, like a **Command**. It keeps running when the **Runtime Panel** closes and is stopped when its owner unregisters, like a **Command**. Two owners giving one **Entry** an **Entry Action** with the same **Title** are told apart by owner, like **Commands**.
 
+- The **Log** and **Performance** are kept from app start only when at least one enabled **Panel Definition** shows them; otherwise nothing is kept or measured.
+- Each **Panel Definition** chooses whether its **Runtime Panel** shows the **Log** and whether it shows **Performance**.
+- The **Log** and **Performance** are available in every build, not only development builds.
+- There is one **Log** per app, shared by every **Runtime Panel**: clearing it from one **Runtime Panel** clears it for all.
+- The **Log** holds a limited number of **Log Entries**; when full, the oldest is dropped.
+- A **Log Entry** identical to the one just before it (same type, message and stack trace) is counted on that one instead of added; identical **Log Entries** further apart stay separate, so the **Log** keeps its order.
+- A **Log Entry** may have no stack trace, when the build does not record one for its type.
+- A **Runtime Panel** shows how many errors arrived since its **Operator** last looked at its **Log**.
+- **Performance** is measured continuously while it is kept, so a **Runtime Panel** opened later shows recent history at once.
+
 ## Flagged ambiguities
+
+- "Profiler" was used to mean the **Performance** tab — resolved: **Performance**, so it is not confused with the Unity Profiler window.
 
 - "Slot" used to mean one of several named saves — resolved: slots are removed; there is one **Save File**.
 - "Constant" (`DSMConstant`) used to mean both the default value and the key name — resolved: defaults live in **Entry Definitions**; there is no generated constant class.
