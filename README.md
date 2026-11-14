@@ -201,14 +201,13 @@ an asset, are kept after Play mode ends. Adding or removing a Panel Definition t
 Play mode starts.
 
 **Moving from a scene-placed panel:** a `OCRuntimePanel` placed in a scene now stays hidden and logs
-a warning. Open its scene, press **Import Scene Panels** under Runtime Panels to turn each one into a
-Panel Definition (Audiences, Open Triggers, Passcode, Layout and sort order carry over), then remove
+a warning. Add a Panel Definition for it under Runtime Panels with the same settings, then remove
 the panel from the scene and save it. Replace Inspector references to the panel with `OC.Panels`.
 
 - **Reset to Defaults** asks for confirmation in a popup, then resets only the Exposed Entries.
   Overrides of non-exposed Entries and of ad-hoc keys (keys used in code without an Entry Definition)
   are left alone. Code gets the same Reset from `OC.ResetExposedEntries()`; `OC.ResetAll()` still clears every Override.
-- **Save Button Mode** (on the Panel Definition) controls the Save button: `Auto` shows it only
+- **Save Button** (on the Panel Definition) controls the Save button: `Auto` shows it only
   when AutoSave is off, `Always` always shows it, `Never` hides it.
 - **Close** (and the toggle key) cancels an open reset confirmation. With AutoSave on, it also saves any
   pending changes immediately instead of waiting for the debounce; with AutoSave off it does not save.
@@ -217,7 +216,7 @@ the panel from the scene and save it. Replace Inspector references to the panel 
 
 An operator opens the panel by hand with its **Open Triggers**, set on its Panel Definition:
 
-- **Hotkey Enabled** + **Toggle Key** — the key opens and closes the panel.
+- **Hotkey** + **Toggle Key** — the key opens and closes the panel.
 - **Corner Tap** — tapping (or clicking) one screen **Corner** **Tap Count** times, each within
   **Max Interval** seconds of the last, opens the panel. The zone is a square whose side is **Size
   Percent** of the screen's shorter side. It only opens; close the panel with Close or the hotkey.
@@ -384,7 +383,7 @@ public sealed class ContentFolders : MonoBehaviour
 ### Log and Performance
 
 Two optional tabs for on-site diagnostics. Turn them on per Panel Definition with **Show Log** and
-**Show Performance** (under **Diagnostics**). See [ADR 0009](docs/adr/0009-log-and-performance-on-the-runtime-panel.md).
+**Show Performance** (under **Tabs & Buttons**). See [ADR 0009](docs/adr/0009-log-and-performance-on-the-runtime-panel.md).
 
 - **When it runs** — the Log is kept from app start, and Performance is measured from the first scene,
   but only when an enabled Panel Definition shows that tab. That is decided when the app starts (and on

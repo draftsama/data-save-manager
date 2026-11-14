@@ -3,7 +3,6 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.Serialization;
 using UnityEngine.UIElements;
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
@@ -37,18 +36,6 @@ namespace OperatorConsole
         private const float TabInset = 8f;
         private const float FooterButtonExtra = 6f;
         private static readonly Vector2Int ReferenceResolution = new(1920, 1080);
-
-        // Settings from before Panel Definitions; read only by the Operator Console's import from scene panels.
-#pragma warning disable CS0414
-        [SerializeField, HideInInspector, FormerlySerializedAs("_saveButtonMode")] private OCSaveButtonMode _legacySaveButtonMode = OCSaveButtonMode.Auto;
-        [SerializeField, HideInInspector, FormerlySerializedAs("_hotkeyEnabled")] private bool _legacyHotkeyEnabled = true;
-        [SerializeField, HideInInspector, FormerlySerializedAs("_toggleKey")] private KeyCode _legacyToggleKey = KeyCode.F1;
-        [SerializeField, HideInInspector, FormerlySerializedAs("_cornerTap")] private OCCornerTap _legacyCornerTap = new();
-        [SerializeField, HideInInspector, FormerlySerializedAs("_passcode")] private OCPasscode _legacyPasscode = new();
-        [SerializeField, HideInInspector, FormerlySerializedAs("_startVisible")] private bool _legacyStartVisible;
-        [SerializeField, HideInInspector, FormerlySerializedAs("_layout")] private OCPanelLayout _legacyLayout = new();
-        [SerializeField, HideInInspector, FormerlySerializedAs("_audienceIds")] private List<string> _legacyAudienceIds = new();
-#pragma warning restore CS0414
 
         private static ThemeStyleSheet? s_theme;
 
@@ -156,7 +143,7 @@ namespace OperatorConsole
         private void Awake()
         {
             if (_definition != null) return;
-            Debug.LogWarning($"OCRuntimePanel on '{gameObject.name}' was placed in a scene. Runtime Panels are now created from Panel Definitions: import this one in the Operator Console, then remove it from the scene.", this);
+            Debug.LogWarning($"OCRuntimePanel on '{gameObject.name}' was placed in a scene. Runtime Panels are now created from Panel Definitions: add one in the Operator Console, then remove this panel from the scene.", this);
             gameObject.SetActive(false);
         }
 
